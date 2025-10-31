@@ -119,7 +119,7 @@ const nip17ErrorLogger = createErrorLogger('NIP-17');
 
 /**
  * Direct Messaging context interface providing access to all DM functionality.
- * 
+ *
  * @property messages - Raw message state (Map of pubkey -> participant data)
  * @property isLoading - True during initial load phases
  * @property loadingPhase - Current loading phase (CACHE, RELAYS, SUBSCRIPTIONS, READY, IDLE)
@@ -140,9 +140,9 @@ interface DMContextType {
   lastSync: LastSyncData;
   subscriptions: SubscriptionStatus;
   conversations: ConversationSummary[];
-  sendMessage: (params: { 
-    recipientPubkey: string; 
-    content: string; 
+  sendMessage: (params: {
+    recipientPubkey: string | string[];
+    content: string;
     protocol?: MessageProtocol;
     attachments?: FileAttachment[];
   }) => Promise<void>;
@@ -155,25 +155,25 @@ const DMContext = createContext<DMContextType | null>(null);
 
 /**
  * Hook to access the direct messaging system.
- * 
+ *
  * Provides access to conversations, message sending, loading states, and cache management.
  * Must be used within a DMProvider.
- * 
+ *
  * @example
  * ```tsx
  * import { useDMContext } from '@/contexts/DMContext';
  * import { MESSAGE_PROTOCOL } from '@/lib/dmConstants';
- * 
+ *
  * function MyComponent() {
  *   const { conversations, sendMessage, isLoading } = useDMContext();
- * 
+ *
  *   // Send a message
  *   await sendMessage({
  *     recipientPubkey: 'hex-pubkey',
  *     content: 'Hello!',
  *     protocol: MESSAGE_PROTOCOL.NIP17
  *   });
- * 
+ *
  *   // Display conversations
  *   return (
  *     <div>
@@ -184,7 +184,7 @@ const DMContext = createContext<DMContextType | null>(null);
  *   );
  * }
  * ```
- * 
+ *
  * @returns DMContextType - The direct messaging context
  * @throws Error if used outside DMProvider
  */
@@ -201,22 +201,22 @@ const MESSAGES_PER_PAGE = 25;
 
 /**
  * Hook to access paginated messages for a specific conversation.
- * 
+ *
  * Returns the most recent messages (default 25) with the ability to load earlier messages.
  * Automatically resets to default page size when switching conversations.
- * 
+ *
  * @example
  * ```tsx
  * import { useConversationMessages } from '@/contexts/DMContext';
- * 
+ *
  * function MessageThread({ recipientPubkey }: { recipientPubkey: string }) {
- *   const { 
- *     messages, 
- *     hasMoreMessages, 
+ *   const {
+ *     messages,
+ *     hasMoreMessages,
  *     loadEarlierMessages,
- *     totalCount 
+ *     totalCount
  *   } = useConversationMessages(recipientPubkey);
- * 
+ *
  *   return (
  *     <div>
  *       {hasMoreMessages && (
@@ -231,7 +231,7 @@ const MESSAGES_PER_PAGE = 25;
  *   );
  * }
  * ```
- * 
+ *
  * @param conversationId - The pubkey of the conversation participant
  * @returns Paginated message data with loading function
  */
@@ -255,7 +255,7 @@ export function useConversationMessages(conversationId: string) {
 
     const totalMessages = conversationData.messages.length;
     const hasMore = totalMessages > visibleCount;
-    
+
     // Return the most recent N messages (slice from the end)
     const visibleMessages = conversationData.messages.slice(-visibleCount);
 
@@ -299,17 +299,17 @@ interface DMProviderProps {
 
 /**
  * File attachment for direct messages (NIP-92 compatible).
- * 
+ *
  * All fields are required. Use with `useUploadFile` hook to upload files
  * and generate the proper tags format.
- * 
+ *
  * @example
  * ```tsx
  * import { useUploadFile } from '@/hooks/useUploadFile';
  * import type { FileAttachment } from '@/contexts/DMContext';
- * 
+ *
  * const { mutateAsync: uploadFile } = useUploadFile();
- * 
+ *
  * const tags = await uploadFile(file);
  * const attachment: FileAttachment = {
  *   url: tags[0][1],
@@ -318,14 +318,14 @@ interface DMProviderProps {
  *   name: file.name,
  *   tags: tags
  * };
- * 
+ *
  * await sendMessage({
  *   recipientPubkey: 'hex-pubkey',
  *   content: 'Check out this file!',
  *   attachments: [attachment]
  * });
  * ```
- * 
+ *
  * @property url - Blossom server URL where file is hosted
  * @property mimeType - MIME type of the file (e.g., 'image/png')
  * @property size - File size in bytes
@@ -345,7 +345,7 @@ export interface FileAttachment {
  */
 function prepareMessageContent(content: string, attachments: FileAttachment[] = []): string {
   if (attachments.length === 0) return content;
-  
+
   const fileUrls = attachments.map(file => file.url).join('\n');
   return content ? `${content}\n\n${fileUrls}` : fileUrls;
 }
@@ -384,10 +384,10 @@ export function DMProvider({ children, config }: DMProviderProps) {
   const { config: appConfig } = useAppContext();
 
   const userPubkey = useMemo(() => user?.pubkey, [user?.pubkey]);
-  
+
   // Track relay URL to detect changes
   const previousRelayUrl = useRef<string>(appConfig.relayUrl);
-  
+
   // Determine if NIP-17 is enabled based on protocol mode
   const enableNIP17 = protocolMode !== PROTOCOL_MODE.NIP04_ONLY;
 
@@ -418,8 +418,8 @@ export function DMProvider({ children, config }: DMProviderProps) {
   // ============================================================================
 
   // Send NIP-04 Message (internal)
-  const sendNIP4Message = useMutation<NostrEvent, Error, { 
-    recipientPubkey: string; 
+  const sendNIP4Message = useMutation<NostrEvent, Error, {
+    recipientPubkey: string;
     content: string;
     attachments?: FileAttachment[];
   }>({
@@ -462,12 +462,14 @@ export function DMProvider({ children, config }: DMProviderProps) {
   });
 
   // Send NIP-17 Message (internal)
-  const sendNIP17Message = useMutation<NostrEvent, Error, { 
-    recipientPubkey: string; 
+  const sendNIP17Message = useMutation<NostrEvent, Error, {
+    recipientPubkey: string | string[];
     content: string;
     attachments?: FileAttachment[];
   }>({
     mutationFn: async ({ recipientPubkey, content, attachments = [] }) => {
+      // Normalize to array for consistent handling
+      const recipients = Array.isArray(recipientPubkey) ? recipientPubkey : [recipientPubkey];
       if (!user) {
         throw new Error('User is not logged in');
       }
@@ -478,7 +480,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
       // Step 1: Create the inner Kind 14 Private Direct Message
       const now = Math.floor(Date.now() / 1000);
-      
+
       // Generate randomized timestamps for gift wraps (NIP-59 metadata privacy)
       // Randomize within ±2 days in the PAST only (relays reject future timestamps > +30min)
       const randomizeTimestamp = (baseTime: number) => {
@@ -491,9 +493,9 @@ export function DMProvider({ children, config }: DMProviderProps) {
       // Prepare content with file URLs
       const messageContent = prepareMessageContent(content, attachments);
 
-      // Build tags with imeta tags for attachments
+      // Build tags with p tags for all recipients and imeta tags for attachments
       const tags: string[][] = [
-        ['p', recipientPubkey],
+        ...recipients.map(pubkey => ['p', pubkey]),
         ...createImetaTags(attachments)
       ];
 
@@ -508,104 +510,72 @@ export function DMProvider({ children, config }: DMProviderProps) {
         content: messageContent,
       };
 
-      // Step 2: Create TWO Kind 13 Seal events (one for recipient, one for myself)
-      const recipientSeal: Omit<NostrEvent, 'id' | 'sig'> = {
-        kind: 13,
-        pubkey: user.pubkey,
-        created_at: now,
-        tags: [],
-        content: await user.signer.nip44.encrypt(recipientPubkey, JSON.stringify(privateMessage)),
-      };
+      // Step 2: Create Kind 13 Seal events and Kind 1059 Gift Wraps for each recipient + sender
+      // For NIP-17 group chats, we send a separate gift wrap to each participant
+      const allRecipients = [...recipients, user.pubkey]; // Include sender for message history
+      const giftWraps: NostrEvent[] = [];
 
-      const senderSeal: Omit<NostrEvent, 'id' | 'sig'> = {
-        kind: 13,
-        pubkey: user.pubkey,
-        created_at: now,
-        tags: [],
-        content: await user.signer.nip44.encrypt(user.pubkey, JSON.stringify(privateMessage)),
-      };
+      for (const recipientPubkey of allRecipients) {
+        // Create seal for this recipient
+        const seal: Omit<NostrEvent, 'id' | 'sig'> = {
+          kind: 13,
+          pubkey: user.pubkey,
+          created_at: now,
+          tags: [],
+          content: await user.signer.nip44.encrypt(recipientPubkey, JSON.stringify(privateMessage)),
+        };
 
-      // Step 3: Create TWO Kind 1059 Gift Wrap events
-      // Per NIP-17/NIP-59: Gift wraps MUST be signed with random, ephemeral keys
-      // to hide the sender's identity and provide - some - metadata privacy
-      
-      // Generate random secret keys for each gift wrap
-      const recipientRandomKey = generateSecretKey();
-      const senderRandomKey = generateSecretKey();
-      
-      // Create signers with the random keys
-      const recipientRandomSigner = new NSecSigner(recipientRandomKey);
-      const senderRandomSigner = new NSecSigner(senderRandomKey);
+        // Generate random secret key for gift wrap
+        const randomKey = generateSecretKey();
+        const randomSigner = new NSecSigner(randomKey);
 
-      // Encrypt the seals using the RANDOM signers (so recipient can decrypt with the random pubkey)
-      // The recipient will decrypt using the gift wrap's pubkey (the random ephemeral key)
-      const recipientGiftWrapContent = await recipientRandomSigner.nip44!.encrypt(recipientPubkey, JSON.stringify(recipientSeal));
-      const senderGiftWrapContent = await senderRandomSigner.nip44!.encrypt(user.pubkey, JSON.stringify(senderSeal));
+        // Encrypt the seal using the random signer
+        const giftWrapContent = await randomSigner.nip44!.encrypt(recipientPubkey, JSON.stringify(seal));
 
-      // Sign both gift wraps with random keys and randomized timestamps
-      // Random keys hide the sender's identity; encryption to recipient allows decryption
-      const [recipientGiftWrap, senderGiftWrap] = await Promise.all([
-        recipientRandomSigner.signEvent({
+        // Sign gift wrap with random key and randomized timestamp
+        const giftWrap = await randomSigner.signEvent({
           kind: 1059,
-          created_at: randomizeTimestamp(now),  // Randomized to hide real send time
+          created_at: randomizeTimestamp(now),
           tags: [['p', recipientPubkey]],
-          content: recipientGiftWrapContent,
-        }),
-        senderRandomSigner.signEvent({
-          kind: 1059,
-          created_at: randomizeTimestamp(now),  // Randomized to hide real send time
-          tags: [['p', user.pubkey]],
-          content: senderGiftWrapContent,
-        }),
-      ]);
+          content: giftWrapContent,
+        });
 
-      // Publish both to relays
+        giftWraps.push(giftWrap);
+      }
+
+      // Publish all gift wraps to relays
       try {
-        const results = await Promise.allSettled([
-          nostr.event(recipientGiftWrap),
-          nostr.event(senderGiftWrap),
-        ]);
-        
+        const results = await Promise.allSettled(
+          giftWraps.map(giftWrap => nostr.event(giftWrap))
+        );
+
         // Check for failures and log detailed errors
-        const recipientResult = results[0];
-        const senderResult = results[1];
-        
-        if (recipientResult.status === 'rejected') {
-          console.error('[DM] Failed to publish recipient gift wrap');
-          console.error('[DM] Recipient gift wrap event:', recipientGiftWrap);
-          
-          // Try to extract detailed errors from AggregateError
-          const error = recipientResult.reason;
-          if (error && typeof error === 'object' && 'errors' in error) {
-            console.error('[DM] Recipient individual relay errors:', error.errors);
-          } else {
-            console.error('[DM] Recipient error:', error);
-          }
+        const failures = results.filter(r => r.status === 'rejected');
+
+        if (failures.length > 0) {
+          console.error(`[DM] Failed to publish ${failures.length}/${giftWraps.length} gift wraps`);
+          failures.forEach((result, index) => {
+            if (result.status === 'rejected') {
+              console.error(`[DM] Gift wrap ${index} failed:`, result.reason);
+            }
+          });
         }
-        
-        if (senderResult.status === 'rejected') {
-          console.error('[DM] Failed to publish sender gift wrap');
-          console.error('[DM] Sender gift wrap event:', senderGiftWrap);
-          
-          // Try to extract detailed errors from AggregateError
-          const error = senderResult.reason;
-          if (error && typeof error === 'object' && 'errors' in error) {
-            console.error('[DM] Sender individual relay errors:', error.errors);
-          } else {
-            console.error('[DM] Sender error:', error);
-          }
+
+        // If all failed, throw error
+        if (failures.length === giftWraps.length) {
+          throw new Error(`All gift wraps rejected. Check console for details.`);
         }
-        
-        // If both failed, throw error
-        if (recipientResult.status === 'rejected' && senderResult.status === 'rejected') {
-          throw new Error(`Both gift wraps rejected. Recipient: ${recipientResult.reason}, Sender: ${senderResult.reason}`);
-        }
+
+        // Log success count
+        const successCount = giftWraps.length - failures.length;
+        console.log(`[DM] Successfully published ${successCount}/${giftWraps.length} gift wraps`);
       } catch (publishError) {
         console.error('[DM] Publish error:', publishError);
         throw publishError;
       }
 
-      return recipientGiftWrap;
+      // Return the first gift wrap (for compatibility)
+      return giftWraps[0];
     },
     onError: (error) => {
       console.error('[DM] Failed to send NIP-17 message:', error);
@@ -686,7 +656,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
     let allNIP17Events: NostrEvent[] = [];
     let processedMessages = 0;
-    
+
     // Adjust since timestamp to account for NIP-17 timestamp fuzzing (±2 days)
     // We need to query from (lastSync - 2 days) to catch messages with randomized past timestamps
     // This may fetch duplicates, but they're filtered by message ID in addMessageToState
@@ -921,7 +891,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
           const existingMessageIds = new Set(
             existing.messages.map(msg => msg.originalGiftWrapId || msg.id)
           );
-          const newMessages = value.messages.filter(msg => 
+          const newMessages = value.messages.filter(msg =>
             !existingMessageIds.has(msg.originalGiftWrapId || msg.id)
           );
 
@@ -1260,7 +1230,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       if (!sinceTimestamp && lastSync.nip17) {
         subscriptionSince = lastSync.nip17 - DM_CONSTANTS.SUBSCRIPTION_OVERLAP_SECONDS;
       }
-      
+
       // Adjust for NIP-17 timestamp fuzzing (±2 days)
       // Subscribe from (lastSync - 2 days) to catch messages with randomized past timestamps
       const TWO_DAYS_IN_SECONDS = 2 * 24 * 60 * 60;
@@ -1309,7 +1279,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
     try {
       const { readMessagesFromDB } = await import('@/lib/dmMessageStore');
-      
+
       const cachedStore = await readMessagesFromDB(userPubkey);
 
       if (!cachedStore || Object.keys(cachedStore.participants).length === 0) {
@@ -1330,13 +1300,13 @@ export function DMProvider({ children, config }: DMProviderProps) {
           // Decrypt based on message kind
           let decryptedContent: string | undefined;
           let error: string | undefined;
-          
+
           if (msg.kind === 4) {
             // NIP-04 message
-            const otherPubkey = msg.pubkey === user?.pubkey 
+            const otherPubkey = msg.pubkey === user?.pubkey
               ? msg.tags.find(([name]) => name === 'p')?.[1]
               : msg.pubkey;
-            
+
             if (otherPubkey && user?.signer?.nip04) {
               try {
                 decryptedContent = await user.signer.nip04.decrypt(otherPubkey, msg.content);
@@ -1350,7 +1320,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
               try {
                 const sealContent = await user.signer.nip44.decrypt(msg.pubkey, msg.content);
                 const decryptedEvent = JSON.parse(sealContent) as NostrEvent;
-                
+
                 // Keep seal structure but add decryptedEvent for access to inner fields
                 return {
                   ...msg,
@@ -1362,7 +1332,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
               }
             }
           }
-          
+
           return {
             ...msg,
             id: msg.id || `missing-${msg.kind}-${msg.created_at}-${msg.pubkey.substring(0, 8)}-${msg.content?.substring(0, 16) || 'nocontent'}`,
@@ -1405,17 +1375,17 @@ export function DMProvider({ children, config }: DMProviderProps) {
     try {
       // ===== PHASE 1: Load cache and show immediately =====
       const { nip4Since, nip17Since } = await loadAllCachedMessages();
-      
+
       // Mark as completed BEFORE releasing isLoading to prevent re-trigger
       setHasInitialLoadCompleted(true);
-      
+
       // Show cached messages immediately! Don't wait for relays
       setLoadingPhase(LOADING_PHASES.READY);
       setIsLoading(false);
 
       // ===== PHASE 2: Query relays in background (non-blocking, parallel) =====
       setLoadingPhase(LOADING_PHASES.RELAYS);
-      
+
       // Run NIP-04 and NIP-17 queries IN PARALLEL
       const [nip4Result, nip17Result] = await Promise.all([
         queryRelaysForMessagesSince(MESSAGE_PROTOCOL.NIP04, nip4Since),
@@ -1469,7 +1439,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       setSubscriptions({ isNIP4Connected: false, isNIP17Connected: false });
       setScanProgress({ nip4: null, nip17: null });
       setLoadingPhase(LOADING_PHASES.IDLE);
-      
+
       // Trigger reload by setting hasInitialLoadCompleted to false
       setHasInitialLoadCompleted(false);
     } catch (error) {
@@ -1487,7 +1457,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
   // Cleanup effect
   useEffect(() => {
     if (!enabled) return;
-    
+
     return () => {
       if (nip4SubscriptionRef.current) {
         nip4SubscriptionRef.current.close();
@@ -1503,7 +1473,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
   // Cleanup subscriptions
   useEffect(() => {
     if (!enabled) return;
-    
+
     return () => {
       if (nip4SubscriptionRef.current) {
         nip4SubscriptionRef.current.close();
@@ -1521,9 +1491,9 @@ export function DMProvider({ children, config }: DMProviderProps) {
   // Detect relay changes and reload messages
   useEffect(() => {
     const relayChanged = previousRelayUrl.current !== appConfig.relayUrl;
-    
+
     previousRelayUrl.current = appConfig.relayUrl;
-    
+
     if (relayChanged && enabled && userPubkey && hasInitialLoadCompleted) {
       clearCacheAndRefetch();
     }
@@ -1669,24 +1639,40 @@ export function DMProvider({ children, config }: DMProviderProps) {
   }, [enabled, messages, shouldSaveImmediately, writeAllMessagesToStore, triggerDebouncedWrite]);
 
   // Send message
-  const sendMessage = useCallback(async (params: { 
-    recipientPubkey: string; 
-    content: string; 
+  const sendMessage = useCallback(async (params: {
+    recipientPubkey: string | string[];
+    content: string;
     protocol?: MessageProtocol;
     attachments?: FileAttachment[];
   }) => {
     if (!enabled) return;
-    
+
     const { recipientPubkey, content, protocol = MESSAGE_PROTOCOL.NIP04, attachments } = params;
     if (!userPubkey) return;
+
+    // Parse group ID if needed (format: "group:pubkey1,pubkey2,pubkey3")
+    let recipients: string[];
+    let conversationId: string;
+
+    if (typeof recipientPubkey === 'string' && recipientPubkey.startsWith('group:')) {
+      // Extract pubkeys from group ID
+      recipients = recipientPubkey.substring(6).split(',');
+      conversationId = recipientPubkey;
+    } else if (Array.isArray(recipientPubkey)) {
+      recipients = recipientPubkey;
+      conversationId = recipients.length === 1 ? recipients[0] : `group:${[...recipients].sort().join(',')}`;
+    } else {
+      recipients = [recipientPubkey];
+      conversationId = recipientPubkey;
+    }
 
     const optimisticId = `optimistic-${Date.now()}-${Math.random()}`;
     const optimisticMessage: DecryptedMessage = {
       id: optimisticId,
-      kind: protocol === MESSAGE_PROTOCOL.NIP04 ? 4 : 14, // Use kind 14 for NIP-17 (the real message kind)
+      kind: protocol === MESSAGE_PROTOCOL.NIP04 ? 4 : 14,
       pubkey: userPubkey,
-      created_at: Math.floor(Date.now() / 1000), // Real timestamp
-      tags: [['p', recipientPubkey]],
+      created_at: Math.floor(Date.now() / 1000),
+      tags: recipients.map(p => ['p', p]),
       content: '',
       decryptedContent: content,
       sig: '',
@@ -1694,13 +1680,15 @@ export function DMProvider({ children, config }: DMProviderProps) {
       clientFirstSeen: Date.now(),
     };
 
-    addMessageToState(optimisticMessage, recipientPubkey, protocol === MESSAGE_PROTOCOL.NIP04 ? MESSAGE_PROTOCOL.NIP04 : MESSAGE_PROTOCOL.NIP17);
+    addMessageToState(optimisticMessage, conversationId, protocol === MESSAGE_PROTOCOL.NIP04 ? MESSAGE_PROTOCOL.NIP04 : MESSAGE_PROTOCOL.NIP17);
 
     try {
       if (protocol === MESSAGE_PROTOCOL.NIP04) {
-        await sendNIP4Message.mutateAsync({ recipientPubkey, content, attachments });
+        // NIP-04 doesn't support group chats, only send to first recipient
+        await sendNIP4Message.mutateAsync({ recipientPubkey: recipients[0], content, attachments });
       } else if (protocol === MESSAGE_PROTOCOL.NIP17) {
-        await sendNIP17Message.mutateAsync({ recipientPubkey, content, attachments });
+        // NIP-17 supports group chats natively
+        await sendNIP17Message.mutateAsync({ recipientPubkey: recipients, content, attachments });
       }
     } catch (error) {
       console.error(`[DM] Failed to send ${protocol} message:`, error);

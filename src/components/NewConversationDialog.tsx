@@ -13,8 +13,8 @@ import { Input } from '@/components/ui/input';
 import { MessageSquarePlus, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { useDMContext } from '@/contexts/DMContext';
-import { useAuthor } from '@/hooks/useAuthor';
 import { useFollows } from '@/hooks/useFollows';
+import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { genUserName } from '@/lib/genUserName';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -27,23 +27,16 @@ function ContactRow({
   pubkey, 
   isSelected, 
   onToggle,
-  searchTerm 
+  metadata
 }: { 
   pubkey: string; 
   isSelected: boolean;
   onToggle: () => void;
-  searchTerm?: string;
+  metadata?: { name?: string; picture?: string };
 }) {
-  const author = useAuthor(pubkey);
-  const metadata = author.data?.metadata;
   const displayName = metadata?.name || genUserName(pubkey);
   const avatarUrl = metadata?.picture;
   const initials = displayName.slice(0, 2).toUpperCase();
-
-  // Filter by display name if search term provided
-  if (searchTerm && !displayName.toLowerCase().includes(searchTerm.toLowerCase())) {
-    return null;
-  }
 
   return (
     <button
@@ -100,16 +93,27 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     return Array.from(uniquePubkeys);
   }, [follows, conversations]);
 
-  // Filter contacts based on search
+  // Batch-fetch metadata for all contacts in one query (much more efficient!)
+  const { data: authorsMap = new Map(), isLoading: isLoadingMetadata } = useAuthorsBatch(allContacts);
+  
+  // Combined loading state
+  const isLoading = isLoadingFollows || isLoadingMetadata;
+
+  // Filter contacts based on search (now we can filter properly since we have metadata)
   const filteredContacts = useMemo(() => {
     if (!searchInput.trim()) {
       return allContacts;
     }
     
-    // If there's a search term, we'll filter in ContactRow component
-    // But we still need to return all contacts so ContactRow can filter
-    return allContacts;
-  }, [allContacts, searchInput]);
+    const searchLower = searchInput.toLowerCase().trim();
+    
+    // Filter contacts that match search term in display name
+    return allContacts.filter(pubkey => {
+      const author = authorsMap.get(pubkey);
+      const displayName = author?.metadata?.name || genUserName(pubkey);
+      return displayName.toLowerCase().includes(searchLower);
+    });
+  }, [allContacts, searchInput, authorsMap]);
 
   const handleToggleContact = (pubkey: string) => {
     setSelectedPubkeys(prev => 
@@ -202,20 +206,21 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   };
 
   const visibleContacts = useMemo(() => {
-    const items = filteredContacts
-      .map(pubkey => (
+    return filteredContacts.map(pubkey => {
+      const author = authorsMap.get(pubkey);
+      const metadata = author?.metadata;
+      
+      return (
         <ContactRow
           key={pubkey}
           pubkey={pubkey}
           isSelected={selectedPubkeys.includes(pubkey)}
           onToggle={() => handleToggleContact(pubkey)}
-          searchTerm={searchInput.trim()}
+          metadata={metadata}
         />
-      ))
-      .filter(item => item !== null);
-    
-    return items;
-  }, [filteredContacts, selectedPubkeys, searchInput]);
+      );
+    });
+  }, [filteredContacts, selectedPubkeys, authorsMap]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -246,7 +251,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
           {/* Contact List */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6">
             <div className="space-y-2 pb-4">
-              {isLoadingFollows ? (
+              {isLoading ? (
                 <div className="py-12 text-center">
                   <p className="text-sm text-muted-foreground">Loading contacts...</p>
                 </div>

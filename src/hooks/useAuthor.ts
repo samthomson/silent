@@ -18,7 +18,9 @@ export function useAuthor(pubkey: string | undefined) {
       );
 
       if (!event) {
-        throw new Error('No event found');
+        // Return empty object - components handle missing metadata gracefully
+        // (If cached data exists from useAuthorsBatch, queryFn won't run anyway)
+        return {};
       }
 
       try {
@@ -28,7 +30,7 @@ export function useAuthor(pubkey: string | undefined) {
         return { event };
       }
     },
-    staleTime: 5 * 60 * 1000, // Keep cached data fresh for 5 minutes
+    staleTime: 4 * 60 * 60 * 1000, // Keep cached data fresh for 4 hours (profile metadata changes infrequently)
     retry: 3,
   });
 }

@@ -152,18 +152,16 @@ const MessageBubble = memo(({
 MessageBubble.displayName = 'MessageBubble';
 
 const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
-  // Show up to 4 avatars in a grid
-  const displayPubkeys = pubkeys.slice(0, 4);
-  const author0 = useAuthor(displayPubkeys[0]);
-  const author1 = useAuthor(displayPubkeys[1] || '');
-  const author2 = useAuthor(displayPubkeys[2] || '');
-  const author3 = useAuthor(displayPubkeys[3] || '');
+  const author1 = useAuthor(pubkeys[0] || '');
+  const author2 = useAuthor(pubkeys[1] || '');
+  const author3 = useAuthor(pubkeys[2] || '');
+  const author4 = useAuthor(pubkeys[3] || '');
 
-  const authors = [author0, author1, author2, author3];
+  const authors = [author1, author2, author3, author4];
 
-  if (displayPubkeys.length === 1) {
-    const metadata = author0.data?.metadata;
-    const displayName = metadata?.name || genUserName(displayPubkeys[0]);
+  if (pubkeys.length === 1) {
+    const metadata = author1.data?.metadata;
+    const displayName = metadata?.name || genUserName(pubkeys[0]);
     const avatarUrl = metadata?.picture;
     const initials = displayName.slice(0, 2).toUpperCase();
 
@@ -175,20 +173,60 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
     );
   }
 
+  // For 2 people: split circle vertically
+  if (pubkeys.length === 2) {
+    return (
+      <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
+        {pubkeys.slice(0, 2).map((pubkey, index) => {
+          const author = authors[index];
+          const metadata = author?.data?.metadata;
+          const avatarUrl = metadata?.picture;
+
+          return (
+            <div
+              key={pubkey}
+              className="absolute inset-0 w-1/2"
+              style={{ left: index === 0 ? 0 : '50%' }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-muted" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // For 3+ people: split into 4 quarters
   return (
-    <div className="h-10 w-10 grid grid-cols-2 gap-0.5 flex-shrink-0">
-      {displayPubkeys.map((pubkey, index) => {
+    <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
+      {pubkeys.slice(0, 4).map((pubkey, index) => {
         const author = authors[index];
         const metadata = author?.data?.metadata;
-        const displayName = metadata?.name || genUserName(pubkey);
         const avatarUrl = metadata?.picture;
-        const initials = displayName.slice(0, 1).toUpperCase();
+
+        const positions = [
+          { top: 0, left: 0 }, // top-left
+          { top: 0, left: '50%' }, // top-right
+          { top: '50%', left: 0 }, // bottom-left
+          { top: '50%', left: '50%' }, // bottom-right
+        ];
 
         return (
-          <Avatar key={pubkey} className="h-[18px] w-[18px]">
-            <AvatarImage src={avatarUrl} alt={displayName} />
-            <AvatarFallback className="text-[8px]">{initials}</AvatarFallback>
-          </Avatar>
+          <div
+            key={pubkey}
+            className="absolute w-1/2 h-1/2"
+            style={positions[index]}
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full bg-muted" />
+            )}
+          </div>
         );
       })}
     </div>

@@ -30,6 +30,88 @@ interface ConversationItemProps {
   hasNIP4Messages: boolean;
 }
 
+const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
+  const author1 = useAuthor(pubkeys[0] || '');
+  const author2 = useAuthor(pubkeys[1] || '');
+  const author3 = useAuthor(pubkeys[2] || '');
+  const author4 = useAuthor(pubkeys[3] || '');
+
+  const authors = [author1, author2, author3, author4];
+
+  if (pubkeys.length === 1) {
+    const metadata = author1.data?.metadata;
+    const displayName = metadata?.name || genUserName(pubkeys[0]);
+    const avatarUrl = metadata?.picture;
+    const initials = displayName.slice(0, 2).toUpperCase();
+
+    return (
+      <Avatar className="h-10 w-10 flex-shrink-0">
+        <AvatarImage src={avatarUrl} alt={displayName} />
+        <AvatarFallback>{initials}</AvatarFallback>
+      </Avatar>
+    );
+  }
+
+  // For 2 people: split circle vertically
+  if (pubkeys.length === 2) {
+    return (
+      <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
+        {pubkeys.slice(0, 2).map((pubkey, index) => {
+          const author = authors[index];
+          const metadata = author?.data?.metadata;
+          const avatarUrl = metadata?.picture;
+
+          return (
+            <div
+              key={pubkey}
+              className="absolute inset-0 w-1/2"
+              style={{ left: index === 0 ? 0 : '50%' }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-muted" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // For 3+ people: split into 4 quarters
+  return (
+    <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
+      {pubkeys.slice(0, 4).map((pubkey, index) => {
+        const author = authors[index];
+        const metadata = author?.data?.metadata;
+        const avatarUrl = metadata?.picture;
+
+        const positions = [
+          { top: 0, left: 0 }, // top-left
+          { top: 0, left: '50%' }, // top-right
+          { top: '50%', left: 0 }, // bottom-left
+          { top: '50%', left: '50%' }, // bottom-right
+        ];
+
+        return (
+          <div
+            key={pubkey}
+            className="absolute w-1/2 h-1/2"
+            style={positions[index]}
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full bg-muted" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const ConversationItemComponent = ({
   pubkey,
   isSelected,
@@ -38,19 +120,41 @@ const ConversationItemComponent = ({
   lastActivity,
   hasNIP4Messages
 }: ConversationItemProps) => {
-  const author = useAuthor(pubkey);
+  // Check if this is a group
+  const isGroup = pubkey.startsWith('group:');
+  const pubkeys = isGroup ? pubkey.substring(6).split(',') : [pubkey];
+
+  // For individual chats
+  const author = useAuthor(pubkeys[0]);
   const metadata = author.data?.metadata;
 
-  const displayName = metadata?.name || genUserName(pubkey);
-  const avatarUrl = metadata?.picture;
-  const initials = displayName.slice(0, 2).toUpperCase();
+  // For group chats, get first 2 names
+  const author2 = useAuthor(pubkeys[1] || '');
+
+  const getDisplayName = () => {
+    if (!isGroup) {
+      return metadata?.name || genUserName(pubkeys[0]);
+    }
+
+    const name1 = metadata?.name || genUserName(pubkeys[0]);
+    const name2 = author2.data?.metadata?.name || genUserName(pubkeys[1]);
+
+    if (pubkeys.length === 2) {
+      return `${name1}, ${name2}`;
+    } else {
+      const remaining = pubkeys.length - 2;
+      return `${name1}, ${name2}, +${remaining}`;
+    }
+  };
+
+  const displayName = getDisplayName();
 
   const lastMessagePreview = lastMessage?.error
     ? '🔒 Encrypted message'
     : lastMessage?.decryptedContent || 'No messages yet';
 
   // Show skeleton only for name/avatar while loading (we already have message data)
-  const isLoadingProfile = author.isLoading && !metadata;
+  const isLoadingProfile = !isGroup && author.isLoading && !metadata;
 
   return (
     <button
@@ -64,10 +168,7 @@ const ConversationItemComponent = ({
         {isLoadingProfile ? (
           <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
         ) : (
-          <Avatar className="h-10 w-10 flex-shrink-0">
-            <AvatarImage src={avatarUrl} alt={displayName} />
-            <AvatarFallback>{initials}</AvatarFallback>
-          </Avatar>
+          <GroupAvatar pubkeys={pubkeys} />
         )}
 
         <div className="flex-1 min-w-0">

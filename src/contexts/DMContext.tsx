@@ -929,7 +929,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
   }, []);
 
   // Add message to state
-  const addMessageToState = useCallback((message: DecryptedMessage, conversationPartner: string, protocol: MessageProtocol) => {
+  const addMessageToState = useCallback((message: DecryptedMessage, conversationPartner: string, protocol: MessageProtocol, userPubkey?: string) => {
     setMessages(prev => {
       const newMap = new Map(prev);
       const existing = newMap.get(conversationPartner);
@@ -939,21 +939,39 @@ export function DMProvider({ children, config }: DMProviderProps) {
         // For NIP-04 and cached NIP-17 messages, dedupe by message ID
         const messageId = message.originalGiftWrapId || message.id;
         if (existing.messages.some(msg => (msg.originalGiftWrapId || msg.id) === messageId)) {
+          console.log('[DM] Skipping duplicate message by ID:', messageId);
           return prev;
         }
 
         // Try to match with optimistic message
         // For incoming messages from the user themselves, match against optimistic sends
-        const optimisticIndex = !message.isSending ? existing.messages.findIndex(msg =>
-          msg.isSending &&
-          msg.pubkey === message.pubkey &&
-          msg.decryptedContent === message.decryptedContent &&
-          Math.abs(msg.created_at - message.created_at) <= 60 // Increased to 60s for better matching
-        ) : -1;
+        // Match by content and timestamp, since optimistic messages don't have real IDs
+        const optimisticIndex = !message.isSending && message.pubkey === userPubkey
+          ? existing.messages.findIndex(msg =>
+              msg.isSending &&
+              msg.pubkey === message.pubkey &&
+              msg.decryptedContent === message.decryptedContent &&
+              Math.abs(msg.created_at - message.created_at) <= 60 // Increased to 60s for better matching
+            )
+          : -1;
+
+        console.log('[DM] Adding message to conversation:', {
+          conversationPartner,
+          messageId,
+          isSending: message.isSending,
+          isFromCurrentUser: message.pubkey === userPubkey,
+          optimisticIndex,
+          pubkey: message.pubkey?.substring(0, 8),
+          content: message.decryptedContent?.substring(0, 50),
+          timestamp: message.created_at,
+          existingCount: existing.messages.length,
+          optimisticMessages: existing.messages.filter(m => m.isSending).length,
+        });
 
         let updatedMessages: DecryptedMessage[];
         if (optimisticIndex !== -1) {
           // Replace optimistic message with real one
+          console.log('[DM] ✅ Replacing optimistic message at index:', optimisticIndex);
           const existingMessage = existing.messages[optimisticIndex];
           updatedMessages = [...existing.messages];
           updatedMessages[optimisticIndex] = {
@@ -962,6 +980,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
             clientFirstSeen: existingMessage.clientFirstSeen
           };
         } else {
+          console.log('[DM] ➕ Adding new message (no optimistic match)');
           updatedMessages = [...existing.messages, message];
         }
 
@@ -978,6 +997,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
           hasNIP17: protocol === MESSAGE_PROTOCOL.NIP17 ? true : existing.hasNIP17,
         });
       } else {
+        console.log('[DM] 🆕 Creating new conversation:', conversationPartner);
         const newConversation = {
           messages: [message],
           lastActivity: message.created_at,
@@ -1019,7 +1039,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       decryptedMessage.clientFirstSeen = Date.now();
     }
 
-    addMessageToState(decryptedMessage, otherPubkey, MESSAGE_PROTOCOL.NIP04);
+    addMessageToState(decryptedMessage, otherPubkey, MESSAGE_PROTOCOL.NIP04, user.pubkey);
   }, [user, decryptNIP4Message, addMessageToState]);
 
   // Process NIP-17 Gift Wrap
@@ -1155,6 +1175,15 @@ export function DMProvider({ children, config }: DMProviderProps) {
     try {
       const { processedMessage, conversationPartner, sealEvent } = await processNIP17GiftWrap(event);
 
+      console.log('[DM] Processing incoming NIP-17 message:', {
+        giftWrapId: event.id,
+        conversationPartner,
+        sealPubkey: sealEvent.pubkey,
+        userPubkey: user.pubkey,
+        isFromUser: sealEvent.pubkey === user.pubkey,
+        content: processedMessage.decryptedContent?.substring(0, 50),
+      });
+
       // Check if decryption failed
       if (processedMessage.error) {
         console.error('[DM] NIP-17 message decryption failed:', {
@@ -1163,14 +1192,6 @@ export function DMProvider({ children, config }: DMProviderProps) {
         });
         nip17ErrorLogger(new Error(processedMessage.error));
         return;
-      }
-
-      // Skip messages sent by the current user to themselves (these are already shown optimistically)
-      // Only process messages from the subscription if they're from someone else
-      if (sealEvent.pubkey === user.pubkey) {
-        // This is a message we sent - it's already shown optimistically
-        // The real-time subscription should only add it if we don't have an optimistic version
-        // This is handled by the deduplication logic in addMessageToState
       }
 
       // Store the seal (kind 13) as-is + add decryptedEvent for inner message access
@@ -1191,7 +1212,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
         messageWithAnimation.clientFirstSeen = Date.now();
       }
 
-      addMessageToState(messageWithAnimation, conversationPartner, MESSAGE_PROTOCOL.NIP17);
+      addMessageToState(messageWithAnimation, conversationPartner, MESSAGE_PROTOCOL.NIP17, user.pubkey);
     } catch (error) {
       console.error('[DM] Exception in processIncomingNIP17Message:', {
         giftWrapId: event.id,
@@ -1700,6 +1721,13 @@ export function DMProvider({ children, config }: DMProviderProps) {
       conversationId = recipientPubkey;
     }
 
+    console.log('[DM] Sending message:', {
+      recipients,
+      conversationId,
+      protocol,
+      isGroup: recipients.length > 1,
+    });
+
     const optimisticId = `optimistic-${Date.now()}-${Math.random()}`;
     const optimisticMessage: DecryptedMessage = {
       id: optimisticId,
@@ -1714,7 +1742,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       clientFirstSeen: Date.now(),
     };
 
-    addMessageToState(optimisticMessage, conversationId, protocol === MESSAGE_PROTOCOL.NIP04 ? MESSAGE_PROTOCOL.NIP04 : MESSAGE_PROTOCOL.NIP17);
+    addMessageToState(optimisticMessage, conversationId, protocol === MESSAGE_PROTOCOL.NIP04 ? MESSAGE_PROTOCOL.NIP04 : MESSAGE_PROTOCOL.NIP17, userPubkey);
 
     try {
       if (protocol === MESSAGE_PROTOCOL.NIP04) {

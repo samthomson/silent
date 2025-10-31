@@ -566,6 +566,15 @@ export function DMProvider({ children, config }: DMProviderProps) {
           throw new Error(`All gift wraps rejected. Check console for details.`);
         }
 
+        // Check if gift wraps to other participants failed (excluding sender's own gift wrap)
+        const recipientGiftWrapCount = giftWraps.length - 1; // Exclude sender's gift wrap
+        const recipientFailures = failures.length > 0 && failures.length >= recipientGiftWrapCount;
+
+        if (recipientFailures && recipients.length > 0) {
+          // Only sender's gift wrap succeeded - warn user
+          throw new Error(`Message may not have been delivered to recipients. Please check your relay connection and try again.`);
+        }
+
         // Log success count
         const successCount = giftWraps.length - failures.length;
         console.log(`[DM] Successfully published ${successCount}/${giftWraps.length} gift wraps`);
@@ -933,15 +942,18 @@ export function DMProvider({ children, config }: DMProviderProps) {
           return prev;
         }
 
-        const optimisticIndex = existing.messages.findIndex(msg =>
+        // Try to match with optimistic message
+        // For incoming messages from the user themselves, match against optimistic sends
+        const optimisticIndex = !message.isSending ? existing.messages.findIndex(msg =>
           msg.isSending &&
           msg.pubkey === message.pubkey &&
           msg.decryptedContent === message.decryptedContent &&
-          Math.abs(msg.created_at - message.created_at) <= 30
-        );
+          Math.abs(msg.created_at - message.created_at) <= 60 // Increased to 60s for better matching
+        ) : -1;
 
         let updatedMessages: DecryptedMessage[];
         if (optimisticIndex !== -1) {
+          // Replace optimistic message with real one
           const existingMessage = existing.messages[optimisticIndex];
           updatedMessages = [...existing.messages];
           updatedMessages[optimisticIndex] = {
@@ -1151,6 +1163,14 @@ export function DMProvider({ children, config }: DMProviderProps) {
         });
         nip17ErrorLogger(new Error(processedMessage.error));
         return;
+      }
+
+      // Skip messages sent by the current user to themselves (these are already shown optimistically)
+      // Only process messages from the subscription if they're from someone else
+      if (sealEvent.pubkey === user.pubkey) {
+        // This is a message we sent - it's already shown optimistically
+        // The real-time subscription should only add it if we don't have an optimistic version
+        // This is handled by the deduplication logic in addMessageToState
       }
 
       // Store the seal (kind 13) as-is + add decryptedEvent for inner message access

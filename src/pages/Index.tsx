@@ -78,21 +78,21 @@ const Index = () => {
         <div className="max-w-4xl mx-auto text-center space-y-8">
           {/* Logo & Title */}
           <div className="space-y-4">
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-primary/80 shadow-2xl shadow-primary/25">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-primary/80 shadow-2xl shadow-primary/25 hover:shadow-primary/40 transition-shadow duration-300 hover:scale-105 transform">
               <MessageSquare className="w-12 h-12 text-primary-foreground" strokeWidth={2.5} />
             </div>
-            <h1 className="text-6xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            <h1 className="text-6xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent animate-in fade-in slide-in-from-bottom-4 duration-700">
               Doduo
             </h1>
-            <p className="text-2xl text-muted-foreground font-medium">
+            <p className="text-2xl text-muted-foreground font-medium animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
               Private messaging, decentralized
             </p>
           </div>
 
           {/* Feature Cards */}
           <div className="grid md:grid-cols-3 gap-6 mt-16">
-            <div className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <div className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
+              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
                 <Shield className="w-7 h-7 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">End-to-End Encrypted</h3>
@@ -101,8 +101,8 @@ const Index = () => {
               </p>
             </div>
 
-            <div className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <div className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
+              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
                 <Lock className="w-7 h-7 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Metadata Private</h3>
@@ -111,8 +111,8 @@ const Index = () => {
               </p>
             </div>
 
-            <div className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <div className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
+              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
                 <Zap className="w-7 h-7 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Decentralized</h3>

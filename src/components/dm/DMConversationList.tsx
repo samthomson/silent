@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { LOADING_PHASES } from '@/lib/dmConstants';
+import { NewConversationDialog } from '@/components/NewConversationDialog';
 
 interface DMConversationListProps {
   selectedPubkey: string | null;
@@ -29,9 +30,9 @@ interface ConversationItemProps {
   hasNIP4Messages: boolean;
 }
 
-const ConversationItemComponent = ({ 
-  pubkey, 
-  isSelected, 
+const ConversationItemComponent = ({
+  pubkey,
+  isSelected,
   onClick,
   lastMessage,
   lastActivity,
@@ -44,8 +45,8 @@ const ConversationItemComponent = ({
   const avatarUrl = metadata?.picture;
   const initials = displayName.slice(0, 2).toUpperCase();
 
-  const lastMessagePreview = lastMessage?.error 
-    ? '🔒 Encrypted message' 
+  const lastMessagePreview = lastMessage?.error
+    ? '🔒 Encrypted message'
     : lastMessage?.decryptedContent || 'No messages yet';
 
   // Show skeleton only for name/avatar while loading (we already have message data)
@@ -68,7 +69,7 @@ const ConversationItemComponent = ({
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
         )}
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -105,7 +106,7 @@ const ConversationItemComponent = ({
               </Tooltip>
             </TooltipProvider>
           </div>
-          
+
           <p className="text-sm text-muted-foreground truncate">
             {lastMessagePreview}
           </p>
@@ -137,8 +138,8 @@ const ConversationListSkeleton = () => {
   );
 };
 
-export const DMConversationList = ({ 
-  selectedPubkey, 
+export const DMConversationList = ({
+  selectedPubkey,
   onSelectConversation,
   className,
   onStatusClick
@@ -166,8 +167,8 @@ export const DMConversationList = ({
       <div className="p-4 border-b flex-shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-lg">Messages</h2>
-          {(loadingPhase === LOADING_PHASES.CACHE || 
-            loadingPhase === LOADING_PHASES.RELAYS || 
+          {(loadingPhase === LOADING_PHASES.CACHE ||
+            loadingPhase === LOADING_PHASES.RELAYS ||
             loadingPhase === LOADING_PHASES.SUBSCRIPTIONS) && (
             <TooltipProvider>
               <Tooltip>
@@ -187,19 +188,22 @@ export const DMConversationList = ({
             </TooltipProvider>
           )}
         </div>
-        {onStatusClick && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onStatusClick}
-            aria-label="View messaging status"
-          >
-            <Info className="h-4 w-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          <NewConversationDialog onStartConversation={onSelectConversation} />
+          {onStatusClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onStatusClick}
+              aria-label="View messaging status"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
-      
+
       {/* Tab buttons - always visible */}
       <div className="px-2 pt-2 flex-shrink-0">
         <div className="grid grid-cols-2 gap-1 bg-muted p-1 rounded-lg">
@@ -207,8 +211,8 @@ export const DMConversationList = ({
             onClick={() => setActiveTab('known')}
             className={cn(
               "text-xs py-2 px-3 rounded-md transition-colors",
-              activeTab === 'known' 
-                ? "bg-background shadow-sm font-medium" 
+              activeTab === 'known'
+                ? "bg-background shadow-sm font-medium"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -218,8 +222,8 @@ export const DMConversationList = ({
             onClick={() => setActiveTab('requests')}
             className={cn(
               "text-xs py-2 px-3 rounded-md transition-colors",
-              activeTab === 'requests' 
-                ? "bg-background shadow-sm font-medium" 
+              activeTab === 'requests'
+                ? "bg-background shadow-sm font-medium"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -227,7 +231,7 @@ export const DMConversationList = ({
           </button>
         </div>
       </div>
-      
+
       {/* Content area - show skeleton during initial load, otherwise show conversations */}
       <div className="flex-1 min-h-0 mt-2 overflow-hidden">
         {(isLoading || isInitialLoad) ? (

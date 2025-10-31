@@ -33,7 +33,7 @@ const queryClient = new QueryClient({
 });
 
 const defaultConfig: AppConfig = {
-  theme: "light",
+  theme: "dark",
   relayUrl: "wss://relay.ditto.pub",
 };
 
@@ -47,7 +47,7 @@ const presetRelays = [
 const dmConfig: DMConfig = {
   // Enable or disable DMs entirely
   enabled: true, // Set to false to completely disable messaging functionality
-  
+
   // Choose one protocol mode:
   // PROTOCOL_MODE.NIP04_ONLY - Force NIP-04 (legacy) only
   // PROTOCOL_MODE.NIP17_ONLY - Force NIP-17 (private) only

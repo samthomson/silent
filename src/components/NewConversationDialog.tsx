@@ -320,12 +320,8 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                       setHighlightedIndex(-1);
                     }}
                     onKeyDown={handleInputKeyDown}
-                    placeholder={selectedContacts.length === 0 
-                      ? 'Search contacts or paste pubkey...'
-                      : selectedContacts.length === 1
-                      ? 'Search for more...'
-                      : 'Search for more or paste pubkey...'}
-                    className="flex-1 min-w-[120px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                    placeholder={selectedContacts.length === 0 ? 'Search or paste pubkey...' : ''}
+                    className="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
                     autoComplete="off"
                   />
                 </div>

@@ -219,7 +219,11 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
         const pubkey = currentFiltered[highlightedIndex];
         handleToggleContact(pubkey);
         setSearchInput('');
-        setHighlightedIndex(-1);
+        // Keep the index position, but adjust if now out of bounds
+        const newLength = allContacts.length;
+        if (highlightedIndex >= newLength) {
+          setHighlightedIndex(Math.max(0, newLength - 1));
+        }
       } else if (searchInput.trim()) {
         // Try to add as pubkey
         const trimmed = searchInput.trim();
@@ -383,7 +387,8 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                             onClick={() => {
                               handleToggleContact(pubkey);
                               setSearchInput('');
-                              setHighlightedIndex(-1);
+                              // Keep the index position
+                              setHighlightedIndex(index);
                             }}
                             onMouseEnter={() => setHighlightedIndex(index)}
                             className={cn(

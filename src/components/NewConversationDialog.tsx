@@ -43,24 +43,12 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const { conversations } = useDMContext();
   const { data: follows = [], isLoading: isLoadingFollows } = useFollows();
 
-  // Combine follows with previous conversations for a comprehensive contact list
-  // Only include conversations where user has actually sent messages (isKnown), not just requests
-  // Deduplicate by pubkey, prioritizing follows (first in array)
   const allContacts = useMemo(() => {
-    // Filter to only known conversations (user has sent at least one message)
     const knownConversationPubkeys = conversations
-      .filter(c => c.isKnown) // Only include conversations where user has sent messages
+      .filter(c => c.isKnown)
       .map(c => c.pubkey);
     
-    const uniquePubkeys = new Set<string>();
-    
-    // Add follows first
-    follows.forEach(pubkey => uniquePubkeys.add(pubkey));
-    
-    // Then add known conversations that aren't already in follows
-    knownConversationPubkeys.forEach(pubkey => uniquePubkeys.add(pubkey));
-    
-    return Array.from(uniquePubkeys);
+    return Array.from(new Set([...follows, ...knownConversationPubkeys]));
   }, [follows, conversations]);
 
   // Batch-fetch metadata in chunks (works efficiently for any list size)

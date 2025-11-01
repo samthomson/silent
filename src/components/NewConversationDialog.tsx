@@ -171,6 +171,9 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
       setSelectedPubkeys([]);
       setSearchInput('');
       setPopoverOpen(false);
+    } else {
+      // Ensure popover is closed when dialog opens
+      setPopoverOpen(false);
     }
   };
 
@@ -266,8 +269,8 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                   aria-expanded={popoverOpen}
                   className="w-full min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 flex items-center gap-2 flex-wrap cursor-text"
                   onClick={() => {
-                    setPopoverOpen(true);
-                    // Don't force focus - let it happen naturally
+                    // Focus input when container is clicked
+                    setTimeout(() => inputRef.current?.focus(), 0);
                   }}
                 >
                   {selectedContacts.map(({ pubkey, metadata }) => {
@@ -308,17 +311,11 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                     type="text"
                     value={searchInput}
                     onChange={(e) => {
-                      const newValue = e.target.value;
-                      setSearchInput(newValue);
-                      if (!popoverOpen) {
-                        setPopoverOpen(true);
-                      }
+                      setSearchInput(e.target.value);
+                      setPopoverOpen(true);
                       setHighlightedIndex(-1);
                     }}
                     onKeyDown={handleInputKeyDown}
-                    onFocus={() => {
-                      setPopoverOpen(true);
-                    }}
                     placeholder={selectedContacts.length === 0 
                       ? 'Search contacts or paste pubkey...'
                       : selectedContacts.length === 1
@@ -336,19 +333,8 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                 sideOffset={4}
                 onOpenAutoFocus={(e) => {
                   e.preventDefault();
-                  // Keep focus on input, not popover
-                }}
-                onInteractOutside={(e) => {
-                  // Don't close if clicking on the input
-                  if (inputRef.current?.contains(e.target as Node)) {
-                    e.preventDefault();
-                  }
-                }}
-                onEscapeKeyDown={(e) => {
-                  // Prevent closing on escape when input has focus
-                  if (document.activeElement === inputRef.current) {
-                    e.preventDefault();
-                  }
+                  // Focus the input when popover opens
+                  inputRef.current?.focus();
                 }}
               >
                 <Command 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { nip19 } from 'nostr-tools';
 import {
   Dialog,
@@ -18,13 +18,6 @@ import { genUserName } from '@/lib/genUserName';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 
 interface NewConversationDialogProps {
@@ -39,6 +32,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const [selectedPubkeys, setSelectedPubkeys] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { conversations } = useDMContext();
   const { data: follows = [], isLoading: isLoadingFollows } = useFollows();
@@ -73,6 +67,17 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
       return displayName.toLowerCase().includes(searchLower);
     });
   }, [allContacts, searchInput, authorsMap]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightedIndex >= 0 && listRef.current) {
+      const items = listRef.current.querySelectorAll('[data-contact-item]');
+      const highlightedItem = items[highlightedIndex];
+      if (highlightedItem) {
+        highlightedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [highlightedIndex]);
 
   const handleToggleContact = (pubkey: string) => {
     setSelectedPubkeys(prev => 
@@ -255,7 +260,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
         >
           {/* Autocomplete Dropdown */}
           <div className="px-6 pb-4 flex-shrink-0">
-            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal={false}>
               <PopoverTrigger asChild>
                 <div
                   role="combobox"
@@ -320,105 +325,98 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                 </div>
               </PopoverTrigger>
               <PopoverContent 
-                className="w-[--radix-popover-trigger-width] p-0" 
+                className="w-[--radix-popover-trigger-width] p-0 overflow-hidden" 
                 align="start" 
                 side="bottom" 
                 sideOffset={4}
                 onOpenAutoFocus={(e) => {
                   e.preventDefault();
-                  // Focus the input when popover opens
                   inputRef.current?.focus();
                 }}
               >
-                <Command 
-                  shouldFilter={false}
-                  loop={false}
+                <div 
+                  ref={listRef}
+                  className="max-h-[300px] overflow-y-auto overscroll-contain"
+                  style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}
+                  onWheel={(e) => e.stopPropagation()}
                 >
-                  <CommandList
-                    style={{ pointerEvents: 'auto' }}
-                  >
-                    {isLoading ? (
-                      <div className="py-6 text-center text-sm text-muted-foreground">
-                        Loading contacts...
-                      </div>
-                    ) : (
-                      <>
-                        <CommandEmpty>
-                          {searchInput ? (
-                            <div className="py-6 text-center">
-                              <p className="text-sm text-muted-foreground mb-2">
-                                No contacts found
-                              </p>
-                              {(/^[0-9a-f]{64}$/i.test(searchInput.trim()) || 
-                                searchInput.trim().startsWith('npub1') || 
-                                searchInput.trim().startsWith('nprofile1')) && (
-                                <p className="text-xs text-muted-foreground">
-                                  Press Enter to add this pubkey
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="py-6 text-center text-sm text-muted-foreground">
-                              Start typing to search or paste a pubkey
-                            </div>
-                          )}
-                        </CommandEmpty>
-                        {filteredContacts.length > 0 && (
-                          <CommandGroup>
-                            {filteredContacts.map((pubkey, index) => {
-                              const author = authorsMap.get(pubkey);
-                              const metadata = author?.metadata;
-                              const displayName = metadata?.name || genUserName(pubkey);
-                              const avatarUrl = metadata?.picture;
-                              const initials = displayName.slice(0, 2).toUpperCase();
-                              const isSelected = selectedPubkeys.includes(pubkey);
-                              const isHighlighted = highlightedIndex === index;
-
-                              return (
-                                <CommandItem
-                                  key={pubkey}
-                                  value={pubkey}
-                                  onSelect={() => {
-                                    handleToggleContact(pubkey);
-                                    setSearchInput('');
-                                    setHighlightedIndex(-1);
-                                  }}
-                                  className={cn(
-                                    "flex items-center gap-3",
-                                    isHighlighted ? "bg-accent" : "[&[data-selected='true']]:!bg-transparent"
-                                  )}
-                                  onMouseEnter={() => setHighlightedIndex(index)}
-                                  data-selected={isHighlighted}
-                                >
-                                  <Avatar className="h-8 w-8 flex-shrink-0">
-                                    <AvatarImage src={avatarUrl} />
-                                    <AvatarFallback>{initials}</AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium truncate">{displayName}</div>
-                                    <div className="text-xs text-muted-foreground truncate">
-                                      @{displayName.toLowerCase().replace(/\s+/g, '')}
-                                    </div>
-                                  </div>
-                                  {isSelected && (
-                                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                                  )}
-                                </CommandItem>
-                              );
-                            })}
-                          </CommandGroup>
-                        )}
-                        {isFetchingMetadata && (
-                          <div className="py-2 text-center">
+                  {isLoading ? (
+                    <div className="py-6 text-center text-sm text-muted-foreground">
+                      Loading contacts...
+                    </div>
+                  ) : filteredContacts.length === 0 ? (
+                    <div className="py-6 text-center">
+                      {searchInput ? (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            No contacts found
+                          </p>
+                          {(/^[0-9a-f]{64}$/i.test(searchInput.trim()) || 
+                            searchInput.trim().startsWith('npub1') || 
+                            searchInput.trim().startsWith('nprofile1')) && (
                             <p className="text-xs text-muted-foreground">
-                              Loading profile information...
+                              Press Enter to add this pubkey
                             </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Start typing to search or paste a pubkey
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-1">
+                      {filteredContacts.map((pubkey, index) => {
+                        const author = authorsMap.get(pubkey);
+                        const metadata = author?.metadata;
+                        const displayName = metadata?.name || genUserName(pubkey);
+                        const avatarUrl = metadata?.picture;
+                        const initials = displayName.slice(0, 2).toUpperCase();
+                        const isSelected = selectedPubkeys.includes(pubkey);
+                        const isHighlighted = highlightedIndex === index;
+
+                        return (
+                          <div
+                            key={pubkey}
+                            data-contact-item
+                            onClick={() => {
+                              handleToggleContact(pubkey);
+                              setSearchInput('');
+                              setHighlightedIndex(-1);
+                            }}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors",
+                              isHighlighted ? "bg-accent" : "hover:bg-accent/50"
+                            )}
+                          >
+                            <Avatar className="h-8 w-8 flex-shrink-0">
+                              <AvatarImage src={avatarUrl} />
+                              <AvatarFallback>{initials}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{displayName}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                @{displayName.toLowerCase().replace(/\s+/g, '')}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                            )}
                           </div>
-                        )}
-                      </>
-                    )}
-                  </CommandList>
-                </Command>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {isFetchingMetadata && filteredContacts.length > 0 && (
+                    <div className="py-2 text-center border-t">
+                      <p className="text-xs text-muted-foreground">
+                        Loading profile information...
+                      </p>
+                    </div>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           </div>

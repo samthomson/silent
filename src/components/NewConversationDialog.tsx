@@ -165,9 +165,9 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     setPopoverOpen(false);
   };
 
-  const handleDialogOpenChange = (newOpen: boolean) => {
-    setDialogOpen(newOpen);
-    if (!newOpen) {
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    setDialogOpen(isOpen);
+    if (!isOpen) {
       setSelectedPubkeys([]);
       setSearchInput('');
       setPopoverOpen(false);

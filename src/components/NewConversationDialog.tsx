@@ -77,12 +77,43 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     
     const searchLower = searchInput.toLowerCase().trim();
     
-    // Filter contacts that match search term in display name
-    return allContacts.filter(pubkey => {
-      const author = authorsMap.get(pubkey);
-      const displayName = getDisplayName(pubkey, author?.metadata);
-      return displayName.toLowerCase().includes(searchLower);
-    });
+    // Filter and rank contacts by match relevance
+    const matches = allContacts
+      .map(pubkey => {
+        const author = authorsMap.get(pubkey);
+        const metadata = author?.metadata;
+        const displayName = getDisplayName(pubkey, metadata);
+        const displayNameLower = displayName.toLowerCase();
+        const userName = metadata?.name?.toLowerCase();
+        
+        // Check if matches
+        const displayMatches = displayNameLower.includes(searchLower);
+        const userNameMatches = userName?.includes(searchLower);
+        
+        if (!displayMatches && !userNameMatches) {
+          return null;
+        }
+        
+        // Calculate relevance score (lower = better)
+        let score = 0;
+        
+        if (displayNameLower.startsWith(searchLower)) {
+          score = 0; // Exact start match in display name (highest priority)
+        } else if (userName?.startsWith(searchLower)) {
+          score = 1; // Exact start match in username
+        } else if (displayMatches) {
+          score = 2; // Contains in display name
+        } else if (userNameMatches) {
+          score = 3; // Contains in username
+        }
+        
+        return { pubkey, score };
+      })
+      .filter((match): match is { pubkey: string; score: number } => match !== null)
+      .sort((a, b) => a.score - b.score)
+      .map(match => match.pubkey);
+    
+    return matches;
   }, [allContacts, searchInput, authorsMap]);
 
   // Scroll highlighted item into view

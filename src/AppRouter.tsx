@@ -7,7 +7,7 @@ import NotFound from "./pages/NotFound";
 
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />

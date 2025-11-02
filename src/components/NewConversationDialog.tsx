@@ -396,6 +396,16 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                         const isSelected = selectedPubkeys.includes(pubkey);
                         const isHighlighted = highlightedIndex === index;
 
+                        // Show secondary text only if we have both display_name and name, or show truncated npub
+                        const hasDisplayName = !!metadata?.display_name;
+                        const userName = metadata?.name;
+                        const showSecondaryText = hasDisplayName && userName && userName !== metadata.display_name;
+                        const secondaryText = showSecondaryText 
+                          ? `@${userName}` 
+                          : displayName.startsWith('npub1') 
+                            ? displayName 
+                            : undefined;
+
                         return (
                           <div
                             key={pubkey}
@@ -418,9 +428,11 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium truncate">{displayName}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                @{displayName.toLowerCase().replace(/\s+/g, '')}
-                              </div>
+                              {secondaryText && (
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {secondaryText}
+                                </div>
+                              )}
                             </div>
                             {isSelected && (
                               <Check className="h-4 w-4 text-primary flex-shrink-0" />

@@ -418,21 +418,19 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                             }}
                             onMouseEnter={() => setHighlightedIndex(index)}
                             className={cn(
-                              "flex items-start gap-3 px-3 py-2 cursor-pointer transition-colors",
+                              "flex items-center gap-2.5 px-3 h-14 cursor-pointer transition-colors",
                               isHighlighted ? "bg-accent" : "hover:bg-accent/50"
                             )}
                           >
-                            <Avatar className="h-8 w-8 flex-shrink-0">
+                            <Avatar className="h-7 w-7 flex-shrink-0">
                               <AvatarImage src={avatarUrl} />
-                              <AvatarFallback>{initials}</AvatarFallback>
+                              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                             </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{displayName}</div>
-                              {secondaryText && (
-                                <div className="text-xs text-muted-foreground truncate">
-                                  {secondaryText}
-                                </div>
-                              )}
+                            <div className="flex-1 min-w-0 py-1.5">
+                              <div className="text-sm font-medium truncate leading-tight">{displayName}</div>
+                              <div className="text-xs text-muted-foreground truncate leading-tight">
+                                {secondaryText || '\u00A0'}
+                              </div>
                             </div>
                             {isSelected && (
                               <Check className="h-4 w-4 text-primary flex-shrink-0" />

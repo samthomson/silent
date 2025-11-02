@@ -1,7 +1,9 @@
 // NOTE: This file should normally not be modified unless you are adding a new provider.
 // To add new routes, edit the AppRouter.tsx file.
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { createHead, UnheadProvider } from '@unhead/react/client';
 import { InferSeoMetaPlugin } from '@unhead/addons';
 import { Suspense } from 'react';
@@ -32,6 +34,14 @@ const queryClient = new QueryClient({
   },
 });
 
+const persistOptions = {
+  persister: createAsyncStoragePersister({
+    storage: window.localStorage,
+    key: 'doduo:cache',
+  }),
+  maxAge: Infinity, // Profile metadata rarely changes, cache indefinitely
+};
+
 const defaultConfig: AppConfig = {
   theme: "dark",
   relayUrl: "wss://relay.ditto.pub",
@@ -59,7 +69,7 @@ export function App() {
   return (
     <UnheadProvider head={head}>
       <AppProvider storageKey="nostr:app-config" defaultConfig={defaultConfig} presetRelays={presetRelays}>
-        <QueryClientProvider client={queryClient}>
+        <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
           <NostrLoginProvider storageKey='nostr:login'>
             <NostrProvider>
               <NWCProvider>
@@ -74,7 +84,7 @@ export function App() {
               </NWCProvider>
             </NostrProvider>
           </NostrLoginProvider>
-        </QueryClientProvider>
+        </PersistQueryClientProvider>
       </AppProvider>
     </UnheadProvider>
   );

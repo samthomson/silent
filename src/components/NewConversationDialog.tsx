@@ -13,7 +13,6 @@ import { useToast } from '@/hooks/useToast';
 import { useDMContext } from '@/contexts/DMContext';
 import { useFollows } from '@/hooks/useFollows';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
-import { genUserName } from '@/lib/genUserName';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -44,12 +43,31 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     return Array.from(new Set([...follows, ...knownConversationPubkeys]));
   }, [follows, conversations]);
 
+  // Include selected pubkeys in metadata fetch (for manually added pubkeys)
+  const pubkeysToFetch = useMemo(() => {
+    return Array.from(new Set([...allContacts, ...selectedPubkeys]));
+  }, [allContacts, selectedPubkeys]);
+
   // Batch-fetch metadata in chunks (works efficiently for any list size)
   // Returns immediately so UI can render, metadata fills in progressively
-  const { data: authorsMap = new Map(), isFetching: isFetchingMetadata } = useAuthorsBatch(allContacts);
+  const { data: authorsMap = new Map(), isFetching: isFetchingMetadata } = useAuthorsBatch(pubkeysToFetch);
   
   // Show loading only for initial follows fetch, not metadata (UI renders immediately)
   const isLoading = isLoadingFollows;
+
+  const getDisplayName = (pubkey: string, metadata?: { name?: string; display_name?: string }) => {
+    // Check display_name first (richer), then name
+    if (metadata?.display_name) {
+      return metadata.display_name;
+    }
+    if (metadata?.name) {
+      return metadata.name;
+    }
+    
+    // Show truncated npub instead of fake generated name
+    const npub = nip19.npubEncode(pubkey);
+    return `${npub.slice(0, 8)}...${npub.slice(-4)}`;
+  };
 
   // Filter contacts based on search (now we can filter properly since we have metadata)
   const filteredContacts = useMemo(() => {
@@ -62,7 +80,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     // Filter contacts that match search term in display name
     return allContacts.filter(pubkey => {
       const author = authorsMap.get(pubkey);
-      const displayName = author?.metadata?.name || genUserName(pubkey);
+      const displayName = getDisplayName(pubkey, author?.metadata);
       return displayName.toLowerCase().includes(searchLower);
     });
   }, [allContacts, searchInput, authorsMap]);
@@ -278,7 +296,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                   }}
                 >
                   {selectedContacts.map(({ pubkey, metadata }) => {
-                    const displayName = metadata?.name || genUserName(pubkey);
+                    const displayName = getDisplayName(pubkey, metadata);
                     const avatarUrl = metadata?.picture;
                     return (
                       <Badge
@@ -372,7 +390,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                       {filteredContacts.map((pubkey, index) => {
                         const author = authorsMap.get(pubkey);
                         const metadata = author?.metadata;
-                        const displayName = metadata?.name || genUserName(pubkey);
+                        const displayName = getDisplayName(pubkey, metadata);
                         const avatarUrl = metadata?.picture;
                         const initials = displayName.slice(0, 2).toUpperCase();
                         const isSelected = selectedPubkeys.includes(pubkey);

@@ -2,6 +2,7 @@ import { type NostrEvent } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentUser } from './useCurrentUser';
+import { followsQueryOptions } from '@/lib/queryConfig';
 
 /**
  * Hook to get the list of people the current user follows.
@@ -65,8 +66,7 @@ export function useFollows() {
       return pubkeys;
     },
     enabled: !!user?.pubkey,
-    staleTime: 15 * 60 * 1000, // Keep cached data fresh for 15 minutes
-    retry: 2,
+    ...followsQueryOptions,
   });
 }
 

@@ -11,6 +11,7 @@ import type { WebLNProvider } from '@webbtc/webln-types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
 import type { NostrEvent } from '@nostrify/nostrify';
+import { zapsQueryOptions } from '@/lib/queryConfig';
 
 export function useZaps(
   target: Event | Event[],
@@ -42,7 +43,7 @@ export function useZaps(
 
   const { data: zapEvents, ...query } = useQuery<NostrEvent[], Error>({
     queryKey: ['zaps', actualTarget?.id],
-    staleTime: 30000, // 30 seconds
+    ...zapsQueryOptions,
     refetchInterval: (query) => {
       // Only refetch if the query is currently being observed (component is mounted)
       return query.getObserversCount() > 0 ? 60000 : false;

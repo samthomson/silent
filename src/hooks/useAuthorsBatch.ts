@@ -2,6 +2,8 @@ import { type NostrEvent, type NostrMetadata, NSchema as n } from '@nostrify/nos
 import { useNostr } from '@nostrify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAppContext } from '@/hooks/useAppContext';
+import { getMetadataRelays } from '@/lib/metadataRelays';
 
 const CHUNK_SIZE = 100; // Fetch metadata for 100 authors at a time
 
@@ -51,6 +53,7 @@ const CHUNK_SIZE = 100; // Fetch metadata for 100 authors at a time
 export function useAuthorsBatch(pubkeys: string[]) {
   const { nostr } = useNostr();
   const queryClient = useQueryClient();
+  const { config } = useAppContext();
   
   // Accumulated results Map that grows as chunks arrive
   const [authorsMap, setAuthorsMap] = useState<Map<string, { event?: NostrEvent; metadata?: NostrMetadata }>>(new Map());
@@ -113,7 +116,9 @@ export function useAuthorsBatch(pubkeys: string[]) {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      const events = await nostr.query(
+      const metadataRelays = nostr.group(getMetadataRelays(config.relayUrl));
+
+      const events = await metadataRelays.query(
         [{ kinds: [0], authors: chunkPubkeys, limit: chunkPubkeys.length }],
         { signal: AbortSignal.any([abortController.signal, AbortSignal.timeout(5000)]) }
       );
@@ -131,7 +136,7 @@ export function useAuthorsBatch(pubkeys: string[]) {
     } finally {
       setIsFetching(false);
     }
-  }, [nostr, processChunk]);
+  }, [nostr, processChunk, config.relayUrl]);
 
   // Main effect: split pubkeys into chunks and fetch them
   const pubkeysString = pubkeys.join(',');
@@ -144,10 +149,22 @@ export function useAuthorsBatch(pubkeys: string[]) {
       return;
     }
 
-    // Reset state when pubkeys change
-    setAuthorsMap(new Map());
-    setLoadedCount(0);
-    setIsFetching(true);
+    // Pre-populate map from React Query cache before fetching
+    const cachedMap = new Map<string, { event?: NostrEvent; metadata?: NostrMetadata }>();
+    let cachedCount = 0;
+    
+    for (const pubkey of pubkeys) {
+      const cachedData = queryClient.getQueryData<{ event?: NostrEvent; metadata?: NostrMetadata }>(['author', pubkey]);
+      if (cachedData && (cachedData.metadata || cachedData.event)) {
+        cachedMap.set(pubkey, cachedData);
+        cachedCount++;
+      }
+    }
+    
+    // Initialize with cached data
+    setAuthorsMap(cachedMap);
+    setLoadedCount(cachedCount);
+    setIsFetching(pubkeys.length > cachedCount);
     fetchedChunks.current.clear();
 
     // Cancel any in-flight requests
@@ -155,10 +172,18 @@ export function useAuthorsBatch(pubkeys: string[]) {
       abortControllerRef.current.abort();
     }
 
-    // Split into chunks
+    // Only fetch pubkeys that aren't already cached
+    const pubkeysToFetch = pubkeys.filter(pubkey => !cachedMap.has(pubkey));
+    
+    if (pubkeysToFetch.length === 0) {
+      // All data is cached, no need to fetch
+      return;
+    }
+
+    // Split uncached pubkeys into chunks
     const chunks: string[][] = [];
-    for (let i = 0; i < pubkeys.length; i += CHUNK_SIZE) {
-      chunks.push(pubkeys.slice(i, i + CHUNK_SIZE));
+    for (let i = 0; i < pubkeysToFetch.length; i += CHUNK_SIZE) {
+      chunks.push(pubkeysToFetch.slice(i, i + CHUNK_SIZE));
     }
 
     // Fetch chunks sequentially (to avoid overwhelming relay)
@@ -194,7 +219,7 @@ export function useAuthorsBatch(pubkeys: string[]) {
         abortControllerRef.current.abort();
       }
     };
-  }, [pubkeysString, pubkeys.length, fetchChunk]); // Re-run when pubkeys change
+  }, [pubkeysString, pubkeys.length, pubkeys, fetchChunk, queryClient]); // Re-run when pubkeys change
 
   return {
     data: authorsMap,

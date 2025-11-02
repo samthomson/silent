@@ -1,9 +1,13 @@
 import { type NostrEvent, type NostrMetadata, NSchema as n } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
 import { useQuery } from '@tanstack/react-query';
+import { useAppContext } from '@/hooks/useAppContext';
+import { getMetadataRelays } from '@/lib/metadataRelays';
+import { authorQueryOptions } from '@/lib/queryConfig';
 
 export function useAuthor(pubkey: string | undefined) {
   const { nostr } = useNostr();
+  const { config } = useAppContext();
 
   return useQuery<{ event?: NostrEvent; metadata?: NostrMetadata }>({
     queryKey: ['author', pubkey ?? ''],
@@ -12,7 +16,9 @@ export function useAuthor(pubkey: string | undefined) {
         return {};
       }
 
-      const [event] = await nostr.query(
+      const metadataRelays = nostr.group(getMetadataRelays(config.relayUrl));
+
+      const [event] = await metadataRelays.query(
         [{ kinds: [0], authors: [pubkey!], limit: 1 }],
         { signal: AbortSignal.any([signal, AbortSignal.timeout(1500)]) },
       );
@@ -30,7 +36,6 @@ export function useAuthor(pubkey: string | undefined) {
         return { event };
       }
     },
-    staleTime: 4 * 60 * 60 * 1000, // Keep cached data fresh for 4 hours (profile metadata changes infrequently)
-    retry: 3,
+    ...authorQueryOptions,
   });
 }

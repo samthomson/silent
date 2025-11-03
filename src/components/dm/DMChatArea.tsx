@@ -23,9 +23,42 @@ interface DMChatAreaProps {
   className?: string;
 }
 
+// Generate consistent color for a pubkey (used for sender names in group chats)
+// Uses darker shades in light mode, lighter shades in dark mode for proper contrast
+const getPubkeyColor = (pubkey: string): string => {
+  const colors = [
+    'text-red-600 dark:text-red-400',
+    'text-orange-600 dark:text-orange-400', 
+    'text-amber-600 dark:text-amber-400',
+    'text-yellow-600 dark:text-yellow-400',
+    'text-lime-600 dark:text-lime-400',
+    'text-green-600 dark:text-green-400',
+    'text-emerald-600 dark:text-emerald-400',
+    'text-teal-600 dark:text-teal-400',
+    'text-cyan-600 dark:text-cyan-400',
+    'text-sky-600 dark:text-sky-400',
+    'text-blue-600 dark:text-blue-400',
+    'text-indigo-600 dark:text-indigo-400',
+    'text-violet-600 dark:text-violet-400',
+    'text-purple-600 dark:text-purple-400',
+    'text-fuchsia-600 dark:text-fuchsia-400',
+    'text-pink-600 dark:text-pink-400',
+    'text-rose-600 dark:text-rose-400',
+  ];
+  
+  // Hash pubkey to get consistent color index
+  let hash = 0;
+  for (let i = 0; i < pubkey.length; i++) {
+    hash = ((hash << 5) - hash) + pubkey.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 const MessageBubble = memo(({
   message,
-  isFromCurrentUser
+  isFromCurrentUser,
+  showSenderName = false,
 }: {
   message: {
     id: string;
@@ -39,11 +72,18 @@ const MessageBubble = memo(({
     isSending?: boolean;
   };
   isFromCurrentUser: boolean;
+  showSenderName?: boolean;
 }) => {
   // For NIP-17, use inner message kind (14/15); for NIP-04, use message kind (4)
   const actualKind = message.decryptedEvent?.kind || message.kind;
   const isNIP4Message = message.kind === 4;
   const isFileAttachment = actualKind === 15; // Kind 15 = files/attachments
+
+  // Fetch sender profile for group chats
+  const senderProfile = useAuthor(message.pubkey);
+  const metadata = senderProfile.data?.metadata;
+  const senderName = metadata?.display_name || metadata?.name || genUserName(message.pubkey);
+  const senderColor = getPubkeyColor(message.pubkey);
 
   // Create a NostrEvent object for NoteContent (only used for kind 15)
   // For NIP-17 file attachments, use the decryptedEvent which has the actual tags
@@ -65,6 +105,11 @@ const MessageBubble = memo(({
           ? "bg-primary text-primary-foreground"
           : "bg-muted"
       )}>
+        {showSenderName && !isFromCurrentUser && (
+          <div className={cn("text-xs font-semibold mb-1", senderColor)}>
+            {senderName}
+          </div>
+        )}
         {message.error ? (
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
@@ -304,6 +349,10 @@ export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
   const { sendMessage, protocolMode, isLoading } = useDMContext();
   const { messages, hasMoreMessages, loadEarlierMessages } = useConversationMessages(pubkey || '');
 
+  // Check if this is a group chat (3+ participants including current user)
+  const allParticipants = parseConversationId(pubkey || '');
+  const isGroupChat = allParticipants.length >= 3;
+
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -441,6 +490,7 @@ export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
                 key={message.id}
                 message={message}
                 isFromCurrentUser={message.pubkey === user.pubkey}
+                showSenderName={isGroupChat}
               />
             ))}
           </div>

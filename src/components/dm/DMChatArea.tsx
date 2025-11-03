@@ -18,7 +18,7 @@ import { NoteContent } from '@/components/NoteContent';
 import type { NostrEvent } from '@nostrify/nostrify';
 
 interface DMChatAreaProps {
-  pubkey: string | null;
+  conversationId: string | null;
   onBack?: () => void;
   className?: string;
 }
@@ -272,11 +272,11 @@ const ParticipantNames = ({ pubkeys }: { pubkeys: string[] }) => {
   }
 };
 
-const ChatHeader = ({ pubkey, onBack }: { pubkey: string; onBack?: () => void }) => {
+const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack?: () => void }) => {
   const { user } = useCurrentUser();
   
   // Parse conversation participants and exclude current user from display
-  const allParticipants = parseConversationId(pubkey);
+  const allParticipants = parseConversationId(conversationId);
   const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
 
   // For 1-on-1 chats, fetch the single participant's profile
@@ -344,13 +344,13 @@ const EmptyState = ({ isLoading }: { isLoading: boolean }) => {
   );
 };
 
-export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
+export const DMChatArea = ({ conversationId, onBack, className }: DMChatAreaProps) => {
   const { user } = useCurrentUser();
   const { sendMessage, protocolMode, isLoading } = useDMContext();
-  const { messages, hasMoreMessages, loadEarlierMessages } = useConversationMessages(pubkey || '');
+  const { messages, hasMoreMessages, loadEarlierMessages } = useConversationMessages(conversationId || '');
 
   // Check if this is a group chat (3+ participants including current user)
-  const allParticipants = parseConversationId(pubkey || '');
+  const allParticipants = parseConversationId(conversationId || '');
   const isGroupChat = allParticipants.length >= 3;
 
   const [messageText, setMessageText] = useState('');
@@ -383,12 +383,12 @@ export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
   }, [messages.length]);
 
   const handleSend = useCallback(async () => {
-    if (!messageText.trim() || !pubkey || !user) return;
+    if (!messageText.trim() || !conversationId || !user) return;
 
     setIsSending(true);
     try {
       await sendMessage({
-        recipientPubkey: pubkey,
+        recipientPubkey: conversationId,
         content: messageText.trim(),
         protocol: selectedProtocol,
       });
@@ -398,7 +398,7 @@ export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
     } finally {
       setIsSending(false);
     }
-  }, [messageText, pubkey, user, sendMessage, selectedProtocol]);
+  }, [messageText, conversationId, user, sendMessage, selectedProtocol]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -433,7 +433,7 @@ export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
     }, 0);
   }, [loadEarlierMessages, isLoadingMore]);
 
-  if (!pubkey) {
+  if (!conversationId) {
     return (
       <Card className={cn("h-full", className)}>
         <EmptyState isLoading={isLoading} />
@@ -453,7 +453,7 @@ export const DMChatArea = ({ pubkey, onBack, className }: DMChatAreaProps) => {
 
   return (
     <Card className={cn("h-full flex flex-col", className)}>
-      <ChatHeader pubkey={pubkey} onBack={onBack} />
+      <ChatHeader conversationId={conversationId} onBack={onBack} />
 
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
         {messages.length === 0 ? (

@@ -17,7 +17,7 @@ import { NewConversationDialog } from '@/components/NewConversationDialog';
 
 interface DMConversationListProps {
   selectedPubkey: string | null;
-  onSelectConversation: (pubkey: string) => void;
+  onSelectConversation: (conversationId: string) => void;
   className?: string;
   onStatusClick?: () => void;
 }

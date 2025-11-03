@@ -44,11 +44,14 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
       .filter(c => c.isKnown)
       .flatMap(c => parseConversationId(c.pubkey));
     
-    // Remove current user from contacts (don't show yourself in the list)
-    const contactsWithoutSelf = [...follows, ...knownConversationPubkeys]
-      .filter(pubkey => pubkey !== user?.pubkey);
+    // Include current user explicitly (for self-messaging support)
+    const allPubkeys = [
+      user?.pubkey,
+      ...follows,
+      ...knownConversationPubkeys
+    ].filter((pk): pk is string => !!pk);
     
-    return Array.from(new Set(contactsWithoutSelf));
+    return Array.from(new Set(allPubkeys));
   }, [follows, conversations, user?.pubkey]);
 
   // Include selected pubkeys in metadata fetch (for manually added pubkeys)

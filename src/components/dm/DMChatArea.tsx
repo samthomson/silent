@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { useConversationMessages, useDMContext } from '@/contexts/DMContext';
+import { useConversationMessages, useDMContext, type DecryptedMessage } from '@/contexts/DMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useAppContext } from '@/hooks/useAppContext';
@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
@@ -25,22 +26,69 @@ interface DMChatAreaProps {
   className?: string;
 }
 
-const RawEventModal = ({ event, open, onOpenChange }: {
-  event: NostrEvent;
+const RawEventModal = ({ 
+  outerEvent, 
+  innerEvent,
+  giftWrapEvent,
+  open, 
+  onOpenChange 
+}: {
+  outerEvent: NostrEvent;
+  innerEvent?: NostrEvent;
+  giftWrapEvent?: NostrEvent;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  const isNIP17 = outerEvent.kind === 13 && innerEvent;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>Raw Nostr Event</DialogTitle>
+          <DialogTitle>Raw Nostr Event{isNIP17 ? 's' : ''}</DialogTitle>
         </DialogHeader>
-        <ScrollArea className="flex-1">
-          <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
-            <code>{JSON.stringify(event, null, 2)}</code>
-          </pre>
-        </ScrollArea>
+        {isNIP17 ? (
+          <Tabs defaultValue="inner" className="flex-1 flex flex-col min-h-0">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="giftwrap">Gift Wrap (Kind 1059)</TabsTrigger>
+              <TabsTrigger value="seal">Seal (Kind 13)</TabsTrigger>
+              <TabsTrigger value="inner">Inner Message (Kind {innerEvent.kind})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="giftwrap" className="flex-1 mt-2">
+              <ScrollArea className="h-full">
+                {giftWrapEvent ? (
+                  <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+                    <code>{JSON.stringify(giftWrapEvent, null, 2)}</code>
+                  </pre>
+                ) : (
+                  <div className="p-4 text-muted-foreground text-sm">
+                    Gift wrap not available for this message
+                  </div>
+                )}
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="seal" className="flex-1 mt-2">
+              <ScrollArea className="h-full">
+                <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+                  <code>{JSON.stringify(outerEvent, null, 2)}</code>
+                </pre>
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="inner" className="flex-1 mt-2">
+              <ScrollArea className="h-full">
+                <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+                  <code>{JSON.stringify(innerEvent, null, 2)}</code>
+                </pre>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <ScrollArea className="flex-1">
+            <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+              <code>{JSON.stringify(outerEvent, null, 2)}</code>
+            </pre>
+          </ScrollArea>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -52,17 +100,7 @@ const MessageBubble = memo(({
   showSenderName = false,
   devMode = false,
 }: {
-  message: {
-    id: string;
-    pubkey: string;
-    kind: number;
-    tags: string[][];
-    decryptedContent?: string;
-    decryptedEvent?: NostrEvent;
-    error?: string;
-    created_at: number;
-    isSending?: boolean;
-  };
+  message: DecryptedMessage;
   isFromCurrentUser: boolean;
   showSenderName?: boolean;
   devMode?: boolean;
@@ -71,6 +109,7 @@ const MessageBubble = memo(({
   // For NIP-17, use inner message kind (14/15); for NIP-04, use message kind (4)
   const actualKind = message.decryptedEvent?.kind || message.kind;
   const isNIP4Message = message.kind === 4;
+  const isNIP17Message = message.kind === 13 && message.decryptedEvent; // Kind 13 = seal
   const isFileAttachment = actualKind === 15; // Kind 15 = files/attachments
 
   // Fetch sender profile for group chats
@@ -89,6 +128,20 @@ const MessageBubble = memo(({
     tags: message.tags,
     content: message.decryptedContent || '',
     sig: '', // Not needed for display
+  };
+
+  // For dev modal: reconstruct the outer event
+  // For NIP-17 this is the Seal (kind 13) with encrypted content
+  // For NIP-04 this is the Kind 4 event with encrypted content
+  const messageAsEvent = message as DecryptedMessage;
+  const outerEvent: NostrEvent = {
+    id: messageAsEvent.id,
+    pubkey: messageAsEvent.pubkey,
+    created_at: messageAsEvent.created_at,
+    kind: messageAsEvent.kind,
+    tags: messageAsEvent.tags,
+    content: messageAsEvent.content || '', // Encrypted content as stored
+    sig: messageAsEvent.sig || '',
   };
 
   return (
@@ -184,7 +237,9 @@ const MessageBubble = memo(({
         </div>
 
         <RawEventModal
-          event={messageEvent}
+          outerEvent={outerEvent}
+          innerEvent={isNIP17Message ? message.decryptedEvent : undefined}
+          giftWrapEvent={isNIP17Message ? messageAsEvent.originalGiftWrap : undefined}
           open={showRawEvent}
           onOpenChange={setShowRawEvent}
         />

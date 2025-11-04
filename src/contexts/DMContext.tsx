@@ -68,7 +68,7 @@ interface DecryptionResult {
   error?: string;
 }
 
-interface DecryptedMessage extends NostrEvent {
+export interface DecryptedMessage extends NostrEvent {
   decryptedContent?: string;
   error?: string;
   isSending?: boolean;

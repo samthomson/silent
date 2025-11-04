@@ -59,8 +59,8 @@ export function DoduoHeader({ onStatusClick }: DoduoHeaderProps) {
 
       {/* Settings Modal */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-3xl p-0">
-          <DialogHeader className="px-6 pt-6 pb-4">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
             <DialogTitle>Settings</DialogTitle>
             <DialogDescription>
               Manage your app preferences
@@ -69,25 +69,25 @@ export function DoduoHeader({ onStatusClick }: DoduoHeaderProps) {
           
           <Separator />
 
-          <Tabs defaultValue="appearance" orientation="vertical" className="flex min-h-[400px]">
-            <TabsList className="flex flex-col h-full w-48 bg-transparent border-r rounded-none p-2 gap-1">
+          <Tabs defaultValue="appearance" className="flex flex-col md:flex-row min-h-[300px] md:min-h-[400px]">
+            <TabsList className="flex flex-row md:flex-col h-auto md:h-full w-full md:w-48 bg-transparent border-b md:border-b-0 md:border-r rounded-none p-2 gap-1 justify-start items-start">
               <TabsTrigger 
                 value="appearance" 
-                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+                className="w-auto md:w-full justify-start gap-3 data-[state=active]:bg-accent"
               >
                 <Palette className="h-4 w-4" />
-                Appearance
+                <span className="hidden sm:inline">Appearance</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="storage" 
-                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+                className="w-auto md:w-full justify-start gap-3 data-[state=active]:bg-accent"
               >
                 <Database className="h-4 w-4" />
-                Storage
+                <span className="hidden sm:inline">Storage</span>
               </TabsTrigger>
             </TabsList>
 
-            <div className="flex-1 px-6 py-4">
+            <div className="flex-1 px-4 md:px-6 py-4">
               <TabsContent value="appearance" className="mt-0 space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold mb-3">Theme</h3>

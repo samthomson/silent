@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useConversationMessages, useDMContext } from '@/contexts/DMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
+import { useAppContext } from '@/hooks/useAppContext';
 import { genUserName } from '@/lib/genUserName';
 import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@/lib/dmConstants';
 import { formatConversationTime, formatFullDateTime, parseConversationId, getPubkeyColor } from '@/lib/dmUtils';
@@ -12,7 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, Send, Loader2, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import type { NostrEvent } from '@nostrify/nostrify';
@@ -23,10 +25,32 @@ interface DMChatAreaProps {
   className?: string;
 }
 
+const RawEventModal = ({ event, open, onOpenChange }: {
+  event: NostrEvent;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Raw Nostr Event</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="flex-1">
+          <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+            <code>{JSON.stringify(event, null, 2)}</code>
+          </pre>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const MessageBubble = memo(({
   message,
   isFromCurrentUser,
   showSenderName = false,
+  devMode = false,
 }: {
   message: {
     id: string;
@@ -41,7 +65,9 @@ const MessageBubble = memo(({
   };
   isFromCurrentUser: boolean;
   showSenderName?: boolean;
+  devMode?: boolean;
 }) => {
+  const [showRawEvent, setShowRawEvent] = useState(false);
   // For NIP-17, use inner message kind (14/15); for NIP-04, use message kind (4)
   const actualKind = message.decryptedEvent?.kind || message.kind;
   const isNIP4Message = message.kind === 4;
@@ -98,41 +124,70 @@ const MessageBubble = memo(({
             {message.decryptedContent}
           </p>
         )}
-        <div className="flex items-center gap-2 mt-1">
-          <TooltipProvider>
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <span className={cn(
-                  "text-xs opacity-70 cursor-default",
-                  isFromCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
-                )}>
-                  {formatConversationTime(message.created_at)}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">{formatFullDateTime(message.created_at)}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <span className={cn(
+                    "text-xs opacity-70 cursor-default",
+                    isFromCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
+                  )}>
+                    {formatConversationTime(message.created_at)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">{formatFullDateTime(message.created_at)}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-          {isNIP4Message && (
+            {isNIP4Message && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex-shrink-0">
+                      <AlertTriangle className="h-3 w-3 text-yellow-600 dark:text-yellow-500" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Uses outdated NIP-04 encryption</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {message.isSending && (
+              <Loader2 className="h-3 w-3 animate-spin opacity-70" />
+            )}
+          </div>
+
+          {devMode && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex-shrink-0">
-                    <AlertTriangle className="h-3 w-3 text-yellow-600 dark:text-yellow-500" />
-                  </div>
+                  <button
+                    onClick={() => setShowRawEvent(true)}
+                    className={cn(
+                      "opacity-50 hover:opacity-100 transition-opacity",
+                      isFromCurrentUser ? "text-primary-foreground" : "text-foreground"
+                    )}
+                  >
+                    <FileJson className="h-3 w-3" />
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="text-xs">Uses outdated NIP-04 encryption</p>
+                  <p className="text-xs">View raw event</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
-          {message.isSending && (
-            <Loader2 className="h-3 w-3 animate-spin opacity-70" />
-          )}
         </div>
+
+        <RawEventModal
+          event={messageEvent}
+          open={showRawEvent}
+          onOpenChange={setShowRawEvent}
+        />
       </div>
     </div>
   );
@@ -325,8 +380,11 @@ const EmptyState = ({ isLoading }: { isLoading: boolean }) => {
 
 export const DMChatArea = ({ conversationId, onBack, className }: DMChatAreaProps) => {
   const { user } = useCurrentUser();
+  const { config } = useAppContext();
   const { sendMessage, protocolMode, isLoading } = useDMContext();
   const { messages, hasMoreMessages, loadEarlierMessages } = useConversationMessages(conversationId || '');
+
+  const devMode = config.devMode ?? false;
 
   // Check if this is a group chat (3+ participants including current user)
   const allParticipants = parseConversationId(conversationId || '');
@@ -470,6 +528,7 @@ export const DMChatArea = ({ conversationId, onBack, className }: DMChatAreaProp
                 message={message}
                 isFromCurrentUser={message.pubkey === user.pubkey}
                 showSenderName={isGroupChat}
+                devMode={devMode}
               />
             ))}
           </div>

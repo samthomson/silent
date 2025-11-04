@@ -49,34 +49,42 @@ const RawEventModal = ({
         </DialogHeader>
         {isNIP17 ? (
           <Tabs defaultValue="inner" className="flex-1 flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="giftwrap">Gift Wrap (Kind 1059)</TabsTrigger>
-              <TabsTrigger value="seal">Seal (Kind 13)</TabsTrigger>
-              <TabsTrigger value="inner">Inner Message (Kind {innerEvent.kind})</TabsTrigger>
+            <TabsList className="h-auto bg-transparent px- pt-0 pb-2 flex items-center gap-2">
+              <TabsTrigger value="giftwrap" className="px-3 py-1.5 rounded data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
+                Gift Wrap (1059)
+              </TabsTrigger>
+              <span className="text-muted-foreground">→</span>
+              <TabsTrigger value="seal" className="px-3 py-1.5 rounded data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
+                Seal (13)
+              </TabsTrigger>
+              <span className="text-muted-foreground">→</span>
+              <TabsTrigger value="inner" className="px-3 py-1.5 rounded data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
+                Message ({innerEvent.kind})
+              </TabsTrigger>
             </TabsList>
-            <TabsContent value="giftwrap" className="flex-1 mt-2">
+            <TabsContent value="giftwrap" className="flex-1 mt-4">
               <ScrollArea className="h-full">
                 {giftWrapEvent ? (
-                  <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+                  <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto mx-6">
                     <code>{JSON.stringify(giftWrapEvent, null, 2)}</code>
                   </pre>
                 ) : (
-                  <div className="p-4 text-muted-foreground text-sm">
+                  <div className="p-4 text-muted-foreground text-sm mx-6">
                     Gift wrap not available for this message
                   </div>
                 )}
               </ScrollArea>
             </TabsContent>
-            <TabsContent value="seal" className="flex-1 mt-2">
+            <TabsContent value="seal" className="flex-1 mt-4">
               <ScrollArea className="h-full">
-                <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+                <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto mx-6">
                   <code>{JSON.stringify(outerEvent, null, 2)}</code>
                 </pre>
               </ScrollArea>
             </TabsContent>
-            <TabsContent value="inner" className="flex-1 mt-2">
+            <TabsContent value="inner" className="flex-1 mt-4">
               <ScrollArea className="h-full">
-                <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto">
+                <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto mx-6">
                   <code>{JSON.stringify(innerEvent, null, 2)}</code>
                 </pre>
               </ScrollArea>
@@ -121,28 +129,28 @@ const MessageBubble = memo(({
   // Create a NostrEvent object for NoteContent (only used for kind 15)
   // For NIP-17 file attachments, use the decryptedEvent which has the actual tags
   const messageEvent: NostrEvent = message.decryptedEvent || {
-    id: message.id,
+    ...(message.id && { id: message.id }),
     pubkey: message.pubkey,
     created_at: message.created_at,
     kind: message.kind,
     tags: message.tags,
     content: message.decryptedContent || '',
-    sig: '', // Not needed for display
-  };
+    ...(message.sig && { sig: message.sig }),
+  } as NostrEvent;
 
   // For dev modal: reconstruct the outer event
-  // For NIP-17 this is the Seal (kind 13) with encrypted content
-  // For NIP-04 this is the Kind 4 event with encrypted content
+  // For NIP-17 this is the Seal (kind 13) with encrypted content (no id/sig)
+  // For NIP-04 this is the Kind 4 event with encrypted content (has id/sig)
   const messageAsEvent = message as DecryptedMessage;
-  const outerEvent: NostrEvent = {
-    id: messageAsEvent.id,
+  const outerEvent = {
+    ...(messageAsEvent.id && { id: messageAsEvent.id }),
     pubkey: messageAsEvent.pubkey,
     created_at: messageAsEvent.created_at,
     kind: messageAsEvent.kind,
     tags: messageAsEvent.tags,
     content: messageAsEvent.content || '', // Encrypted content as stored
-    sig: messageAsEvent.sig || '',
-  };
+    ...(messageAsEvent.sig && { sig: messageAsEvent.sig }),
+  } as NostrEvent;
 
   return (
     <div className={cn("flex mb-4", isFromCurrentUser ? "justify-end" : "justify-start")}>

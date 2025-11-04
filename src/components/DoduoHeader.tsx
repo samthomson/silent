@@ -1,4 +1,4 @@
-import { MessageSquare, Moon, Sun, Settings, Info, Palette, Database, ChevronRight, ArrowLeft } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Settings, Info, Palette, Database, ChevronRight, ArrowLeft, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
@@ -7,7 +7,6 @@ import { HelpDialog } from '@/components/HelpDialog';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -36,21 +35,30 @@ function SettingsModal({ open, onOpenChange, onStatusClick }: SettingsModalProps
         if (!isOpen) setMobileCategory(null);
       }}
     >
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0">
-        {/* Mobile: Show back button when category is selected */}
-        <DialogHeader className="md:hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0 [&>button]:hidden md:[&>button]:block">
+        {/* Mobile: Single-line header with arrow, title, and close */}
+        <DialogHeader className="md:hidden flex flex-row items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
           {mobileCategory ? (
             <Button
               variant="ghost"
-              size="sm"
-              className="w-fit -ml-2 mb-2"
+              size="icon"
+              className="h-8 w-8 -ml-2"
               onClick={() => setMobileCategory(null)}
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
+              <ArrowLeft className="h-4 w-4" />
             </Button>
-          ) : null}
-          <DialogTitle>{mobileCategory || 'Settings'}</DialogTitle>
+          ) : (
+            <div className="w-8 h-8" />
+          )}
+          <DialogTitle className="flex-1 text-center">{mobileCategory || 'Settings'}</DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 -mr-2"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </DialogHeader>
 
         {/* Desktop: Always show title */}

@@ -51,17 +51,11 @@ function SettingsModal({ open, onOpenChange, onStatusClick }: SettingsModalProps
             </Button>
           ) : null}
           <DialogTitle>{mobileCategory || 'Settings'}</DialogTitle>
-          <DialogDescription>
-            {mobileCategory ? '' : 'Manage your app preferences'}
-          </DialogDescription>
         </DialogHeader>
 
         {/* Desktop: Always show title */}
-        <DialogHeader className="hidden md:block px-6 pt-6 pb-4">
+        <DialogHeader className="hidden md:block px-6 pt-6">
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            Manage your app preferences
-          </DialogDescription>
         </DialogHeader>
         
         <Separator />

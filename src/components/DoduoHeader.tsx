@@ -215,8 +215,8 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
         {/* Desktop: Tabbed layout */}
         <Tabs defaultValue="appearance" className="hidden md:flex flex-1 min-h-0">
-          <div className="w-48 border-r pt-4 flex-shrink-0">
-            <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pb-2 gap-1 items-start">
+          <div className="w-48 border-r flex-shrink-0 self-stretch">
+            <TabsList className="flex flex-col w-full h-full bg-transparent border-0 rounded-none px-2 pt-0 pb-4 gap-1 items-start justify-start">
               <TabsTrigger 
                 value="appearance" 
                 className="w-full justify-start gap-3 data-[state=active]:bg-accent"
@@ -242,7 +242,7 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           </div>
 
           <ScrollArea className="flex-1 min-w-0">
-            <div className="px-6 pb-4">
+            <div className="px-6 pt-0 pb-4">
               <TabsContent value="appearance" className="mt-0">
                 <AppearanceContent />
               </TabsContent>

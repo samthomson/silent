@@ -75,6 +75,7 @@ interface DecryptedMessage extends NostrEvent {
   clientFirstSeen?: number;
   decryptedEvent?: NostrEvent; // For NIP-17: the inner kind 14/15 event
   originalGiftWrapId?: string; // Store gift wrap ID for NIP-17 deduplication
+  originalGiftWrap?: NostrEvent; // Store full gift wrap for debugging
 }
 
 interface NIP17ProcessingResult {
@@ -799,7 +800,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
               continue;
             }
 
-            // Store the seal (kind 13) as-is + add decryptedEvent for inner message access
+            // Store the seal (kind 13) as-is + add decryptedEvent for inner message access + gift wrap for debugging
             const messageWithAnimation: DecryptedMessage = {
               ...sealEvent, // Seal fields (kind 13, seal pubkey, encrypted content, etc.)
               created_at: processedMessage.created_at, // Use real timestamp from inner message
@@ -809,6 +810,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
               } as NostrEvent,
               decryptedContent: processedMessage.decryptedContent,
               originalGiftWrapId: giftWrap.id, // Store gift wrap ID for deduplication
+              originalGiftWrap: giftWrap, // Store full gift wrap for debugging
             };
 
           // Use real message timestamp for recency check
@@ -1193,7 +1195,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
         return;
       }
 
-      // Store the seal (kind 13) as-is + add decryptedEvent for inner message access
+      // Store the seal (kind 13) as-is + add decryptedEvent for inner message access + gift wrap for debugging
       const messageWithAnimation: DecryptedMessage = {
         ...sealEvent, // Seal fields (kind 13, seal pubkey, encrypted content, etc.)
         created_at: processedMessage.created_at, // Use real timestamp from inner message
@@ -1203,6 +1205,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
         } as NostrEvent,
         decryptedContent: processedMessage.decryptedContent,
         originalGiftWrapId: event.id, // Store gift wrap ID for deduplication
+        originalGiftWrap: event, // Store full gift wrap for debugging
       };
 
       // Use real message timestamp for recency check
@@ -1376,11 +1379,14 @@ export function DMProvider({ children, config }: DMProviderProps) {
                 const decryptedEvent = JSON.parse(sealContent) as NostrEvent;
 
                 // Keep seal structure but add decryptedEvent for access to inner fields
+                // Also preserve originalGiftWrap if it was stored
+                const msgWithExtra = msg as NostrEvent & { originalGiftWrap?: NostrEvent };
                 return {
                   ...msg,
                   decryptedEvent,                         // Full inner event (kind 14/15)
                   decryptedContent: decryptedEvent.content, // Plaintext message
-                } as NostrEvent & { decryptedEvent?: NostrEvent; decryptedContent?: string; error?: string };
+                  ...(msgWithExtra.originalGiftWrap && { originalGiftWrap: msgWithExtra.originalGiftWrap }),
+                } as NostrEvent & { decryptedEvent?: NostrEvent; decryptedContent?: string; error?: string; originalGiftWrap?: NostrEvent };
               } catch {
                 error = 'Decryption failed';
               }
@@ -1641,7 +1647,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
           messages: participant.messages.map(msg => ({
             // Store messages in their ORIGINAL ENCRYPTED form
             // Just strip the decrypted fields (decryptedContent, decryptedEvent)
-            // Keep originalGiftWrapId for NIP-17 deduplication on cache load
+            // Keep originalGiftWrapId and originalGiftWrap for NIP-17 debugging
             id: msg.id,
             pubkey: msg.pubkey,
             content: msg.content, // Encrypted content (NIP-04 or seal)
@@ -1650,6 +1656,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
             tags: msg.tags,
             sig: msg.sig,
             ...(msg.originalGiftWrapId && { originalGiftWrapId: msg.originalGiftWrapId }),
+            ...(msg.originalGiftWrap && { originalGiftWrap: msg.originalGiftWrap }),
           } as NostrEvent)),
           lastActivity: participant.lastActivity,
           hasNIP4: participant.hasNIP4,

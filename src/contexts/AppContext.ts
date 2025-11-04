@@ -7,6 +7,8 @@ export interface AppConfig {
   theme: Theme;
   /** Selected relay URL */
   relayUrl: string;
+  /** Developer mode toggle */
+  devMode?: boolean;
 }
 
 export interface AppContextType {

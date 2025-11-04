@@ -1,4 +1,4 @@
-import { MessageSquare, Moon, Sun, Settings, Palette, Database, ChevronRight, ArrowLeft, X } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Settings, Palette, Database, ChevronRight, ArrowLeft, X, Code } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
@@ -6,6 +6,9 @@ import { LoginArea } from '@/components/auth/LoginArea';
 import { HelpDialog } from '@/components/HelpDialog';
 import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
 import { useDMContext } from '@/contexts/DMContext';
+import { useAppContext } from '@/hooks/useAppContext';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +74,36 @@ function StorageContent() {
   );
 }
 
+function AdvancedContent() {
+  const { config, updateConfig } = useAppContext();
+  const devMode = config.devMode ?? false;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Developer Options</h3>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col items-start">
+            <Label htmlFor="dev-mode" className="font-medium cursor-pointer">
+              Developer Mode
+            </Label>
+            <span className="text-xs text-muted-foreground">
+              Enable developer tools and debug features
+            </span>
+          </div>
+          <Switch
+            id="dev-mode"
+            checked={devMode}
+            onCheckedChange={(checked) => {
+              updateConfig((current) => ({ ...current, devMode: checked }));
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
 
@@ -82,7 +115,7 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         if (!isOpen) setMobileCategory(null);
       }}
     >
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0 max-h-[90vh] flex flex-col [&>button]:hidden md:[&>button]:block">
+      <DialogContent className="max-w-[95vw] w-full sm:max-w-2xl md:max-w-[700px] p-0 max-h-[90vh] flex flex-col [&>button]:hidden md:[&>button]:block">
         {/* Mobile: Single-line header with arrow, title, and close */}
         <DialogHeader className="md:hidden flex flex-row items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
           {mobileCategory ? (
@@ -149,6 +182,21 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
               </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-auto py-4 px-4"
+                onClick={() => setMobileCategory('Advanced')}
+              >
+                <div className="flex items-center gap-3">
+                  <Code className="h-5 w-5" />
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Advanced</span>
+                    <span className="text-xs text-muted-foreground">Developer options</span>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </Button>
             </div>
           ) : mobileCategory === 'Appearance' ? (
             <div className="px-4 py-4">
@@ -158,11 +206,15 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <div className="px-4 py-4">
               <StorageContent />
             </div>
+          ) : mobileCategory === 'Advanced' ? (
+            <div className="px-4 py-4">
+              <AdvancedContent />
+            </div>
           ) : null}
         </ScrollArea>
 
         {/* Desktop: Tabbed layout */}
-        <Tabs defaultValue="appearance" className="hidden md:flex flex-1 min-h-0 overflow-hidden">
+        <Tabs defaultValue="appearance" className="hidden md:flex flex-1 min-h-0">
           <div className="w-48 border-r pt-4 flex-shrink-0">
             <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pb-2 gap-1 items-start">
               <TabsTrigger 
@@ -179,10 +231,17 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <Database className="h-4 w-4" />
                 Storage
               </TabsTrigger>
+              <TabsTrigger 
+                value="advanced" 
+                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+              >
+                <Code className="h-4 w-4" />
+                Advanced
+              </TabsTrigger>
             </TabsList>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-w-0">
             <div className="px-6 pb-4">
               <TabsContent value="appearance" className="mt-0">
                 <AppearanceContent />
@@ -190,6 +249,10 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
               <TabsContent value="storage" className="mt-0">
                 <StorageContent />
+              </TabsContent>
+
+              <TabsContent value="advanced" className="mt-0">
+                <AdvancedContent />
               </TabsContent>
             </div>
           </ScrollArea>

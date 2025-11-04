@@ -587,7 +587,7 @@ export const DMChatArea = ({ conversationId, onBack, className }: DMChatAreaProp
             )}
             {messages.map((message) => (
               <MessageBubble
-                key={message.id}
+                key={message.originalGiftWrapId || message.id}
                 message={message}
                 isFromCurrentUser={message.pubkey === user.pubkey}
                 showSenderName={isGroupChat}

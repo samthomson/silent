@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
 
 interface DoduoHeaderProps {
   onStatusClick?: () => void;
@@ -39,15 +38,12 @@ function SettingsModal({ open, onOpenChange, onStatusClick }: SettingsModalProps
     >
       <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0">
         {/* Mobile: Show back button when category is selected */}
-        <DialogHeader className={cn(
-          "px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4",
-          mobileCategory && "md:hidden"
-        )}>
+        <DialogHeader className="md:hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
           {mobileCategory ? (
             <Button
               variant="ghost"
               size="sm"
-              className="w-fit -ml-2 mb-2 md:hidden"
+              className="w-fit -ml-2 mb-2"
               onClick={() => setMobileCategory(null)}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -166,24 +162,26 @@ function SettingsModal({ open, onOpenChange, onStatusClick }: SettingsModalProps
 
         {/* Desktop: Tabbed layout */}
         <Tabs defaultValue="appearance" className="hidden md:flex min-h-[400px]">
-          <TabsList className="flex flex-col h-full w-48 bg-transparent border-r rounded-none p-2 gap-1 items-start">
-            <TabsTrigger 
-              value="appearance" 
-              className="w-full justify-start gap-3 data-[state=active]:bg-accent"
-            >
-              <Palette className="h-4 w-4" />
-              Appearance
-            </TabsTrigger>
-            <TabsTrigger 
-              value="storage" 
-              className="w-full justify-start gap-3 data-[state=active]:bg-accent"
-            >
-              <Database className="h-4 w-4" />
-              Storage
-            </TabsTrigger>
-          </TabsList>
+          <div className="w-48 border-r pt-4">
+            <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pb-2 gap-1 items-start">
+              <TabsTrigger 
+                value="appearance" 
+                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+              >
+                <Palette className="h-4 w-4" />
+                Appearance
+              </TabsTrigger>
+              <TabsTrigger 
+                value="storage" 
+                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+              >
+                <Database className="h-4 w-4" />
+                Storage
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <div className="flex-1 px-6 py-4">
+          <div className="flex-1 px-6 pb-4">
             <TabsContent value="appearance" className="mt-0 space-y-4">
               <div>
                 <h3 className="text-sm font-semibold mb-3">Theme</h3>

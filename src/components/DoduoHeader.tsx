@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface SettingsModalProps {
   open: boolean;
@@ -81,7 +82,7 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         if (!isOpen) setMobileCategory(null);
       }}
     >
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0 [&>button]:hidden md:[&>button]:block">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-3xl p-0 max-h-[90vh] flex flex-col [&>button]:hidden md:[&>button]:block">
         {/* Mobile: Single-line header with arrow, title, and close */}
         <DialogHeader className="md:hidden flex flex-row items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
           {mobileCategory ? (
@@ -115,7 +116,7 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         <Separator />
 
         {/* Mobile: Category list or selected category content */}
-        <div className="md:hidden min-h-[300px]">
+        <ScrollArea className="md:hidden flex-1 overflow-auto">
           {!mobileCategory ? (
             // Category List
             <div className="px-4 py-4 space-y-2">
@@ -158,11 +159,11 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               <StorageContent />
             </div>
           ) : null}
-        </div>
+        </ScrollArea>
 
         {/* Desktop: Tabbed layout */}
-        <Tabs defaultValue="appearance" className="hidden md:flex min-h-[400px]">
-          <div className="w-48 border-r pt-4">
+        <Tabs defaultValue="appearance" className="hidden md:flex flex-1 min-h-0 overflow-hidden">
+          <div className="w-48 border-r pt-4 flex-shrink-0">
             <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pb-2 gap-1 items-start">
               <TabsTrigger 
                 value="appearance" 
@@ -181,15 +182,17 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </TabsList>
           </div>
 
-          <div className="flex-1 px-6 pb-4">
-            <TabsContent value="appearance" className="mt-0">
-              <AppearanceContent />
-            </TabsContent>
+          <ScrollArea className="flex-1">
+            <div className="px-6 pb-4">
+              <TabsContent value="appearance" className="mt-0">
+                <AppearanceContent />
+              </TabsContent>
 
-            <TabsContent value="storage" className="mt-0">
-              <StorageContent />
-            </TabsContent>
-          </div>
+              <TabsContent value="storage" className="mt-0">
+                <StorageContent />
+              </TabsContent>
+            </div>
+          </ScrollArea>
         </Tabs>
       </DialogContent>
     </Dialog>

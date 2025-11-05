@@ -110,9 +110,13 @@ const MessageBubble = memo(({
   const [showRawEvent, setShowRawEvent] = useState(false);
   const { config } = useAppContext();
   
+  // For NIP-17, use inner message kind (14/15); for NIP-04, use message kind (4)
+  const actualKind = message.decryptedEvent?.kind || message.kind;
   const isNIP4Message = message.kind === 4;
   const isNIP17Message = message.kind === 13 && message.decryptedEvent; // Kind 13 = seal
+  const isFileAttachment = actualKind === 15; // Kind 15 = files/attachments
   const renderInlineMedia = config.renderInlineMedia ?? true;
+  const shouldRenderMedia = isFileAttachment || renderInlineMedia;
 
   // Fetch sender profile for group chats
   const senderProfile = useAuthor(message.pubkey);
@@ -168,13 +172,11 @@ const MessageBubble = memo(({
               <p className="text-xs">{message.error}</p>
             </TooltipContent>
           </Tooltip>
-        ) : renderInlineMedia ? (
-          // Kind 15: Use NoteContent to render files/media with imeta tags
+        ) : shouldRenderMedia ? (
           <div className="text-sm">
             <NoteContent event={messageEvent} className="whitespace-pre-wrap break-words" />
           </div>
         ) : (
-          // Kind 4 (NIP-04) and Kind 14 (NIP-17 text): Display plain text
           <p className="text-sm whitespace-pre-wrap break-words">
             {message.decryptedContent}
           </p>

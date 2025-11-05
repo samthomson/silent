@@ -74,31 +74,56 @@ function StorageContent() {
   );
 }
 
+function MessagesContent() {
+  const { config, updateConfig } = useAppContext();
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold mb-3">Display</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col items-start">
+          <Label htmlFor="inline-media" className="font-medium cursor-pointer">
+            Render Inline Media
+          </Label>
+          <span className="text-xs text-muted-foreground">
+            Show images and videos directly in messages
+          </span>
+        </div>
+        <Switch
+          id="inline-media"
+          checked={config.renderInlineMedia ?? true}
+          onCheckedChange={(checked) => {
+            updateConfig((current) => ({ ...current, renderInlineMedia: checked }));
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function AdvancedContent() {
   const { config, updateConfig } = useAppContext();
   const devMode = config.devMode ?? false;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold mb-3">Developer Options</h3>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col items-start">
-            <Label htmlFor="dev-mode" className="font-medium cursor-pointer">
-              Developer Mode
-            </Label>
-            <span className="text-xs text-muted-foreground">
-              See what&apos;s going on under the hood.
-            </span>
-          </div>
-          <Switch
-            id="dev-mode"
-            checked={devMode}
-            onCheckedChange={(checked) => {
-              updateConfig((current) => ({ ...current, devMode: checked }));
-            }}
-          />
+      <h3 className="text-sm font-semibold mb-3">Developer Options</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col items-start">
+          <Label htmlFor="dev-mode" className="font-medium cursor-pointer">
+            Developer Mode
+          </Label>
+          <span className="text-xs text-muted-foreground">
+            See what&apos;s going on under the hood.
+          </span>
         </div>
+        <Switch
+          id="dev-mode"
+          checked={devMode}
+          onCheckedChange={(checked) => {
+            updateConfig((current) => ({ ...current, devMode: checked }));
+          }}
+        />
       </div>
     </div>
   );
@@ -171,6 +196,21 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               <Button
                 variant="ghost"
                 className="w-full justify-between h-auto py-4 px-4"
+                onClick={() => setMobileCategory('Messages')}
+              >
+                <div className="flex items-center gap-3">
+                  <MessageSquare className="h-5 w-5" />
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Messages</span>
+                    <span className="text-xs text-muted-foreground">Message display settings</span>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-auto py-4 px-4"
                 onClick={() => setMobileCategory('Storage')}
               >
                 <div className="flex items-center gap-3">
@@ -202,6 +242,10 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <div className="px-4 py-4">
               <AppearanceContent />
             </div>
+          ) : mobileCategory === 'Messages' ? (
+            <div className="px-4 py-4">
+              <MessagesContent />
+            </div>
           ) : mobileCategory === 'Storage' ? (
             <div className="px-4 py-4">
               <StorageContent />
@@ -225,6 +269,13 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 Appearance
               </TabsTrigger>
               <TabsTrigger 
+                value="messages" 
+                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Messages
+              </TabsTrigger>
+              <TabsTrigger 
                 value="storage" 
                 className="w-full justify-start gap-3 data-[state=active]:bg-accent"
               >
@@ -245,6 +296,10 @@ function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <div className="px-6 pt-0 pb-4">
               <TabsContent value="appearance" className="mt-0">
                 <AppearanceContent />
+              </TabsContent>
+
+              <TabsContent value="messages" className="mt-0">
+                <MessagesContent />
               </TabsContent>
 
               <TabsContent value="storage" className="mt-0">

@@ -45,6 +45,7 @@ const persistOptions = {
 const defaultConfig: AppConfig = {
   theme: "dark",
   relayUrl: "wss://relay.ditto.pub",
+  renderInlineMedia: true,
 };
 
 const presetRelays = [

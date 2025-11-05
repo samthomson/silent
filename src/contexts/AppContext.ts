@@ -9,6 +9,8 @@ export interface AppConfig {
   relayUrl: string;
   /** Developer mode toggle */
   devMode?: boolean;
+  /** Render images and media inline in messages */
+  renderInlineMedia?: boolean;
 }
 
 export interface AppContextType {

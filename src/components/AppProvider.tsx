@@ -18,6 +18,7 @@ const AppConfigSchema = z.object({
   theme: z.enum(['dark', 'light', 'system']),
   relayUrl: z.string().url(),
   devMode: z.boolean().optional(),
+  renderInlineMedia: z.boolean().optional(),
 }) satisfies z.ZodType<AppConfig>;
 
 export function AppProvider(props: AppProviderProps) {

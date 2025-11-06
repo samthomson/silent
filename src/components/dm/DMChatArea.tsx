@@ -273,6 +273,92 @@ const MessageBubble = memo(({
 
 MessageBubble.displayName = 'MessageBubble';
 
+// Smaller avatar for chat header
+const ChatGroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
+  const author1 = useAuthor(pubkeys[0] || '');
+  const author2 = useAuthor(pubkeys[1] || '');
+  const author3 = useAuthor(pubkeys[2] || '');
+  const author4 = useAuthor(pubkeys[3] || '');
+
+  const authors = [author1, author2, author3, author4];
+
+  if (pubkeys.length === 1) {
+    const metadata = author1.data?.metadata;
+    const displayName = metadata?.name || genUserName(pubkeys[0]);
+    const avatarUrl = metadata?.picture;
+    const initials = displayName.slice(0, 2).toUpperCase();
+    const bgColor = getPubkeyColor(pubkeys[0]);
+
+    return (
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={avatarUrl} alt={displayName} />
+        <AvatarFallback className="text-white text-xs" style={{ backgroundColor: bgColor }}>{initials}</AvatarFallback>
+      </Avatar>
+    );
+  }
+
+  // For 2 people: split circle vertically
+  if (pubkeys.length === 2) {
+    return (
+      <div className="relative h-8 w-8 rounded-full overflow-hidden flex-shrink-0">
+        {pubkeys.slice(0, 2).map((pubkey, index) => {
+          const author = authors[index];
+          const metadata = author?.data?.metadata;
+          const avatarUrl = metadata?.picture;
+          const bgColor = getPubkeyColor(pubkey);
+
+          return (
+            <div
+              key={pubkey}
+              className="absolute inset-0 w-1/2"
+              style={{ left: index === 0 ? 0 : '50%' }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full" style={{ backgroundColor: bgColor }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // For 3+ people: split into 4 quarters
+  return (
+    <div className="relative h-8 w-8 rounded-full overflow-hidden flex-shrink-0">
+      {pubkeys.slice(0, 4).map((pubkey, index) => {
+        const author = authors[index];
+        const metadata = author?.data?.metadata;
+        const avatarUrl = metadata?.picture;
+        const bgColor = getPubkeyColor(pubkey);
+
+        const positions = [
+          { top: 0, left: 0 }, // top-left
+          { top: 0, left: '50%' }, // top-right
+          { top: '50%', left: 0 }, // bottom-left
+          { top: '50%', left: '50%' }, // bottom-right
+        ];
+
+        return (
+          <div
+            key={pubkey}
+            className="absolute w-1/2 h-1/2"
+            style={positions[index]}
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full" style={{ backgroundColor: bgColor }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
   const author1 = useAuthor(pubkeys[0] || '');
   const author2 = useAuthor(pubkeys[1] || '');
@@ -405,7 +491,7 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
       : metadata?.nip05;
 
   return (
-    <div className="p-4 border-b flex items-center gap-3">
+    <div className="px-4 py-3 border-b flex items-center gap-3">
       {onBack && (
         <Button
           variant="ghost"
@@ -417,10 +503,10 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
         </Button>
       )}
 
-      <GroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} />
+      <ChatGroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} />
 
       <div className="flex-1 min-w-0">
-        <h2 className="font-semibold truncate">
+        <h2 className="font-semibold truncate text-sm">
           {isMultiPerson ? <ParticipantNames pubkeys={conversationParticipants} /> : displayName}
         </h2>
         {subtitle && (

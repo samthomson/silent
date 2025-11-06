@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson, FileLock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import type { NostrEvent } from '@nostrify/nostrify';
@@ -118,6 +118,12 @@ const MessageBubble = memo(({
   const renderInlineMedia = config.renderInlineMedia ?? true;
   const shouldRenderMedia = isFileAttachment || renderInlineMedia;
 
+  // Check if it's an encrypted file attachment
+  const eventToCheck = message.decryptedEvent || message;
+  const hasEncryption = isFileAttachment && eventToCheck.tags.some(
+    ([tagName]) => tagName === 'encryption-algorithm' || tagName === 'decryption-key'
+  );
+
   // Fetch sender profile for group chats
   const senderProfile = useAuthor(message.pubkey);
   const metadata = senderProfile.data?.metadata;
@@ -209,6 +215,20 @@ const MessageBubble = memo(({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs">Uses outdated NIP-04 encryption</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {hasEncryption && (
+              <TooltipProvider>
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-shrink-0">
+                      <FileLock className="h-3 w-3 text-orange-500 dark:text-orange-400" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Encrypted file (not yet supported)</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

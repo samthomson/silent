@@ -48,7 +48,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
     return (
       <Avatar className="h-10 w-10 flex-shrink-0">
         <AvatarImage src={avatarUrl} alt={displayName} />
-        <AvatarFallback className={cn(bgColor, "text-white")}>{initials}</AvatarFallback>
+        <AvatarFallback className="text-white" style={{ backgroundColor: bgColor }}>{initials}</AvatarFallback>
       </Avatar>
     );
   }
@@ -72,7 +72,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
               ) : (
-                <div className={cn("h-full w-full", bgColor)} />
+                <div className="h-full w-full" style={{ backgroundColor: bgColor }} />
               )}
             </div>
           );
@@ -106,7 +106,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
             {avatarUrl ? (
               <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className={cn("h-full w-full", bgColor)} />
+              <div className="h-full w-full" style={{ backgroundColor: bgColor }} />
             )}
           </div>
         );

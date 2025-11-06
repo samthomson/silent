@@ -127,7 +127,7 @@ const MessageBubble = memo(({
   const senderProfile = useAuthor(message.pubkey);
   const metadata = senderProfile.data?.metadata;
   const senderName = metadata?.display_name || metadata?.name || genUserName(message.pubkey);
-  const senderTextColor = getPubkeyColor(message.pubkey, 'text');
+  const senderColor = getPubkeyColor(message.pubkey);
 
   // Create a NostrEvent object for NoteContent (only used for kind 15)
   // For NIP-17 file attachments, use the decryptedEvent which has the actual tags
@@ -164,7 +164,7 @@ const MessageBubble = memo(({
           : "bg-muted"
       )}>
         {showSenderName && !isFromCurrentUser && (
-          <div className={cn("text-xs font-semibold mb-1", senderTextColor)}>
+          <div className="text-xs font-semibold mb-1" style={{ color: senderColor }}>
             {senderName}
           </div>
         )}
@@ -291,7 +291,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
     return (
       <Avatar className="h-10 w-10">
         <AvatarImage src={avatarUrl} alt={displayName} />
-        <AvatarFallback className={cn(bgColor, "text-white")}>{initials}</AvatarFallback>
+        <AvatarFallback className="text-white" style={{ backgroundColor: bgColor }}>{initials}</AvatarFallback>
       </Avatar>
     );
   }
@@ -315,7 +315,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
               ) : (
-                <div className={cn("h-full w-full", bgColor)} />
+                <div className="h-full w-full" style={{ backgroundColor: bgColor }} />
               )}
             </div>
           );
@@ -349,7 +349,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
             {avatarUrl ? (
               <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className={cn("h-full w-full", bgColor)} />
+              <div className="h-full w-full" style={{ backgroundColor: bgColor }} />
             )}
           </div>
         );

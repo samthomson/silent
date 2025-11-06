@@ -137,31 +137,30 @@ export function parseConversationId(conversationId: string): string[] {
 
 /**
  * Generate a consistent color for a pubkey (used for avatars and names).
- * Uses darker shades in light mode, lighter shades in dark mode for proper contrast.
+ * Returns a hex color string that can be used as inline styles.
  * 
  * @param pubkey - The user's public key
- * @param variant - 'bg' for background colors (avatars), 'text' for text colors (names)
- * @returns Tailwind color class string with dark mode variant
+ * @returns Hex color string (e.g., '#dc2626')
  */
-export function getPubkeyColor(pubkey: string, variant: 'bg' | 'text' = 'bg'): string {
+export function getPubkeyColor(pubkey: string): string {
   const colors = [
-    'red-600 dark:red-400',
-    'orange-600 dark:orange-400', 
-    'amber-600 dark:amber-400',
-    'yellow-600 dark:yellow-400',
-    'lime-600 dark:lime-400',
-    'green-600 dark:green-400',
-    'emerald-600 dark:emerald-400',
-    'teal-600 dark:teal-400',
-    'cyan-600 dark:cyan-400',
-    'sky-600 dark:sky-400',
-    'blue-600 dark:blue-400',
-    'indigo-600 dark:indigo-400',
-    'violet-600 dark:violet-400',
-    'purple-600 dark:purple-400',
-    'fuchsia-600 dark:fuchsia-400',
-    'pink-600 dark:pink-400',
-    'rose-600 dark:rose-400',
+    '#dc2626', // red
+    '#ea580c', // orange
+    '#d97706', // amber
+    '#ca8a04', // yellow
+    '#65a30d', // lime
+    '#16a34a', // green
+    '#059669', // emerald
+    '#0d9488', // teal
+    '#0891b2', // cyan
+    '#0284c7', // sky
+    '#2563eb', // blue
+    '#4f46e5', // indigo
+    '#7c3aed', // violet
+    '#9333ea', // purple
+    '#c026d3', // fuchsia
+    '#db2777', // pink
+    '#e11d48', // rose
   ];
   
   // Hash pubkey to get consistent color index
@@ -171,9 +170,7 @@ export function getPubkeyColor(pubkey: string, variant: 'bg' | 'text' = 'bg'): s
     hash = hash & hash;
   }
   
-  const colorValue = colors[Math.abs(hash) % colors.length];
-  const prefix = variant === 'bg' ? 'bg-' : 'text-';
-  return colorValue.replace(/(\w+-\d+)/g, `${prefix}$1`);
+  return colors[Math.abs(hash) % colors.length];
 }
 
 /**

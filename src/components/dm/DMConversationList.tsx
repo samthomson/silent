@@ -268,7 +268,7 @@ export const DMConversationList = ({
     <Card className={cn("h-full flex flex-col overflow-hidden", className)}>
       {/* Header - always visible */}
       <div className="p-4 border-b flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               Doduo
@@ -290,29 +290,26 @@ export const DMConversationList = ({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-sm text-muted-foreground">Messages</h2>
-          {(loadingPhase === LOADING_PHASES.CACHE ||
-            loadingPhase === LOADING_PHASES.RELAYS ||
-            loadingPhase === LOADING_PHASES.SUBSCRIPTIONS) && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-xs">
-                    {loadingPhase === LOADING_PHASES.CACHE && 'Loading from cache...'}
-                    {loadingPhase === LOADING_PHASES.RELAYS && 'Querying relays for new messages...'}
-                    {loadingPhase === LOADING_PHASES.SUBSCRIPTIONS && 'Setting up subscriptions...'}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
+        {(loadingPhase === LOADING_PHASES.CACHE ||
+          loadingPhase === LOADING_PHASES.RELAYS ||
+          loadingPhase === LOADING_PHASES.SUBSCRIPTIONS) && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {loadingPhase === LOADING_PHASES.CACHE && 'Loading from cache...'}
+                  {loadingPhase === LOADING_PHASES.RELAYS && 'Querying relays for new messages...'}
+                  {loadingPhase === LOADING_PHASES.SUBSCRIPTIONS && 'Setting up subscriptions...'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
 
       {/* Tab buttons - always visible */}

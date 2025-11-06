@@ -53,7 +53,7 @@ export function AppSidebar() {
         </Button>
 
         {/* User Avatar - Bottom */}
-        <Avatar className="h-10 w-10 cursor-pointer">
+        <Avatar className="h-10 w-10 cursor-pointer opacity-40 hover:opacity-100 transition-opacity">
           <AvatarImage src={avatarUrl} alt={displayName} />
           <AvatarFallback className="bg-primary text-primary-foreground">
             {initials}

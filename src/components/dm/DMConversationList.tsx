@@ -30,7 +30,7 @@ interface ConversationItemProps {
   hasNIP4Messages: boolean;
 }
 
-const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
+const GroupAvatar = ({ pubkeys, isSelected }: { pubkeys: string[]; isSelected: boolean }) => {
   const author1 = useAuthor(pubkeys[0] || '');
   const author2 = useAuthor(pubkeys[1] || '');
   const author3 = useAuthor(pubkeys[2] || '');
@@ -46,7 +46,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
     const bgColor = getPubkeyColor(pubkeys[0]);
 
     return (
-      <Avatar className="h-10 w-10 flex-shrink-0">
+      <Avatar className={cn("h-10 w-10 flex-shrink-0 transition-opacity", !isSelected && "opacity-40")}>
         <AvatarImage src={avatarUrl} alt={displayName} />
         <AvatarFallback className="text-white" style={{ backgroundColor: bgColor }}>{initials}</AvatarFallback>
       </Avatar>
@@ -56,7 +56,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
   // For 2 people: split circle vertically
   if (pubkeys.length === 2) {
     return (
-      <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
+      <div className={cn("relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0 transition-opacity", !isSelected && "opacity-40")}>
         {pubkeys.slice(0, 2).map((pubkey, index) => {
           const author = authors[index];
           const metadata = author?.data?.metadata;
@@ -83,7 +83,7 @@ const GroupAvatar = ({ pubkeys }: { pubkeys: string[] }) => {
 
   // For 3+ people: split into 4 quarters
   return (
-    <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
+    <div className={cn("relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0 transition-opacity", !isSelected && "opacity-40")}>
       {pubkeys.slice(0, 4).map((pubkey, index) => {
         const author = authors[index];
         const metadata = author?.data?.metadata;
@@ -183,7 +183,7 @@ const ConversationItemComponent = ({
         {isLoadingProfile ? (
           <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
         ) : (
-          <GroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} />
+          <GroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} isSelected={isSelected} />
         )}
 
         <div className="flex-1 min-w-0">

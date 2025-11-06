@@ -30,6 +30,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const [dialogOpen, setDialogOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedPubkeys, setSelectedPubkeys] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,6 +39,12 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const { conversations } = useDMContext();
   const { user } = useCurrentUser();
   const { data: follows = [], isLoading: isLoadingFollows } = useFollows();
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const allContacts = useMemo(() => {
     // Extract individual pubkeys from conversations (including group members)
@@ -57,8 +64,10 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
 
   // Include selected pubkeys in metadata fetch (for manually added pubkeys)
   const pubkeysToFetch = useMemo(() => {
+    // Only fetch when dialog is open to avoid unnecessary requests
+    if (!dialogOpen) return [];
     return Array.from(new Set([...allContacts, ...selectedPubkeys]));
-  }, [allContacts, selectedPubkeys]);
+  }, [dialogOpen, allContacts, selectedPubkeys]);
 
   // Batch-fetch metadata in chunks (works efficiently for any list size)
   // Returns immediately so UI can render, metadata fills in progressively
@@ -83,11 +92,11 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
 
   // Filter contacts based on search (now we can filter properly since we have metadata)
   const filteredContacts = useMemo(() => {
-    if (!searchInput.trim()) {
+    if (!debouncedSearch.trim()) {
       return allContacts;
     }
     
-    const searchLower = searchInput.toLowerCase().trim();
+    const searchLower = debouncedSearch.toLowerCase().trim();
     
     // Filter and rank contacts by match relevance
     const matches = allContacts
@@ -126,7 +135,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
       .map(match => match.pubkey);
     
     return matches;
-  }, [allContacts, searchInput, authorsMap]);
+  }, [allContacts, debouncedSearch, authorsMap]);
 
   // Scroll highlighted item into view
   useEffect(() => {

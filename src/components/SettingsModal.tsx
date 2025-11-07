@@ -1,4 +1,4 @@
-import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
@@ -16,6 +16,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { RelayListManager } from '@/components/RelayListManager';
 
 interface SettingsModalProps {
   open: boolean;
@@ -95,6 +96,14 @@ function MessagesContent() {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function RelaysContent() {
+  return (
+    <div className="space-y-4">
+      <RelayListManager />
     </div>
   );
 }
@@ -208,6 +217,21 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               <Button
                 variant="ghost"
                 className="w-full justify-between h-auto py-4 px-4"
+                onClick={() => setMobileCategory('Relays')}
+              >
+                <div className="flex items-center gap-3">
+                  <Radio className="h-5 w-5" />
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Relays</span>
+                    <span className="text-xs text-muted-foreground">Manage your relay list</span>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-auto py-4 px-4"
                 onClick={() => setMobileCategory('Storage')}
               >
                 <div className="flex items-center gap-3">
@@ -243,6 +267,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <div className="px-4 py-4">
               <MessagesContent />
             </div>
+          ) : mobileCategory === 'Relays' ? (
+            <div className="px-4 py-4">
+              <RelaysContent />
+            </div>
           ) : mobileCategory === 'Storage' ? (
             <div className="px-4 py-4">
               <StorageContent />
@@ -273,6 +301,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 Messages
               </TabsTrigger>
               <TabsTrigger 
+                value="relays" 
+                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+              >
+                <Radio className="h-4 w-4" />
+                Relays
+              </TabsTrigger>
+              <TabsTrigger 
                 value="storage" 
                 className="w-full justify-start gap-3 data-[state=active]:bg-accent"
               >
@@ -297,6 +332,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
               <TabsContent value="messages" className="mt-0">
                 <MessagesContent />
+              </TabsContent>
+
+              <TabsContent value="relays" className="mt-0">
+                <RelaysContent />
               </TabsContent>
 
               <TabsContent value="storage" className="mt-0">

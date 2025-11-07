@@ -5,8 +5,8 @@ export type Theme = "dark" | "light" | "system";
 export interface AppConfig {
   /** Current theme */
   theme: Theme;
-  /** Selected relay URL */
-  relayUrl: string;
+  /** Discovery relays - used to find NIP-65 and as default relay pool */
+  discoveryRelays: string[];
   /** Developer mode toggle */
   devMode?: boolean;
   /** Render images and media inline in messages */
@@ -18,8 +18,6 @@ export interface AppContextType {
   config: AppConfig;
   /** Update configuration using a callback that receives current config and returns new config */
   updateConfig: (updater: (currentConfig: Partial<AppConfig>) => Partial<AppConfig>) => void;
-  /** Optional list of preset relays to display in the RelaySelector */
-  presetRelays?: { name: string; url: string }[];
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

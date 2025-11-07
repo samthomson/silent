@@ -44,16 +44,15 @@ const persistOptions = {
 
 const defaultConfig: AppConfig = {
   theme: "dark",
-  relayUrl: "wss://relay.ditto.pub",
+  discoveryRelays: [
+    'wss://relay.ditto.pub',
+    'wss://relay.damus.io',
+    'wss://relay.nostr.band',
+    'wss://relay.primal.net',
+    'wss://nos.lol',
+  ],
   renderInlineMedia: true,
 };
-
-const presetRelays = [
-  { url: 'wss://relay.ditto.pub', name: 'Ditto' },
-  { url: 'wss://relay.nostr.band', name: 'Nostr.Band' },
-  { url: 'wss://relay.damus.io', name: 'Damus' },
-  { url: 'wss://relay.primal.net', name: 'Primal' },
-];
 
 const dmConfig: DMConfig = {
   // Enable or disable DMs entirely
@@ -69,7 +68,7 @@ const dmConfig: DMConfig = {
 export function App() {
   return (
     <UnheadProvider head={head}>
-      <AppProvider storageKey="nostr:app-config" defaultConfig={defaultConfig} presetRelays={presetRelays}>
+      <AppProvider storageKey="nostr:app-config" defaultConfig={defaultConfig}>
         <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
           <NostrLoginProvider storageKey='nostr:login'>
             <NostrProvider>

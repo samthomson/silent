@@ -1,30 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
-import { useCurrentUser } from './useCurrentUser';
 import { useAppContext } from './useAppContext';
+import type { RelayEntry } from './useRelayList';
 
-export interface RelayEntry {
-  url: string;
-  read: boolean;
-  write: boolean;
-}
-
-export function useRelayList() {
+/**
+ * Fetch NIP-65 relay list for any pubkey (not just current user)
+ */
+export function useRelayListForPubkey(pubkey: string | undefined) {
   const { nostr } = useNostr();
-  const { user } = useCurrentUser();
   const { config } = useAppContext();
 
   return useQuery({
-    queryKey: ['nostr', 'relay-list', user?.pubkey],
+    queryKey: ['nostr', 'relay-list', pubkey],
     queryFn: async (c) => {
-      if (!user?.pubkey) return null;
+      if (!pubkey) return null;
 
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(3000)]);
       
       const relayGroup = nostr.group(config.discoveryRelays);
       
       const events = await relayGroup.query(
-        [{ kinds: [10002], authors: [user.pubkey], limit: 1 }],
+        [{ kinds: [10002], authors: [pubkey], limit: 1 }],
         { signal }
       );
 
@@ -55,7 +51,7 @@ export function useRelayList() {
 
       return relays;
     },
-    enabled: !!user?.pubkey,
+    enabled: !!pubkey,
     staleTime: 5 * 60 * 1000,
   });
 }

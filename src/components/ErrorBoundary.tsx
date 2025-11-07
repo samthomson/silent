@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { APP_NAME } from '@/lib/constants';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -53,55 +54,46 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         return this.props.fallback;
       }
 
+      // Purple Screen of Death (Nostr Edition)
       return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="max-w-md w-full space-y-4">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-foreground mb-2">
-                Something went wrong
-              </h2>
-              <p className="text-muted-foreground">
-                An unexpected error occurred. The error has been reported.
-              </p>
-            </div>
-
-            <div className="bg-muted p-4 rounded-lg">
-              <details className="text-sm">
-                <summary className="cursor-pointer font-medium text-foreground">
-                  Error details
-                </summary>
-                <div className="mt-2 space-y-2">
-                  <div>
-                    <strong className="text-foreground">Message:</strong>
-                    <p className="text-muted-foreground mt-1">
-                      {this.state.error?.message}
-                    </p>
-                  </div>
-                  {this.state.error?.stack && (
-                    <div>
-                      <strong className="text-foreground">Stack trace:</strong>
-                      <pre className="text-xs text-muted-foreground mt-1 overflow-auto max-h-32">
-                        {this.state.error.stack}
-                      </pre>
-                    </div>
-                  )}
+        <div className="min-h-screen bg-[#5B21B6] text-white p-8 font-['Lucida_Console','Consolas','Courier_New','monospace'] overflow-auto">
+          <div className="max-w-4xl">
+            {/* Main error message */}
+            <h1 className="text-2xl mb-6 font-bold">
+              A problem has been detected and {APP_NAME} needs to restart.
+            </h1>
+            
+            <div className="space-y-4 text-sm leading-relaxed">
+              <div className="mt-4">
+                <div className="bg-black/30 p-4 border border-white/20">
+                  <p className="mb-2 font-bold">{this.state.error?.name || 'Error'}</p>
+                  <p>{this.state.error?.message || 'No error message available'}</p>
                 </div>
-              </details>
-            </div>
+              </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={this.handleReset}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-              >
-                Try again
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 transition-colors"
-              >
-                Reload page
-              </button>
+              {this.state.error?.stack && (
+                <details className="mt-6" open>
+                  <summary className="text-xs cursor-pointer hover:text-white/80">Stack trace</summary>
+                  <pre className="mt-2 bg-black/30 p-2 overflow-auto max-h-48 text-[9px] leading-tight border border-white/20">
+                    {this.state.error.stack}
+                  </pre>
+                </details>
+              )}
+
+              <div className="mt-12 flex gap-4">
+                <button
+                  onClick={this.handleReset}
+                  className="px-6 py-2 bg-white text-[#5B21B6] font-bold hover:bg-gray-200 transition-colors"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-2 bg-black/40 border border-white hover:bg-black/60 transition-colors"
+                >
+                  Reload Page
+                </button>
+              </div>
             </div>
           </div>
         </div>

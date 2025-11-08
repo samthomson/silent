@@ -1,4 +1,4 @@
-import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
@@ -138,6 +138,7 @@ function AdvancedContent() {
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
+  const { relayError } = useDMContext();
 
   return (
     <Dialog 
@@ -222,7 +223,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="flex items-center gap-3">
                   <Radio className="h-5 w-5" />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Relays</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Relays</span>
+                      {relayError && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                    </div>
                     <span className="text-xs text-muted-foreground">Manage your relay list</span>
                   </div>
                 </div>
@@ -306,6 +310,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               >
                 <Radio className="h-4 w-4" />
                 Relays
+                {relayError && <AlertTriangle className="h-3 w-3 ml-1 text-destructive" />}
               </TabsTrigger>
               <TabsTrigger 
                 value="storage" 

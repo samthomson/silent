@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostr } from '@nostrify/react';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
+import { useRelayList } from '@/hooks/useRelayList';
 import { validateDMEvent, createConversationId, parseConversationId } from '@/lib/dmUtils';
 import { LOADING_PHASES, type LoadingPhase, PROTOCOL_MODE, type ProtocolMode } from '@/lib/dmConstants';
 import { NSecSigner, type NostrEvent } from '@nostrify/nostrify';
@@ -133,6 +134,12 @@ const nip17ErrorLogger = createErrorLogger('NIP-17');
  * @property scanProgress - Progress info for large message history scans
  * @property clearCacheAndRefetch - Clear IndexedDB cache and reload all messages from relays
  */
+interface RelayError {
+  timestamp: number;
+  message: string;
+  protocol: MessageProtocol;
+}
+
 interface DMContextType {
   messages: MessagesState;
   isLoading: boolean;
@@ -150,6 +157,8 @@ interface DMContextType {
   protocolMode: ProtocolMode;
   scanProgress: ScanProgressState;
   clearCacheAndRefetch: () => Promise<void>;
+  relayError: RelayError | null;
+  clearRelayError: () => void;
 }
 
 const DMContext = createContext<DMContextType | null>(null);
@@ -383,11 +392,21 @@ export function DMProvider({ children, config }: DMProviderProps) {
   const { mutateAsync: createEvent } = useNostrPublish();
   const { toast } = useToast();
   const { config: appConfig } = useAppContext();
+  const queryClient = useQueryClient();
 
   const userPubkey = useMemo(() => user?.pubkey, [user?.pubkey]);
 
-  // Track relay URL to detect changes
-  const previousRelayUrl = useRef<string>(appConfig.relayUrl);
+  // Get user's NIP-65 relay list
+  const { data: userRelayListData } = useRelayList();
+  
+  // Extract user's read relays (inbox) with fallback to discovery relays
+  const userInboxRelays = useMemo(() => {
+    const readRelays = userRelayListData?.relays?.filter(r => r.read)?.map(r => r.url);
+    return readRelays && readRelays.length > 0 ? readRelays : appConfig.discoveryRelays;
+  }, [userRelayListData, appConfig.discoveryRelays]);
+
+  // Track NIP-65 changes by event ID (cleaner than JSON serialization)
+  const previousEventId = useRef<string>();
 
   // Determine if NIP-17 is enabled based on protocol mode
   const enableNIP17 = protocolMode !== PROTOCOL_MODE.NIP04_ONLY;
@@ -409,10 +428,44 @@ export function DMProvider({ children, config }: DMProviderProps) {
     nip4: null,
     nip17: null
   });
+  const [relayError, setRelayError] = useState<RelayError | null>(null);
 
   const nip4SubscriptionRef = useRef<{ close: () => void } | null>(null);
   const nip17SubscriptionRef = useRef<{ close: () => void } | null>(null);
   const debouncedWriteRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearRelayError = useCallback(() => {
+    setRelayError(null);
+  }, []);
+
+  // ============================================================================
+  // Helper: Get inbox relays for a pubkey
+  // ============================================================================
+
+  const getInboxRelaysForPubkey = useCallback(async (pubkey: string): Promise<string[]> => {
+    try {
+      const relayGroup = nostr.group(appConfig.discoveryRelays);
+      const events = await relayGroup.query(
+        [{ kinds: [10002], authors: [pubkey], limit: 1 }],
+        { signal: AbortSignal.timeout(3000) }
+      );
+
+      if (events.length === 0) {
+        return appConfig.discoveryRelays;
+      }
+
+      const readRelays = events[0].tags
+        .filter(tag => tag[0] === 'r')
+        .filter(tag => !tag[2] || tag[2] === 'read')
+        .map(tag => tag[1])
+        .filter(Boolean);
+
+      return readRelays.length > 0 ? readRelays : appConfig.discoveryRelays;
+    } catch (error) {
+      console.error('[DM] Failed to fetch inbox relays for', pubkey, error);
+      return appConfig.discoveryRelays;
+    }
+  }, [nostr, appConfig.discoveryRelays]);
 
   // ============================================================================
   // Internal Message Sending Mutations
@@ -445,12 +498,26 @@ export function DMProvider({ children, config }: DMProviderProps) {
         ...createImetaTags(attachments)
       ];
 
-      // Create and publish the event
-      return await createEvent({
+      // Get inbox relays for both user and recipient
+      const [userInbox, recipientInbox] = await Promise.all([
+        Promise.resolve(userInboxRelays),
+        getInboxRelaysForPubkey(recipientPubkey)
+      ]);
+
+      // Combine both inboxes (NIP-4 is a shared event visible to both parties)
+      const publishRelays = Array.from(new Set([...userInbox, ...recipientInbox]));
+      const relayGroup = nostr.group(publishRelays);
+
+      // Sign the event using createEvent (includes "client" tag)
+      const signedEvent = await createEvent({
         kind: 4,
         content: encryptedContent,
         tags,
       });
+
+      // Publish to both inboxes
+      await relayGroup.event(signedEvent);
+      return signedEvent;
     },
     onError: (error) => {
       console.error('[DM] Failed to send NIP-04 message:', error);
@@ -545,11 +612,27 @@ export function DMProvider({ children, config }: DMProviderProps) {
         giftWraps.push(giftWrap);
       }
 
-      // Publish all gift wraps to relays
+      // Publish each gift wrap to the recipient's inbox relays
       try {
-        const results = await Promise.allSettled(
-          giftWraps.map(giftWrap => nostr.event(giftWrap))
-        );
+        // Fetch all inbox relays in parallel first
+        const inboxRelayPromises = giftWraps.map(async (giftWrap) => {
+          const recipientPubkey = giftWrap.tags.find(tag => tag[0] === 'p')?.[1];
+          if (!recipientPubkey) {
+            throw new Error('Gift wrap missing recipient pubkey');
+          }
+          const inboxRelays = await getInboxRelaysForPubkey(recipientPubkey);
+          return { giftWrap, inboxRelays };
+        });
+
+        const giftWrapWithRelays = await Promise.all(inboxRelayPromises);
+
+        // Now publish all in parallel
+        const publishPromises = giftWrapWithRelays.map(({ giftWrap, inboxRelays }) => {
+          const relayGroup = nostr.group(inboxRelays);
+          return relayGroup.event(giftWrap);
+        });
+
+        const results = await Promise.allSettled(publishPromises);
 
         // Check for failures and log detailed errors
         const failures = results.filter(r => r.status === 'rejected');
@@ -610,8 +693,10 @@ export function DMProvider({ children, config }: DMProviderProps) {
     let processedMessages = 0;
     let currentSince = sinceTimestamp || 0;
 
-
     setScanProgress(prev => ({ ...prev, nip4: { current: 0, status: SCAN_STATUS_MESSAGES.NIP4_STARTING } }));
+
+    // Use user's inbox relays (read relays) for receiving DMs
+    const relayGroup = nostr.group(userInboxRelays);
 
     while (processedMessages < DM_CONSTANTS.SCAN_TOTAL_LIMIT) {
       const batchLimit = Math.min(DM_CONSTANTS.SCAN_BATCH_SIZE, DM_CONSTANTS.SCAN_TOTAL_LIMIT - processedMessages);
@@ -622,8 +707,11 @@ export function DMProvider({ children, config }: DMProviderProps) {
       ];
 
       try {
-        const batchDMs = await nostr.query(filters, { signal: AbortSignal.timeout(DM_CONSTANTS.NIP4_QUERY_TIMEOUT) });
+        const batchDMs = await relayGroup.query(filters, { signal: AbortSignal.timeout(DM_CONSTANTS.NIP4_QUERY_TIMEOUT) });
         const validBatchDMs = batchDMs.filter(validateDMEvent);
+
+        // Clear relay error on successful query
+        setRelayError(null);
 
         if (validBatchDMs.length === 0) break;
 
@@ -653,13 +741,28 @@ export function DMProvider({ children, config }: DMProviderProps) {
         if (validBatchDMs.length < batchLimit * 2) break;
       } catch (error) {
         console.error('[DM] NIP-4 Error in batch query:', error);
-        break;
+        setScanProgress(prev => ({ ...prev, nip4: null }));
+        
+        // Set relay error state
+        setRelayError({
+          timestamp: Date.now(),
+          message: 'One or more of your inbox relays failed to respond. Check your relay configuration in settings.',
+          protocol: MESSAGE_PROTOCOL.NIP04
+        });
+        
+        // Also show toast for immediate feedback
+        toast({
+          title: 'Failed to load messages',
+          description: `One or more of your inbox relays failed to respond. Check your relay configuration in settings.`,
+          variant: 'destructive',
+        });
+        throw new Error('Failed to query inbox relays - check your NIP-65 relay configuration');
       }
     }
 
     setScanProgress(prev => ({ ...prev, nip4: null }));
     return allMessages;
-  }, [user, nostr]);
+  }, [user, nostr, userInboxRelays, toast]);
 
   // Load past NIP-17 messages
   const loadPastNIP17Messages = useCallback(async (sinceTimestamp?: number) => {
@@ -674,8 +777,10 @@ export function DMProvider({ children, config }: DMProviderProps) {
     const TWO_DAYS_IN_SECONDS = 2 * 24 * 60 * 60;
     let currentSince = sinceTimestamp ? sinceTimestamp - TWO_DAYS_IN_SECONDS : 0;
 
-
     setScanProgress(prev => ({ ...prev, nip17: { current: 0, status: SCAN_STATUS_MESSAGES.NIP17_STARTING } }));
+
+    // Use user's inbox relays (read relays) for receiving DMs
+    const relayGroup = nostr.group(userInboxRelays);
 
     while (processedMessages < DM_CONSTANTS.SCAN_TOTAL_LIMIT) {
       const batchLimit = Math.min(DM_CONSTANTS.SCAN_BATCH_SIZE, DM_CONSTANTS.SCAN_TOTAL_LIMIT - processedMessages);
@@ -685,7 +790,10 @@ export function DMProvider({ children, config }: DMProviderProps) {
       ];
 
       try {
-        const batchEvents = await nostr.query(filters, { signal: AbortSignal.timeout(DM_CONSTANTS.NIP17_QUERY_TIMEOUT) });
+        const batchEvents = await relayGroup.query(filters, { signal: AbortSignal.timeout(DM_CONSTANTS.NIP17_QUERY_TIMEOUT) });
+
+        // Clear relay error on successful query
+        setRelayError(null);
 
         if (batchEvents.length === 0) break;
 
@@ -708,13 +816,28 @@ export function DMProvider({ children, config }: DMProviderProps) {
         if (batchEvents.length < batchLimit) break;
       } catch (error) {
         console.error('[DM] NIP-17 Error in batch query:', error);
-        break;
+        setScanProgress(prev => ({ ...prev, nip17: null }));
+        
+        // Set relay error state
+        setRelayError({
+          timestamp: Date.now(),
+          message: 'One or more of your inbox relays failed to respond. Check your relay configuration in settings.',
+          protocol: MESSAGE_PROTOCOL.NIP17
+        });
+        
+        // Also show toast for immediate feedback
+        toast({
+          title: 'Failed to load messages',
+          description: `One or more of your inbox relays failed to respond. Check your relay configuration in settings.`,
+          variant: 'destructive',
+        });
+        throw new Error('Failed to query inbox relays - check your NIP-65 relay configuration');
       }
     }
 
     setScanProgress(prev => ({ ...prev, nip17: null }));
     return allNIP17Events;
-  }, [user, nostr]);
+  }, [user, nostr, userInboxRelays, toast]);
 
   // Query relays for messages
   const queryRelaysForMessagesSince = useCallback(async (protocol: MessageProtocol, sinceTimestamp?: number): Promise<MessageProcessingResult> => {
@@ -1243,7 +1366,9 @@ export function DMProvider({ children, config }: DMProviderProps) {
         { kinds: [4], authors: [user.pubkey], since: subscriptionSince }
       ];
 
-      const subscription = nostr.req(filters);
+      // Subscribe to user's inbox relays (read relays)
+      const relayGroup = nostr.group(userInboxRelays);
+      const subscription = relayGroup.req(filters);
       let isActive = true;
 
       (async () => {
@@ -1272,7 +1397,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       console.error('[DM] Failed to start NIP-4 subscription:', error);
       setSubscriptions(prev => ({ ...prev, isNIP4Connected: false }));
     }
-  }, [user, nostr, lastSync.nip4, processIncomingNIP4Message]);
+  }, [user, nostr, lastSync.nip4, processIncomingNIP4Message, userInboxRelays]);
 
   // Start NIP-17 subscription
   const startNIP17Subscription = useCallback(async (sinceTimestamp?: number) => {
@@ -1299,7 +1424,9 @@ export function DMProvider({ children, config }: DMProviderProps) {
         since: subscriptionSince,
       }];
 
-      const subscription = nostr.req(filters);
+      // Subscribe to user's inbox relays (read relays)
+      const relayGroup = nostr.group(userInboxRelays);
+      const subscription = relayGroup.req(filters);
       let isActive = true;
 
       (async () => {
@@ -1328,7 +1455,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       console.error('[DM] Failed to start NIP-17 subscription:', error);
       setSubscriptions(prev => ({ ...prev, isNIP17Connected: false }));
     }
-  }, [user, nostr, lastSync.nip17, enableNIP17, processIncomingNIP17Message]);
+  }, [user, nostr, lastSync.nip17, enableNIP17, processIncomingNIP17Message, userInboxRelays]);
 
   // Load all cached messages at once (both protocols)
   const loadAllCachedMessages = useCallback(async (): Promise<{ nip4Since?: number; nip17Since?: number }> => {
@@ -1548,16 +1675,17 @@ export function DMProvider({ children, config }: DMProviderProps) {
     };
   }, [enabled]);
 
-  // Detect relay changes and reload messages
+  // Detect NIP-65 changes and reload messages (track by event ID)
   useEffect(() => {
-    const relayChanged = previousRelayUrl.current !== appConfig.relayUrl;
+    const currentEventId = userRelayListData?.eventId;
+    const nip65Changed = previousEventId.current !== undefined && previousEventId.current !== currentEventId;
+    previousEventId.current = currentEventId;
 
-    previousRelayUrl.current = appConfig.relayUrl;
-
-    if (relayChanged && enabled && userPubkey && hasInitialLoadCompleted) {
+    if (nip65Changed && enabled && userPubkey && hasInitialLoadCompleted) {
+      console.log('[DM] NIP-65 relay list changed (new event ID), clearing cache and refetching');
       clearCacheAndRefetch();
     }
-  }, [enabled, userPubkey, appConfig.relayUrl, hasInitialLoadCompleted, clearCacheAndRefetch]);
+  }, [enabled, userPubkey, userRelayListData?.eventId, hasInitialLoadCompleted, clearCacheAndRefetch]);
 
   // Detect hard refresh shortcut (Ctrl+Shift+R / Cmd+Shift+R) to clear cache
   useEffect(() => {
@@ -1621,6 +1749,70 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
     return conversationsList.sort((a, b) => b.lastActivity - a.lastActivity);
   }, [messages, user?.pubkey]);
+
+  // Pre-fetch relay lists for all conversation participants
+  // This populates React Query cache so sending messages has no delay
+  useEffect(() => {
+    if (!enabled || conversations.length === 0) return;
+
+    const fetchRelayLists = async () => {
+      // Extract unique participant pubkeys from all conversations
+      const pubkeys: string[] = [];
+      conversations.forEach(conv => {
+        const participants = parseConversationId(conv.id);
+        pubkeys.push(...participants);
+      });
+      const uniquePubkeys = Array.from(new Set(pubkeys));
+
+      if (uniquePubkeys.length === 0) return;
+
+      const relayGroup = nostr.group(appConfig.discoveryRelays);
+      
+      // Fetch all in parallel (let them fail silently, just for cache warming)
+      await Promise.allSettled(
+        uniquePubkeys.map(async (pubkey) => {
+          try {
+            const events = await relayGroup.query(
+              [{ kinds: [10002], authors: [pubkey], limit: 1 }],
+              { signal: AbortSignal.timeout(3000) }
+            );
+            
+            if (events.length === 0) return;
+
+            // Parse relay list and cache it in queryClient
+            const event = events[0];
+            const relays: { url: string; read: boolean; write: boolean }[] = [];
+
+            for (const tag of event.tags) {
+              if (tag[0] !== 'r') continue;
+              const url = tag[1];
+              const marker = tag[2];
+              if (!url) continue;
+
+              switch (marker) {
+                case 'read':
+                  relays.push({ url, read: true, write: false });
+                  break;
+                case 'write':
+                  relays.push({ url, read: false, write: true });
+                  break;
+                default:
+                  relays.push({ url, read: true, write: true });
+              }
+            }
+
+            // Cache in React Query using the same key as useRelayListForPubkey
+            queryClient.setQueryData(['nostr', 'relay-list', pubkey], relays);
+          } catch (error) {
+            // Silent fail - this is just cache warming
+            console.debug('[DM] Failed to pre-fetch relay list for', pubkey, error);
+          }
+        })
+      );
+    };
+
+    fetchRelayLists();
+  }, [enabled, conversations, nostr, appConfig.discoveryRelays, queryClient]);
 
   // Write to store
   const writeAllMessagesToStore = useCallback(async () => {
@@ -1783,6 +1975,8 @@ export function DMProvider({ children, config }: DMProviderProps) {
     scanProgress,
     subscriptions,
     clearCacheAndRefetch,
+    relayError,
+    clearRelayError,
   };
 
   return (

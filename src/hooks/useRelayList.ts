@@ -9,6 +9,11 @@ export interface RelayEntry {
   write: boolean;
 }
 
+export interface RelayListResult {
+  relays: RelayEntry[];
+  eventId: string;
+}
+
 export function useRelayList() {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
@@ -53,10 +58,10 @@ export function useRelayList() {
         }
       }
 
-      return relays;
+      return { relays, eventId: event.id };
     },
     enabled: !!user?.pubkey,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000, // 30 minutes - relay lists change rarely
   });
 }
 

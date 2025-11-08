@@ -1,21 +1,25 @@
 import { useState } from 'react';
-import { Plus, Trash2, Radio, Search } from 'lucide-react';
+import { Plus, Trash2, Radio, Search, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useRelayList, type RelayEntry } from '@/hooks/useRelayList';
 import { usePublishRelayList } from '@/hooks/usePublishRelayList';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
+import { useDMContext } from '@/contexts/DMContext';
 
 export function RelayListManager() {
   const { user } = useCurrentUser();
   const { config, updateConfig } = useAppContext();
-  const { data: relays, isLoading } = useRelayList();
+  const { data: relayListData, isLoading } = useRelayList();
+  const relays = relayListData?.relays;
   const { mutate: publishRelays, isPending: isPublishingNIP65 } = usePublishRelayList();
+  const { relayError, clearRelayError } = useDMContext();
   
   const [editedRelays, setEditedRelays] = useState<RelayEntry[]>([]);
   const [newRelayUrl, setNewRelayUrl] = useState('');
@@ -119,6 +123,23 @@ export function RelayListManager() {
 
   return (
     <Tabs defaultValue="discovery" className="w-full">
+      {relayError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>{relayError.message}</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={clearRelayError}
+              className="h-auto py-1 px-2"
+            >
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="discovery">
           <Search className="h-4 w-4 mr-2" />
@@ -127,6 +148,7 @@ export function RelayListManager() {
         <TabsTrigger value="nip65">
           <Radio className="h-4 w-4 mr-2" />
           NIP-65 Relay List
+          {relayError && <AlertTriangle className="h-3 w-3 ml-2 text-destructive" />}
         </TabsTrigger>
       </TabsList>
 

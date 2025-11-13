@@ -139,6 +139,8 @@ interface RelayError {
   timestamp: number;
   message: string;
   protocol: MessageProtocol;
+  failedRelays: string[];
+  totalRelays: number;
 }
 
 interface DMContextType {
@@ -744,17 +746,19 @@ export function DMProvider({ children, config }: DMProviderProps) {
         console.error('[DM] NIP-4 Error in batch query:', error);
         setScanProgress(prev => ({ ...prev, nip4: null }));
         
-        // Set relay error state
+        // Set relay error state with specific relay URLs
         setRelayError({
           timestamp: Date.now(),
-          message: 'One or more of your inbox relays failed to respond. Check your relay configuration in settings.',
-          protocol: MESSAGE_PROTOCOL.NIP04
+          message: 'Failed to load messages from your inbox relays. Check your relay configuration.',
+          protocol: MESSAGE_PROTOCOL.NIP04,
+          failedRelays: userInboxRelays,
+          totalRelays: userInboxRelays.length
         });
         
         // Also show toast for immediate feedback
         toast({
           title: 'Failed to load messages',
-          description: `One or more of your inbox relays failed to respond. Check your relay configuration in settings.`,
+          description: `Failed to query ${userInboxRelays.length} inbox relay${userInboxRelays.length > 1 ? 's' : ''}. Check your relay configuration in settings.`,
           variant: 'destructive',
         });
         throw new Error('Failed to query inbox relays - check your NIP-65 relay configuration');
@@ -819,17 +823,19 @@ export function DMProvider({ children, config }: DMProviderProps) {
         console.error('[DM] NIP-17 Error in batch query:', error);
         setScanProgress(prev => ({ ...prev, nip17: null }));
         
-        // Set relay error state
+        // Set relay error state with specific relay URLs
         setRelayError({
           timestamp: Date.now(),
-          message: 'One or more of your inbox relays failed to respond. Check your relay configuration in settings.',
-          protocol: MESSAGE_PROTOCOL.NIP17
+          message: 'Failed to load messages from your inbox relays. Check your relay configuration.',
+          protocol: MESSAGE_PROTOCOL.NIP17,
+          failedRelays: userInboxRelays,
+          totalRelays: userInboxRelays.length
         });
         
         // Also show toast for immediate feedback
         toast({
           title: 'Failed to load messages',
-          description: `One or more of your inbox relays failed to respond. Check your relay configuration in settings.`,
+          description: `Failed to query ${userInboxRelays.length} inbox relay${userInboxRelays.length > 1 ? 's' : ''}. Check your relay configuration in settings.`,
           variant: 'destructive',
         });
         throw new Error('Failed to query inbox relays - check your NIP-65 relay configuration');

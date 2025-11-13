@@ -235,6 +235,36 @@ export function RelayListManager() {
       </TabsContent>
 
       <TabsContent value="nip65" className="space-y-6 mt-4">
+        {relayError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="font-semibold mb-2">{relayError.message}</p>
+                <p className="text-sm mb-2">
+                  Failed to query {relayError.totalRelays} relay{relayError.totalRelays > 1 ? 's' : ''}:
+                </p>
+                <ul className="text-sm space-y-1 ml-4 mb-2">
+                  {relayError.failedRelays.map(url => (
+                    <li key={url} className="font-mono text-xs list-disc">{url}</li>
+                  ))}
+                </ul>
+                <p className="text-sm">
+                  Check your relay list below and remove or replace problematic relays.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearRelayError}
+                className="flex-shrink-0"
+              >
+                Dismiss
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {!user ? (
           <div className="text-center py-8 text-muted-foreground">
             <Radio className="h-8 w-8 mx-auto mb-3 opacity-50" />

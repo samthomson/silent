@@ -3,6 +3,7 @@ import { NostrEvent, NPool, NRelay1 } from '@nostrify/nostrify';
 import { NostrContext } from '@nostrify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '@/hooks/useAppContext';
+import { RelayResolver } from './RelayResolver';
 
 interface NostrProviderProps {
   children: React.ReactNode;
@@ -19,6 +20,7 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
 
   // Use refs so the pool always has the latest data
   const discoveryRelays = useRef<string[]>(config.discoveryRelays);
+  const activeRelays = useRef<string[]>(config.discoveryRelays);
 
   // Invalidate Nostr queries when discovery relays change
   useEffect(() => {
@@ -35,7 +37,7 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
       reqRouter(filters) {
         // Use ALL discovery relays for reading
         // Creates a map where each relay gets the same filters
-        const relays = discoveryRelays.current;
+        const relays = activeRelays.current;
         const map = new Map();
         for (const relay of relays) {
           map.set(relay, filters);
@@ -80,14 +82,16 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
         }
         
         // For all other events, publish to discovery relays
-        return discoveryRelays.current;
+        return activeRelays.current;
       },
     });
   }
 
   return (
     <NostrContext.Provider value={{ nostr: pool.current }}>
-      {children}
+      <RelayResolver activeRelaysRef={activeRelays}>
+        {children}
+      </RelayResolver>
     </NostrContext.Provider>
   );
 };

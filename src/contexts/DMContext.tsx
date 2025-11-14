@@ -5,7 +5,7 @@ import { useNostr } from '@nostrify/react';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
-import { useRelayList } from '@/hooks/useRelayList';
+import { useRelayLists } from '@/hooks/useRelayList';
 import { validateDMEvent, createConversationId, parseConversationId } from '@/lib/dmUtils';
 import { LOADING_PHASES, type LoadingPhase, PROTOCOL_MODE, type ProtocolMode } from '@/lib/dmConstants';
 import { fetchRelayListsBulk } from '@/lib/relayUtils';
@@ -400,7 +400,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
   const userPubkey = useMemo(() => user?.pubkey, [user?.pubkey]);
 
   // Get user's relay lists (both 10002 and 10050 in one query)
-  const { data: relayLists } = useRelayList();
+  const { data: relayLists } = useRelayLists();
   
   // Extract user's inbox relays with priority fallback: 10050 → 10002 read relays → discovery relays
   const userInboxRelays = useMemo(() => {

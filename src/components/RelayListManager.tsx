@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useRelayList, type RelayEntry } from '@/hooks/useRelayList';
+import { useRelayLists, type RelayEntry } from '@/hooks/useRelayList';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
@@ -77,7 +77,7 @@ function DiscoveryRelaysTab() {
 
 function DMInboxTab() {
   const { user } = useCurrentUser();
-  const { data, isLoading, refetch, publishDMInbox, isPublishingDM } = useRelayList();
+  const { data, isLoading, refetch, publishDMInbox, isPublishingDM } = useRelayLists();
   const [edited, setEdited] = useState<string[]>([]);
   const [newUrl, setNewUrl] = useState('');
   
@@ -155,7 +155,7 @@ function DMInboxTab() {
 
 function NIP65Tab() {
   const { user } = useCurrentUser();
-  const { data, isLoading, refetch, publishNIP65, isPublishingNIP65 } = useRelayList();
+  const { data, isLoading, refetch, publishNIP65, isPublishingNIP65 } = useRelayLists();
   const { relayError, clearRelayError } = useDMContext();
   const [edited, setEdited] = useState<RelayEntry[]>([]);
   const [newUrl, setNewUrl] = useState('');
@@ -175,7 +175,7 @@ function NIP65Tab() {
   const remove = (url: string) => setEdited(current.filter(r => r.url !== url));
   const toggleRead = (url: string) => setEdited(current.map(r => r.url === url ? { ...r, read: !r.read } : r));
   const toggleWrite = (url: string) => setEdited(current.map(r => r.url === url ? { ...r, write: !r.write } : r));
-  const save = () => { publishNIP65(edited.filter(r => r.read || r.write)); setEdited([]); };
+  const save = () => { publishNIP65(edited); setEdited([]); };
   const cancel = () => setEdited([]);
 
   if (!user) return (

@@ -15,7 +15,7 @@ export interface RelayListResult {
   dmInbox?: { relays: string[]; eventId: string };
 }
 
-export function useRelayList() {
+export function useRelayLists() {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
   const { config } = useAppContext();
@@ -80,8 +80,12 @@ export function useRelayList() {
   const publishNIP65 = useMutation({
     mutationFn: async (relays: RelayEntry[]) => {
       if (!user?.signer) throw new Error('No signer available');
+      if (relays.length === 0) throw new Error('Cannot publish empty relay list');
 
-      const tags = relays.flatMap(r => {
+      const validRelays = relays.filter(r => r.read || r.write);
+      if (validRelays.length === 0) throw new Error('No valid relays (must have read or write enabled)');
+
+      const tags = validRelays.flatMap(r => {
         if (r.read && r.write) return [['r', r.url]];
         if (r.read) return [['r', r.url, 'read']];
         if (r.write) return [['r', r.url, 'write']];
@@ -114,6 +118,7 @@ export function useRelayList() {
   const publishDMInbox = useMutation({
     mutationFn: async (relays: string[]) => {
       if (!user?.signer) throw new Error('No signer available');
+      if (relays.length === 0) throw new Error('Cannot publish empty DM inbox relay list');
 
       const tags = relays.map(url => ['relay', url]);
 

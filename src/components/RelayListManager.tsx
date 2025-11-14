@@ -271,7 +271,7 @@ export function RelayListManager() {
   const { relayError, clearRelayError } = useDMContext();
 
   return (
-    <Tabs defaultValue="discovery" className="w-full">
+    <Tabs defaultValue="dm-inbox" className="w-full">
       {relayError && (
         <Alert variant="destructive" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
@@ -294,20 +294,20 @@ export function RelayListManager() {
           <Search className="h-4 w-4 mr-2" />
           Discovery
         </TabsTrigger>
-        <TabsTrigger value="dm-inbox">
-          <MessageSquare className="h-4 w-4 mr-2" />
-          DM Inbox
-          {relayError && <AlertTriangle className="h-3 w-3 ml-2 text-destructive" />}
-        </TabsTrigger>
         <TabsTrigger value="nip65">
           <Radio className="h-4 w-4 mr-2" />
-          General
+          Inbox/Outbox
+        </TabsTrigger>
+        <TabsTrigger value="dm-inbox">
+          <MessageSquare className="h-4 w-4 mr-2" />
+          DMs
+          {relayError && <AlertTriangle className="h-3 w-3 ml-2 text-destructive" />}
         </TabsTrigger>
       </TabsList>
 
       <DiscoveryRelaysTab />
-      <DMInboxTab />
       <NIP65Tab />
+      <DMInboxTab />
 
     </Tabs>
   );

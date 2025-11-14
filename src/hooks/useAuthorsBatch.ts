@@ -3,7 +3,6 @@ import { useNostr } from '@nostrify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppContext } from '@/hooks/useAppContext';
-import { getMetadataRelays } from '@/lib/metadataRelays';
 
 const CHUNK_SIZE = 100; // Fetch metadata for 100 authors at a time
 
@@ -55,10 +54,10 @@ export function useAuthorsBatch(pubkeys: string[]) {
   const queryClient = useQueryClient();
   const { config } = useAppContext();
   
-  // Memoize metadata relays to prevent recreating on every render
-  const metadataRelays = useMemo(
-    () => nostr.group(getMetadataRelays(config.relayUrl)),
-    [nostr, config.relayUrl]
+  // Memoize relay group to prevent recreating on every render
+  const relayGroup = useMemo(
+    () => nostr.group(config.discoveryRelays),
+    [nostr, config.discoveryRelays]
   );
   
   // Accumulated results Map that grows as chunks arrive
@@ -122,7 +121,7 @@ export function useAuthorsBatch(pubkeys: string[]) {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      const events = await metadataRelays.query(
+      const events = await relayGroup.query(
         [{ kinds: [0], authors: chunkPubkeys, limit: chunkPubkeys.length }],
         { signal: AbortSignal.any([abortController.signal, AbortSignal.timeout(5000)]) }
       );
@@ -140,7 +139,7 @@ export function useAuthorsBatch(pubkeys: string[]) {
     } finally {
       setIsFetching(false);
     }
-  }, [metadataRelays, processChunk]);
+  }, [relayGroup, processChunk]);
 
   // Main effect: split pubkeys into chunks and fetch them
   const pubkeysString = pubkeys.join(',');

@@ -2,7 +2,6 @@ import { type NostrEvent, type NostrMetadata, NSchema as n } from '@nostrify/nos
 import { useNostr } from '@nostrify/react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppContext } from '@/hooks/useAppContext';
-import { getMetadataRelays } from '@/lib/metadataRelays';
 import { authorQueryOptions } from '@/lib/queryConfig';
 
 export function useAuthor(pubkey: string | undefined) {
@@ -16,7 +15,7 @@ export function useAuthor(pubkey: string | undefined) {
         return {};
       }
 
-      const metadataRelays = nostr.group(getMetadataRelays(config.relayUrl));
+      const metadataRelays = nostr.group(config.discoveryRelays);
 
       const [event] = await metadataRelays.query(
         [{ kinds: [0], authors: [pubkey!], limit: 1 }],

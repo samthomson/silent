@@ -206,7 +206,7 @@ export function useZaps(
         profile: actualTarget.pubkey,
         event: event,
         amount: zapAmount,
-        relays: [config.relayUrl],
+        relays: config.discoveryRelays,
         comment
       });
 

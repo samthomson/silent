@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Radio, Search, AlertTriangle, RefreshCw, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,24 +78,40 @@ function DiscoveryRelaysTab() {
 function DMInboxTab() {
   const { user } = useCurrentUser();
   const { data, isLoading, refetch, publishDMInbox, isPublishingDM } = useRelayLists();
-  const [edited, setEdited] = useState<string[]>([]);
+  const [edited, setEdited] = useState<string[] | null>(null);
   const [newUrl, setNewUrl] = useState('');
   
-  const current = edited.length > 0 ? edited : (data?.dmInbox?.relays || []);
-  const hasChanges = edited.length > 0;
+  const current = edited !== null ? edited : (data?.dmInbox?.relays || []);
+
+  // Reset edited state when data changes (after successful mutation)
+  useEffect(() => {
+    if (edited !== null && data?.dmInbox?.relays) {
+      const currentRelays = data.dmInbox.relays;
+      const editedRelays = edited;
+      // If arrays match, reset edited state
+      if (currentRelays.length === editedRelays.length && 
+          currentRelays.every(r => editedRelays.includes(r))) {
+        setEdited(null);
+      }
+    }
+  }, [data?.dmInbox?.relays, edited]);
 
   const add = () => {
     const trimmed = newUrl.trim();
     if (!trimmed) return;
     const normalized = trimmed.startsWith('wss://') || trimmed.startsWith('ws://') ? trimmed : `wss://${trimmed}`;
     if (current.includes(normalized)) return;
-    setEdited([...current, normalized]);
+    const updated = [...current, normalized];
+    setEdited(updated);
     setNewUrl('');
+    publishDMInbox(updated);
   };
 
-  const remove = (url: string) => setEdited(current.filter(r => r !== url));
-  const save = () => { publishDMInbox(edited); setEdited([]); };
-  const cancel = () => setEdited([]);
+  const remove = (url: string) => {
+    const updated = current.filter(r => r !== url);
+    setEdited(updated);
+    publishDMInbox(updated);
+  };
 
   if (isLoading) return (
     <TabsContent value="dm-inbox" className="mt-4">
@@ -143,16 +159,15 @@ function DMInboxTab() {
       <div>
         <h3 className="text-sm font-semibold mb-3">Add Relay</h3>
         <div className="flex gap-2">
-          <Input placeholder="wss://relay.example.com" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} disabled={!user} className="font-mono text-xs" />
-          <Button onClick={add} disabled={!user || !newUrl.trim()}><Plus className="h-4 w-4" /></Button>
+          <Input placeholder="wss://relay.example.com" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} disabled={!user || isPublishingDM} className="font-mono text-xs" />
+          <Button onClick={add} disabled={!user || !newUrl.trim() || isPublishingDM}>
+            {isPublishingDM ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </Button>
         </div>
+        {isPublishingDM && (
+          <p className="text-xs text-muted-foreground mt-2">Publishing changes...</p>
+        )}
       </div>
-      {hasChanges && (
-        <div className="flex gap-2">
-          <Button onClick={save} disabled={isPublishingDM || !user} className="flex-1">{isPublishingDM ? 'Publishing...' : 'Publish'}</Button>
-          <Button variant="outline" onClick={cancel} disabled={isPublishingDM}>Cancel</Button>
-        </div>
-      )}
     </TabsContent>
   );
 }
@@ -161,26 +176,52 @@ function NIP65Tab() {
   const { user } = useCurrentUser();
   const { data, isLoading, refetch, publishNIP65, isPublishingNIP65 } = useRelayLists();
   const { relayError, clearRelayError } = useDMContext();
-  const [edited, setEdited] = useState<RelayEntry[]>([]);
+  const [edited, setEdited] = useState<RelayEntry[] | null>(null);
   const [newUrl, setNewUrl] = useState('');
   
-  const current = edited.length > 0 ? edited : (data?.nip65?.relays || []);
-  const hasChanges = edited.length > 0;
+  const current = edited !== null ? edited : (data?.nip65?.relays || []);
+
+  // Reset edited state when data changes (after successful mutation)
+  useEffect(() => {
+    if (edited !== null && data?.nip65?.relays) {
+      const currentRelays = data.nip65.relays;
+      const editedRelays = edited;
+      // If arrays match, reset edited state
+      if (currentRelays.length === editedRelays.length && 
+          currentRelays.every(r => editedRelays.some(e => e.url === r.url && e.read === r.read && e.write === r.write))) {
+        setEdited(null);
+      }
+    }
+  }, [data?.nip65?.relays, edited]);
 
   const add = () => {
     const trimmed = newUrl.trim();
     if (!trimmed) return;
     const normalized = trimmed.startsWith('wss://') || trimmed.startsWith('ws://') ? trimmed : `wss://${trimmed}`;
     if (current.some(r => r.url === normalized)) return;
-    setEdited([...current, { url: normalized, read: true, write: true }]);
+    const updated = [...current, { url: normalized, read: true, write: true }];
+    setEdited(updated);
     setNewUrl('');
+    publishNIP65(updated);
   };
 
-  const remove = (url: string) => setEdited(current.filter(r => r.url !== url));
-  const toggleRead = (url: string) => setEdited(current.map(r => r.url === url ? { ...r, read: !r.read } : r));
-  const toggleWrite = (url: string) => setEdited(current.map(r => r.url === url ? { ...r, write: !r.write } : r));
-  const save = () => { publishNIP65(edited); setEdited([]); };
-  const cancel = () => setEdited([]);
+  const remove = (url: string) => {
+    const updated = current.filter(r => r.url !== url);
+    setEdited(updated);
+    publishNIP65(updated);
+  };
+  
+  const toggleRead = (url: string) => {
+    const updated = current.map(r => r.url === url ? { ...r, read: !r.read } : r);
+    setEdited(updated);
+    publishNIP65(updated);
+  };
+  
+  const toggleWrite = (url: string) => {
+    const updated = current.map(r => r.url === url ? { ...r, write: !r.write } : r);
+    setEdited(updated);
+    publishNIP65(updated);
+  };
 
   if (!user) return (
     <TabsContent value="nip65" className="mt-4">
@@ -262,15 +303,14 @@ function NIP65Tab() {
         <h3 className="text-sm font-semibold mb-3">Add Relay</h3>
         <div className="flex gap-2">
           <Input placeholder="wss://relay.example.com" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} disabled={isPublishingNIP65} />
-          <Button onClick={add} disabled={!newUrl.trim() || isPublishingNIP65}><Plus className="h-4 w-4" /></Button>
+          <Button onClick={add} disabled={!newUrl.trim() || isPublishingNIP65}>
+            {isPublishingNIP65 ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </Button>
         </div>
+        {isPublishingNIP65 && (
+          <p className="text-xs text-muted-foreground mt-2">Publishing changes...</p>
+        )}
       </div>
-      {hasChanges && (
-        <div className="flex gap-2">
-          <Button onClick={save} disabled={isPublishingNIP65} className="flex-1">Save & Publish</Button>
-          <Button variant="outline" onClick={cancel} disabled={isPublishingNIP65} className="flex-1">Cancel</Button>
-        </div>
-      )}
     </TabsContent>
   );
 }

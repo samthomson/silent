@@ -459,14 +459,14 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
   const getInboxRelaysForPubkey = useCallback(async (pubkey: string): Promise<string[]> => {
     try {
-      const relayGroup = nostr.group(appConfig.discoveryRelays);
+      const relayGroup = nostr.group(userInboxRelays);
       const events = await relayGroup.query(
         [{ kinds: [10002], authors: [pubkey], limit: 1 }],
         { signal: AbortSignal.timeout(3000) }
       );
 
       if (events.length === 0) {
-        return appConfig.discoveryRelays;
+        return userInboxRelays;
       }
 
       const readRelays = events[0].tags
@@ -475,12 +475,12 @@ export function DMProvider({ children, config }: DMProviderProps) {
         .map(tag => tag[1])
         .filter(Boolean);
 
-      return readRelays.length > 0 ? readRelays : appConfig.discoveryRelays;
+      return readRelays.length > 0 ? readRelays : userInboxRelays;
     } catch (error) {
       console.error('[DM] Failed to fetch inbox relays for', pubkey, error);
-      return appConfig.discoveryRelays;
+      return userInboxRelays;
     }
-  }, [nostr, appConfig.discoveryRelays]);
+  }, [nostr, userInboxRelays]);
 
   // ============================================================================
   // Internal Message Sending Mutations
@@ -1777,7 +1777,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
   // Pre-fetch relay lists for all conversation participants
   // This populates React Query cache so sending messages has no delay
   useEffect(() => {
-    if (!enabled || conversations.length === 0) return;
+    if (!enabled || conversations.length === 0 || !userPubkey) return;
 
     const fetchRelayLists = async () => {
       // Extract unique participant pubkeys from all conversations
@@ -1786,12 +1786,12 @@ export function DMProvider({ children, config }: DMProviderProps) {
         const participants = parseConversationId(conv.id);
         pubkeys.push(...participants);
       });
-      const uniquePubkeys = Array.from(new Set(pubkeys));
+      const uniquePubkeys = Array.from(new Set(pubkeys)).filter(p => p !== userPubkey);
 
       if (uniquePubkeys.length === 0) return;
 
       // Bulk fetch all relay lists in ONE query (much more efficient)
-      const relayLists = await fetchRelayListsBulk(nostr, appConfig.discoveryRelays, uniquePubkeys);
+      const relayLists = await fetchRelayListsBulk(nostr, userInboxRelays, uniquePubkeys);
 
       // Cache each result in React Query
       relayLists.forEach((relays, pubkey) => {
@@ -1802,7 +1802,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
     };
 
     fetchRelayLists();
-  }, [enabled, conversations, nostr, appConfig.discoveryRelays, queryClient]);
+  }, [enabled, conversations, nostr, userInboxRelays, queryClient, userPubkey]);
 
   // Write to store
   const writeAllMessagesToStore = useCallback(async () => {

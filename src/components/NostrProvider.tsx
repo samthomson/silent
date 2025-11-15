@@ -22,11 +22,9 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
   const discoveryRelays = useRef<string[]>(config.discoveryRelays);
   const activeRelays = useRef<string[]>(config.discoveryRelays);
 
-  // Invalidate Nostr queries when discovery relays change
   useEffect(() => {
     discoveryRelays.current = config.discoveryRelays;
-    queryClient.invalidateQueries({ queryKey: ['nostr'] });
-  }, [config.discoveryRelays, queryClient]);
+  }, [config.discoveryRelays]);
 
   // Initialize NPool only once
   if (!pool.current) {

@@ -1,7 +1,6 @@
 import { useEffect, useRef, ReactNode } from 'react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useRelayLists } from '@/hooks/useRelayList';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface RelayResolverProps {
   children: ReactNode;
@@ -11,7 +10,6 @@ interface RelayResolverProps {
 export function RelayResolver({ children, activeRelaysRef }: RelayResolverProps) {
   const { user } = useCurrentUser();
   const { data: relayLists, isLoading } = useRelayLists();
-  const queryClient = useQueryClient();
   const hasResolved = useRef(false);
 
   useEffect(() => {
@@ -24,17 +22,18 @@ export function RelayResolver({ children, activeRelaysRef }: RelayResolverProps)
 
     if (relayLists?.dmInbox?.relays && relayLists.dmInbox.relays.length > 0) {
       activeRelaysRef.current = relayLists.dmInbox.relays;
-      console.log('[RelayResolver] Using kind 10050 relays');
+      console.log('[RelayResolver] Using kind 10050 relays:', relayLists.dmInbox.relays);
     } else if (relayLists?.nip65?.relays && relayLists.nip65.relays.length > 0) {
       activeRelaysRef.current = relayLists.nip65.relays.map(r => r.url);
-      console.log('[RelayResolver] Using kind 10002 relays');
+      console.log('[RelayResolver] Using kind 10002 relays:', activeRelaysRef.current);
+    } else {
+      console.log('[RelayResolver] No relay lists found, keeping discovery relays:', activeRelaysRef.current);
     }
 
     if (!hasResolved.current) {
-      queryClient.invalidateQueries({ queryKey: ['nostr'] });
       hasResolved.current = true;
     }
-  }, [user?.pubkey, relayLists, isLoading, activeRelaysRef, queryClient]);
+  }, [user?.pubkey, relayLists, isLoading, activeRelaysRef]);
 
   if (user?.pubkey && isLoading) {
     return (

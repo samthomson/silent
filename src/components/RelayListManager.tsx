@@ -14,11 +14,11 @@ import { useDMContext } from '@/contexts/DMContext';
 
 function DiscoveryRelaysTab() {
   const { config, updateConfig } = useAppContext();
-  const [edited, setEdited] = useState<string[]>([]);
+  const [edited, setEdited] = useState<string[] | null>(null);
   const [newUrl, setNewUrl] = useState('');
   
-  const current = edited.length > 0 ? edited : config.discoveryRelays;
-  const hasChanges = edited.length > 0;
+  const current = edited !== null ? edited : config.discoveryRelays;
+  const hasChanges = edited !== null;
 
   const add = () => {
     const trimmed = newUrl.trim();
@@ -30,8 +30,8 @@ function DiscoveryRelaysTab() {
   };
 
   const remove = (url: string) => setEdited(current.filter(r => r !== url));
-  const save = () => { updateConfig(c => ({ ...c, discoveryRelays: edited })); setEdited([]); };
-  const cancel = () => setEdited([]);
+  const save = () => { updateConfig(c => ({ ...c, discoveryRelays: edited! })); setEdited(null); };
+  const cancel = () => setEdited(null);
 
   return (
     <TabsContent value="discovery" className="space-y-6 mt-4">
@@ -98,9 +98,13 @@ function DMInboxTab() {
   const cancel = () => setEdited([]);
 
   if (isLoading) return (
-    <TabsContent value="dm-inbox" className="space-y-3 mt-4">
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-12 w-full" />
+    <TabsContent value="dm-inbox" className="mt-4">
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading relay lists...</p>
+        </div>
+      </div>
     </TabsContent>
   );
 
@@ -188,9 +192,13 @@ function NIP65Tab() {
   );
 
   if (isLoading) return (
-    <TabsContent value="nip65" className="space-y-4 mt-4">
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-12 w-full" />
+    <TabsContent value="nip65" className="mt-4">
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading relay lists...</p>
+        </div>
+      </div>
     </TabsContent>
   );
 

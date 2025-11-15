@@ -27,6 +27,8 @@ export function useRelayLists() {
     queryFn: async (c) => {
       if (!user?.pubkey) return null;
 
+      console.log('[useRelayLists] Querying relay lists from discovery relays:', config.discoveryRelays);
+
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(10000)]);
       const relayGroup = nostr.group(config.discoveryRelays);
       
@@ -34,6 +36,8 @@ export function useRelayLists() {
         [{ kinds: [10002, 10050], authors: [user.pubkey] }],
         { signal }
       );
+
+      console.log('[useRelayLists] Query returned', events.length, 'events:', events.map(e => ({ kind: e.kind, id: e.id.substring(0, 8), tagCount: e.tags.length })));
 
       const result: RelayListResult = {};
       
@@ -58,6 +62,9 @@ export function useRelayLists() {
           }
         }
         result.nip65 = { relays, eventId: nip65Event.id };
+        console.log('[useRelayLists] Parsed kind 10002 with', relays.length, 'relays');
+      } else {
+        console.log('[useRelayLists] No kind 10002 event found');
       }
       
       const dmEvent = events.find(e => e.kind === 10050);
@@ -67,14 +74,17 @@ export function useRelayLists() {
           .map(tag => tag[1])
           .filter(Boolean);
         result.dmInbox = { relays, eventId: dmEvent.id };
+        console.log('[useRelayLists] Parsed kind 10050 with', relays.length, 'relays');
+      } else {
+        console.log('[useRelayLists] No kind 10050 event found');
       }
 
+      console.log('[useRelayLists] Final result:', result);
       return Object.keys(result).length > 0 ? result : null;
     },
     enabled: !!user?.pubkey,
     staleTime: 30 * 60 * 1000,
     retry: 2,
-    refetchOnMount: 'always',
   });
 
   const publishNIP65 = useMutation({
@@ -103,7 +113,9 @@ export function useRelayLists() {
       return event;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nostr', 'relay-list'] });
+      if (user?.pubkey) {
+        queryClient.invalidateQueries({ queryKey: ['nostr', 'relay-list', user.pubkey] });
+      }
       toast({ title: 'Relay list updated', description: 'Your relay preferences have been saved.' });
     },
     onError: (error) => {
@@ -133,7 +145,9 @@ export function useRelayLists() {
       return event;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nostr', 'relay-list'] });
+      if (user?.pubkey) {
+        queryClient.invalidateQueries({ queryKey: ['nostr', 'relay-list', user.pubkey] });
+      }
       toast({ title: 'DM inbox relays updated', description: 'Your DM inbox preferences have been saved.' });
     },
     onError: (error) => {

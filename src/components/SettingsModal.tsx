@@ -150,7 +150,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }, []);
 
-  // Measure height when dialog opens (initial measurement)
   useEffect(() => {
     if (open && contentHeight === undefined) {
       const timer = setTimeout(measureHeight, 50);
@@ -158,7 +157,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }, [open, contentHeight, measureHeight]);
 
-  // Measure height when tab changes
   useEffect(() => {
     if (contentHeight !== undefined) {
       const timer = setTimeout(measureHeight, 0);

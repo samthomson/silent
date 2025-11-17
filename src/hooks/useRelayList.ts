@@ -40,11 +40,26 @@ export function useRelayLists() {
       console.log('[useRelayLists] Query returned', events.length, 'events:', events.map(e => ({ kind: e.kind, id: e.id.substring(0, 8), tagCount: e.tags.length })));
 
       const result: RelayListResult = {};
-      
-      const nip65Event = events.find(e => e.kind === 10002);
-      if (nip65Event) {
+
+      // Select latest 10002 and 10050 events by created_at
+      let latestNip65: (typeof events)[number] | undefined;
+      let latestDm: (typeof events)[number] | undefined;
+
+      for (const event of events) {
+        if (event.kind === 10002) {
+          if (!latestNip65 || event.created_at > latestNip65.created_at) {
+            latestNip65 = event;
+          }
+        } else if (event.kind === 10050) {
+          if (!latestDm || event.created_at > latestDm.created_at) {
+            latestDm = event;
+          }
+        }
+      }
+
+      if (latestNip65) {
         const relays: RelayEntry[] = [];
-        for (const tag of nip65Event.tags) {
+        for (const tag of latestNip65.tags) {
           if (tag[0] !== 'r') continue;
           const url = tag[1];
           const marker = tag[2];
@@ -61,20 +76,19 @@ export function useRelayLists() {
               relays.push({ url, read: true, write: true });
           }
         }
-        result.nip65 = { relays, eventId: nip65Event.id };
-        console.log('[useRelayLists] Parsed kind 10002 with', relays.length, 'relays');
+        result.nip65 = { relays, eventId: latestNip65.id };
+        console.log('[useRelayLists] Parsed latest kind 10002 with', relays.length, 'relays');
       } else {
         console.log('[useRelayLists] No kind 10002 event found');
       }
       
-      const dmEvent = events.find(e => e.kind === 10050);
-      if (dmEvent) {
-        const relays = dmEvent.tags
+      if (latestDm) {
+        const relays = latestDm.tags
           .filter(tag => tag[0] === 'relay')
           .map(tag => tag[1])
           .filter(Boolean);
-        result.dmInbox = { relays, eventId: dmEvent.id };
-        console.log('[useRelayLists] Parsed kind 10050 with', relays.length, 'relays');
+        result.dmInbox = { relays, eventId: latestDm.id };
+        console.log('[useRelayLists] Parsed latest kind 10050 with', relays.length, 'relays');
       } else {
         console.log('[useRelayLists] No kind 10050 event found');
       }

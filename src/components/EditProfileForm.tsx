@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -15,18 +15,35 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Loader2, Upload } from 'lucide-react';
+import { Loader2, Upload, Copy, Check } from 'lucide-react';
 import { NSchema as n, type NostrMetadata } from '@nostrify/nostrify';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUploadFile } from '@/hooks/useUploadFile';
+import { nip19 } from 'nostr-tools';
+import { useState } from 'react';
 
 export const EditProfileForm: React.FC = () => {
   const queryClient = useQueryClient();
+  const [copied, setCopied] = useState(false);
 
   const { user, metadata } = useCurrentUser();
   const { mutateAsync: publishEvent, isPending } = useNostrPublish();
   const { mutateAsync: uploadFile, isPending: isUploading } = useUploadFile();
   const { toast } = useToast();
+
+  const npub = user?.pubkey ? nip19.npubEncode(user.pubkey) : '';
+
+  const copyNpub = async () => {
+    if (npub) {
+      await navigator.clipboard.writeText(npub);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({
+        title: 'Copied!',
+        description: 'Your npub has been copied to clipboard',
+      });
+    }
+  };
 
   // Initialize the form with default values
   const form = useForm<NostrMetadata>({
@@ -115,6 +132,29 @@ export const EditProfileForm: React.FC = () => {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Npub Display */}
+        <div className="rounded-lg border bg-muted/50 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Your Public Key (npub)</p>
+              <p className="text-sm font-mono truncate">{npub}</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={copyNpub}
+              className="flex-shrink-0"
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+
         <FormField
           control={form.control}
           name="name"

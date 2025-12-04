@@ -1,4 +1,4 @@
-import { MessageSquare, Settings, HelpCircle, User, LogOut } from 'lucide-react';
+import { MessageSquare, Settings, HelpCircle, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -67,10 +67,6 @@ export function AppSidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="right" className="w-48">
-            <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="cursor-pointer">
-              <User className="mr-2 h-4 w-4" />
-              <span>Edit Profile</span>
-            </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => currentUser && removeLogin(currentUser.id)} 
               className="cursor-pointer text-red-500"

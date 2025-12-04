@@ -143,6 +143,11 @@ interface RelayError {
   totalRelays: number;
 }
 
+export interface ConversationRelayInfo {
+  relay: string;
+  users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }>;
+}
+
 interface DMContextType {
   messages: MessagesState;
   isLoading: boolean;
@@ -162,6 +167,9 @@ interface DMContextType {
   clearCacheAndRefetch: () => Promise<void>;
   relayError: RelayError | null;
   clearRelayError: () => void;
+  userInboxRelays: string[];
+  myRelayLists: RelayListResult | null | undefined;
+  getConversationRelays: (conversationId: string) => ConversationRelayInfo[];
 }
 
 const DMContext = createContext<DMContextType | null>(null);
@@ -1939,6 +1947,80 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
   const isDoingInitialLoad = isLoading && (loadingPhase === LOADING_PHASES.CACHE || loadingPhase === LOADING_PHASES.RELAYS);
 
+  // Get all relay info for a conversation, grouped by relay
+  // This is reactive - when cache updates, result updates
+  const getConversationRelays = useCallback((conversationId: string): ConversationRelayInfo[] => {
+    const participants = parseConversationId(conversationId);
+    const relayMap = new Map<string, Array<{ pubkey: string; isCurrentUser: boolean; source: string }>>();
+
+    // Normalize relay URL by removing trailing slash
+    const normalizeRelay = (relay: string) => relay.endsWith('/') ? relay.slice(0, -1) : relay;
+
+    // Add current user's relays
+    userInboxRelays.forEach(relay => {
+      const normalizedRelay = normalizeRelay(relay);
+      if (!relayMap.has(normalizedRelay)) {
+        relayMap.set(normalizedRelay, []);
+      }
+      const source = relayLists?.dmInbox 
+        ? 'Kind 10050 (DM Inbox)' 
+        : relayLists?.nip65 
+        ? 'Kind 10002 (NIP-65)' 
+        : 'Discovery relays';
+      
+      relayMap.get(normalizedRelay)!.push({
+        pubkey: userPubkey || '',
+        isCurrentUser: true,
+        source,
+      });
+    });
+
+    // Add other participants' relays
+    participants
+      .filter(pk => pk !== userPubkey)
+      .forEach(pubkey => {
+        const cached = queryClient.getQueryData<RelayListResult>(['nostr', 'relay-list', pubkey]);
+        
+        // If not cached, add a placeholder that will be reactive
+        if (!cached) {
+          const loadingRelay = '(loading relay info...)';
+          if (!relayMap.has(loadingRelay)) {
+            relayMap.set(loadingRelay, []);
+          }
+          relayMap.get(loadingRelay)!.push({
+            pubkey,
+            isCurrentUser: false,
+            source: 'Loading...',
+          });
+          return;
+        }
+
+        const relays = extractInboxRelays(cached, appConfig.discoveryRelays);
+        const source = cached.dmInbox 
+          ? 'Kind 10050 (DM Inbox)' 
+          : cached.nip65 
+          ? 'Kind 10002 (NIP-65)' 
+          : 'Discovery relays';
+
+        relays.forEach(relay => {
+          const normalizedRelay = normalizeRelay(relay);
+          if (!relayMap.has(normalizedRelay)) {
+            relayMap.set(normalizedRelay, []);
+          }
+          relayMap.get(normalizedRelay)!.push({
+            pubkey,
+            isCurrentUser: false,
+            source,
+          });
+        });
+      });
+
+    return Array.from(relayMap.entries()).map(([relay, users]) => ({
+      relay,
+      users,
+    }));
+  }, [userInboxRelays, relayLists, userPubkey, queryClient, appConfig.discoveryRelays]);
+
   const contextValue: DMContextType = {
     messages,
     isLoading,
@@ -1953,6 +2035,9 @@ export function DMProvider({ children, config }: DMProviderProps) {
     clearCacheAndRefetch,
     relayError,
     clearRelayError,
+    userInboxRelays,
+    myRelayLists: relayLists,
+    getConversationRelays,
   };
 
   return (

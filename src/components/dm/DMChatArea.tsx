@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useConversationMessages, useDMContext, type DecryptedMessage } from '@/contexts/DMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
+import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { useAppContext } from '@/hooks/useAppContext';
 import { genUserName } from '@/lib/genUserName';
 import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@/lib/dmConstants';
@@ -14,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson, FileLock } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson, FileLock, Server } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import type { NostrEvent } from '@nostrify/nostrify';
@@ -377,8 +378,100 @@ const ParticipantNames = ({ pubkeys }: { pubkeys: string[] }) => {
   }
 };
 
+// Component to display user labels for a relay
+const RelayUserLabels = ({ users, authorsMap }: { 
+  users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }>; 
+  authorsMap: Map<string, { event?: NostrEvent; metadata?: import('@nostrify/nostrify').NostrMetadata }>;
+}) => {
+  const userLabels = users.map(user => {
+    if (user.isCurrentUser) {
+      return { label: 'You', source: user.source, isCurrentUser: true };
+    }
+    
+    const authorData = authorsMap.get(user.pubkey);
+    const metadata = authorData?.metadata;
+    const displayName = metadata?.name || genUserName(user.pubkey);
+    return { label: displayName, source: user.source, isCurrentUser: false };
+  });
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {userLabels.map((user, idx) => (
+        <TooltipProvider key={idx}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className={cn(
+                "text-xs px-2 py-0.5 rounded cursor-help font-semibold",
+                user.isCurrentUser 
+                  ? "bg-primary text-primary-foreground" 
+                  : "bg-primary-foreground text-primary border border-primary"
+              )}>
+                {user.label}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">Source: {user.source}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ))}
+    </div>
+  );
+};
+
+// Modal to display relay information for a conversation
+const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean; onOpenChange: (open: boolean) => void; conversationId: string }) => {
+  const { user } = useCurrentUser();
+  const { getConversationRelays } = useDMContext();
+  
+  // This is reactive - updates when cache updates
+  const relayInfo = getConversationRelays(conversationId);
+
+  // Get all participant pubkeys and fetch their metadata
+  const allParticipants = parseConversationId(conversationId);
+  const otherParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
+  const authorsData = useAuthorsBatch(otherParticipants);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Conversation Relay Information</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-6">
+          <div className="text-sm text-muted-foreground">
+            <p className="text-xs">
+              Messages are fetched from your inbox relays and sent to recipients' inbox relays.
+              {relayInfo.length === 0 && ' Loading relay information...'}
+            </p>
+          </div>
+          {relayInfo.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Relays Used in This Conversation</h3>
+              <div className="space-y-2">
+                {relayInfo.map(({ relay, users }) => (
+                  <div key={relay} className="flex items-center gap-3 bg-muted px-3 py-2 rounded">
+                    <div className="text-xs font-mono flex-1 min-w-0 truncate">
+                      {relay}
+                    </div>
+                    <div className="flex-shrink-0">
+                      <RelayUserLabels users={users} authorsMap={authorsData.data} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack?: () => void }) => {
   const { user } = useCurrentUser();
+  const { config } = useAppContext();
+  const [showRelayModal, setShowRelayModal] = useState(false);
   
   // Parse conversation participants and exclude current user from display
   const allParticipants = parseConversationId(conversationId);
@@ -405,6 +498,8 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
       ? 'Private notes to yourself'
       : metadata?.nip05;
 
+  const devMode = config.devMode ?? false;
+
   return (
     <div className="px-4 py-4 border-b flex items-center gap-3">
       {onBack && (
@@ -428,6 +523,33 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
           <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
         )}
       </div>
+
+      {devMode && (
+        <>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowRelayModal(true)}
+                >
+                  <Server className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">View relay information</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <RelayInfoModal
+            open={showRelayModal}
+            onOpenChange={setShowRelayModal}
+            conversationId={conversationId}
+          />
+        </>
+      )}
     </div>
   );
 };

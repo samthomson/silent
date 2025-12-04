@@ -1,31 +1,134 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Radio, Search, AlertTriangle, RefreshCw, MessageSquare } from 'lucide-react';
+import { Plus, Trash2, Radio, Search, AlertTriangle, RefreshCw, MessageSquare, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useRelayLists, type RelayEntry } from '@/hooks/useRelayList';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useDMContext } from '@/contexts/DMContext';
 
+// Popular relay suggestions for each tab
+const DISCOVERY_SUGGESTIONS = [
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://relay.primal.net',
+  'wss://nos.lol',
+  'wss://relay.ditto.pub',
+  'wss://nostr.wine',
+];
+
+const NIP65_SUGGESTIONS = [
+  'wss://relay.damus.io',
+  'wss://purplepag.es',
+  'wss://relay.nostr.band',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://nostr.wine',
+];
+
+const DM_INBOX_SUGGESTIONS = [
+  'wss://relay.0xchat.com',
+  'wss://auth.nostr1.com',
+  'wss://inbox.nostr.wine',
+  'wss://relay.damus.io',
+  'wss://nostr.land',
+];
+
+
+// Shared component for relay input with popular suggestions
+interface RelayInputWithSuggestionsProps {
+  suggestions: string[];
+  onAdd: (url: string) => void;
+  currentRelays: string[];
+  disabled?: boolean;
+  placeholder?: string;
+  isLoading?: boolean;
+}
+
+function RelayInputWithSuggestions({ suggestions, onAdd, currentRelays, disabled, placeholder = "wss://relay.example.com", isLoading }: RelayInputWithSuggestionsProps) {
+  const [newUrl, setNewUrl] = useState('');
+  const [open, setOpen] = useState(false);
+  
+  const available = suggestions.filter(url => !currentRelays.includes(url));
+
+  const handleAdd = (url?: string) => {
+    const input = url || newUrl;
+    onAdd(input);
+    setNewUrl('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex gap-2">
+      <div className="flex-1 flex gap-1">
+        <Input 
+          placeholder={placeholder}
+          value={newUrl} 
+          onChange={e => setNewUrl(e.target.value)} 
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          disabled={disabled}
+          className="font-mono text-xs"
+        />
+        {available.length > 0 && (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon"
+                disabled={disabled}
+                className="flex-shrink-0"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-2">
+              <div className="text-xs font-medium text-muted-foreground px-2 py-1.5 mb-1">
+                Popular Relays
+              </div>
+              <div className="space-y-1">
+                {available.map(url => (
+                  <button
+                    key={url}
+                    onClick={() => handleAdd(url)}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-2 text-xs font-mono rounded hover:bg-accent transition-colors group"
+                  >
+                    <span className="truncate">{url}</span>
+                    <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+      <Button 
+        onClick={() => handleAdd()} 
+        disabled={disabled || !newUrl.trim()}
+      >
+        {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+      </Button>
+    </div>
+  );
+}
+
 function DiscoveryRelaysTab() {
   const { config, updateConfig } = useAppContext();
   const [edited, setEdited] = useState<string[] | null>(null);
-  const [newUrl, setNewUrl] = useState('');
   
   const current = edited !== null ? edited : config.discoveryRelays;
   const hasChanges = edited !== null;
 
-  const add = () => {
-    const trimmed = newUrl.trim();
-    if (!trimmed) return;
-    const normalized = trimmed.startsWith('wss://') || trimmed.startsWith('ws://') ? trimmed : `wss://${trimmed}`;
+  const add = (url: string) => {
+    const input = url.trim();
+    if (!input) return;
+    const normalized = input.startsWith('wss://') || input.startsWith('ws://') ? input : `wss://${input}`;
     if (current.includes(normalized)) return;
     setEdited([...current, normalized]);
-    setNewUrl('');
   };
 
   const remove = (url: string) => setEdited(current.filter(r => r !== url));
@@ -59,10 +162,11 @@ function DiscoveryRelaysTab() {
       </div>
       <div>
         <h3 className="text-sm font-semibold mb-3">Add Relay</h3>
-        <div className="flex gap-2">
-          <Input placeholder="wss://relay.example.com" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} />
-          <Button onClick={add} disabled={!newUrl.trim()}><Plus className="h-4 w-4" /></Button>
-        </div>
+        <RelayInputWithSuggestions
+          suggestions={DISCOVERY_SUGGESTIONS}
+          onAdd={add}
+          currentRelays={current}
+        />
       </div>
       {hasChanges && (
         <div className="flex gap-2">
@@ -78,7 +182,6 @@ function DMInboxTab() {
   const { user } = useCurrentUser();
   const { data, isLoading, refetch, publishDMInbox, isPublishingDM } = useRelayLists();
   const [edited, setEdited] = useState<string[] | null>(null);
-  const [newUrl, setNewUrl] = useState('');
   
   const current = edited !== null ? edited : (data?.dmInbox?.relays || []);
 
@@ -95,14 +198,13 @@ function DMInboxTab() {
     }
   }, [data?.dmInbox?.relays, edited]);
 
-  const add = () => {
-    const trimmed = newUrl.trim();
-    if (!trimmed) return;
-    const normalized = trimmed.startsWith('wss://') || trimmed.startsWith('ws://') ? trimmed : `wss://${trimmed}`;
+  const add = (url: string) => {
+    const input = url.trim();
+    if (!input) return;
+    const normalized = input.startsWith('wss://') || input.startsWith('ws://') ? input : `wss://${input}`;
     if (current.includes(normalized)) return;
     const updated = [...current, normalized];
     setEdited(updated);
-    setNewUrl('');
     publishDMInbox(updated);
   };
 
@@ -157,12 +259,13 @@ function DMInboxTab() {
       </div>
       <div>
         <h3 className="text-sm font-semibold mb-3">Add Relay</h3>
-        <div className="flex gap-2">
-          <Input placeholder="wss://relay.example.com" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} disabled={!user || isPublishingDM} className="font-mono text-xs" />
-          <Button onClick={add} disabled={!user || !newUrl.trim() || isPublishingDM}>
-            {isPublishingDM ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          </Button>
-        </div>
+        <RelayInputWithSuggestions
+          suggestions={DM_INBOX_SUGGESTIONS}
+          onAdd={add}
+          currentRelays={current}
+          disabled={!user || isPublishingDM}
+          isLoading={isPublishingDM}
+        />
         {isPublishingDM && (
           <p className="text-xs text-muted-foreground mt-2">Publishing changes...</p>
         )}
@@ -176,7 +279,6 @@ function NIP65Tab() {
   const { data, isLoading, refetch, publishNIP65, isPublishingNIP65 } = useRelayLists();
   const { relayError, clearRelayError } = useDMContext();
   const [edited, setEdited] = useState<RelayEntry[] | null>(null);
-  const [newUrl, setNewUrl] = useState('');
   
   const current = edited !== null ? edited : (data?.nip65?.relays || []);
 
@@ -193,14 +295,13 @@ function NIP65Tab() {
     }
   }, [data?.nip65?.relays, edited]);
 
-  const add = () => {
-    const trimmed = newUrl.trim();
-    if (!trimmed) return;
-    const normalized = trimmed.startsWith('wss://') || trimmed.startsWith('ws://') ? trimmed : `wss://${trimmed}`;
+  const add = (url: string) => {
+    const input = url.trim();
+    if (!input) return;
+    const normalized = input.startsWith('wss://') || input.startsWith('ws://') ? input : `wss://${input}`;
     if (current.some(r => r.url === normalized)) return;
     const updated = [...current, { url: normalized, read: true, write: true }];
     setEdited(updated);
-    setNewUrl('');
     publishNIP65(updated);
   };
 
@@ -300,12 +401,13 @@ function NIP65Tab() {
       </div>
       <div>
         <h3 className="text-sm font-semibold mb-3">Add Relay</h3>
-        <div className="flex gap-2">
-          <Input placeholder="wss://relay.example.com" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} disabled={isPublishingNIP65} />
-          <Button onClick={add} disabled={!newUrl.trim() || isPublishingNIP65}>
-            {isPublishingNIP65 ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          </Button>
-        </div>
+        <RelayInputWithSuggestions
+          suggestions={NIP65_SUGGESTIONS}
+          onAdd={add}
+          currentRelays={current.map(r => r.url)}
+          disabled={isPublishingNIP65}
+          isLoading={isPublishingNIP65}
+        />
         {isPublishingNIP65 && (
           <p className="text-xs text-muted-foreground mt-2">Publishing changes...</p>
         )}

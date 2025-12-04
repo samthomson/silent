@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
-import { genUserName } from '@/lib/genUserName';
 import { HelpDialog } from '@/components/HelpDialog';
 import { SettingsModal } from '@/components/SettingsModal';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useNavigate } from 'react-router-dom';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 
 export function AppSidebar() {
@@ -18,11 +16,10 @@ export function AppSidebar() {
   const { currentUser, removeLogin } = useLoggedInAccounts();
   const author = useAuthor(user?.pubkey || '');
   const metadata = author.data?.metadata;
-  const navigate = useNavigate();
 
-  const displayName = metadata?.name || genUserName(user?.pubkey || '');
+  const displayName = metadata?.name || 'Anon';
   const avatarUrl = metadata?.picture;
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const initials = metadata?.name ? displayName.slice(0, 2).toUpperCase() : '?';
 
   return (
     <>
@@ -69,24 +66,11 @@ export function AppSidebar() {
               </Avatar>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="right" className="w-56">
-            <div className="flex items-center gap-2 p-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={avatarUrl} alt={displayName} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 truncate">
-                <p className="text-sm font-medium truncate">{displayName}</p>
-              </div>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
+          <DropdownMenuContent align="end" side="right" className="w-48">
+            <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="cursor-pointer">
               <User className="mr-2 h-4 w-4" />
               <span>Edit Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={() => currentUser && removeLogin(currentUser.id)} 
               className="cursor-pointer text-red-500"
@@ -99,7 +83,7 @@ export function AppSidebar() {
       </div>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} defaultTab="profile" />
     </>
   );
 }

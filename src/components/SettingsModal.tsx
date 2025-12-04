@@ -1,4 +1,4 @@
-import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
@@ -16,10 +16,20 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { RelayListManager } from '@/components/RelayListManager';
+import { EditProfileForm } from '@/components/EditProfileForm';
 
 interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTab?: string;
+}
+
+function ProfileContent() {
+  return (
+    <div className="space-y-4">
+      <EditProfileForm />
+    </div>
+  );
 }
 
 function AppearanceContent() {
@@ -135,7 +145,7 @@ function AdvancedContent() {
   );
 }
 
-export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
+export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
   const { relayError } = useDMContext();
 
@@ -184,6 +194,21 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         <div className="md:hidden flex-1 min-h-0 overflow-auto">
           {!mobileCategory ? (
             <div className="px-4 py-4 space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-between h-auto py-4 px-4"
+                onClick={() => setMobileCategory('Profile')}
+              >
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5" />
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Profile</span>
+                    <span className="text-xs text-muted-foreground">Edit your profile</span>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </Button>
+
               <Button
                 variant="ghost"
                 className="w-full justify-between h-auto py-4 px-4"
@@ -262,6 +287,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
               </Button>
             </div>
+          ) : mobileCategory === 'Profile' ? (
+            <div className="px-4 py-4">
+              <ProfileContent />
+            </div>
           ) : mobileCategory === 'Appearance' ? (
             <div className="px-4 py-4">
               <AppearanceContent />
@@ -286,9 +315,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         </div>
 
         {/* Desktop: Tabbed layout */}
-        <Tabs defaultValue="appearance" className="hidden md:flex flex-1 min-h-0 overflow-hidden">
+        <Tabs defaultValue={defaultTab} className="hidden md:flex flex-1 min-h-0 overflow-hidden">
           <div className="w-48 border-r flex-shrink-0 flex flex-col">
             <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pt-4 pb-4 gap-1 items-start justify-start">
+              <TabsTrigger 
+                value="profile" 
+                className="w-full justify-start gap-3 data-[state=active]:bg-accent"
+              >
+                <User className="h-4 w-4" />
+                Profile
+              </TabsTrigger>
               <TabsTrigger 
                 value="appearance" 
                 className="w-full justify-start gap-3 data-[state=active]:bg-accent"
@@ -330,6 +366,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
           <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
             <div className="px-6 pt-4 pb-4 flex-1 min-h-0 overflow-auto">
+              <TabsContent value="profile" className="mt-0 animate-in fade-in-0 duration-200">
+                <ProfileContent />
+              </TabsContent>
+
               <TabsContent value="appearance" className="mt-0 animate-in fade-in-0 duration-200">
                 <AppearanceContent />
               </TabsContent>

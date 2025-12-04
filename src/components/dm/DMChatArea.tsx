@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { useConversationMessages, useDMContext, type DecryptedMessage } from '@/contexts/DMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
@@ -425,11 +425,14 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
   const { getConversationRelays } = useDMContext();
   
   // This is reactive - updates when cache updates
-  const relayInfo = getConversationRelays(conversationId);
+  const relayInfo = useMemo(() => getConversationRelays(conversationId), [getConversationRelays, conversationId]);
 
   // Get all participant pubkeys and fetch their metadata
-  const allParticipants = parseConversationId(conversationId);
-  const otherParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
+  const otherParticipants = useMemo(() => {
+    const allParticipants = parseConversationId(conversationId);
+    return allParticipants.filter(pk => pk !== user?.pubkey);
+  }, [conversationId, user?.pubkey]);
+  
   const authorsData = useAuthorsBatch(otherParticipants);
 
   return (

@@ -180,7 +180,7 @@ function DiscoveryRelaysTab() {
 
 function DMInboxTab() {
   const { user } = useCurrentUser();
-  const { data, isLoading, refetch, publishDMInbox, isPublishingDM } = useRelayLists();
+  const { data, isLoading, isFetching, refetch, publishDMInbox, isPublishingDM } = useRelayLists();
   const [edited, setEdited] = useState<string[] | null>(null);
   
   const current = edited !== null ? edited : (data?.dmInbox?.relays || []);
@@ -230,8 +230,14 @@ function DMInboxTab() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold">DM Inbox (kind 10050)</h3>
-          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="h-7 px-2 text-xs">
-            <RefreshCw className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => refetch()} 
+            disabled={isFetching} 
+            className="h-7 px-2 text-xs"
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
             Resync
           </Button>
         </div>
@@ -276,7 +282,7 @@ function DMInboxTab() {
 
 function NIP65Tab() {
   const { user } = useCurrentUser();
-  const { data, isLoading, refetch, publishNIP65, isPublishingNIP65 } = useRelayLists();
+  const { data, isLoading, isFetching, refetch, publishNIP65, isPublishingNIP65 } = useRelayLists();
   const { relayError, clearRelayError } = useDMContext();
   const [edited, setEdited] = useState<RelayEntry[] | null>(null);
   
@@ -363,8 +369,14 @@ function NIP65Tab() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold">NIP-65 (kind 10002)</h3>
-          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="h-7 px-2 text-xs">
-            <RefreshCw className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => refetch()} 
+            disabled={isFetching} 
+            className="h-7 px-2 text-xs"
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
             Resync
           </Button>
         </div>

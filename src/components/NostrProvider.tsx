@@ -17,7 +17,8 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
 
   // Use refs so the pool always has the latest data
   const discoveryRelays = useRef<string[]>(config.discoveryRelays);
-  const activeRelays = useRef<string[]>(config.discoveryRelays);
+  const inboxRelays = useRef<string[]>(config.discoveryRelays); // For reading DMs
+  const outboxRelays = useRef<string[]>(config.discoveryRelays); // For reading/writing profiles
 
   useEffect(() => {
     discoveryRelays.current = config.discoveryRelays;
@@ -30,9 +31,15 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
         return new NRelay1(url);
       },
       reqRouter(filters) {
-        // Use ALL discovery relays for reading
+        // Relay routing for queries through the default nostr pool
+        // NOTE: DMContext bypasses this by using nostr.group() with explicit inbox relays
+        // NOTE: useAuthor should implement proper outbox model (fetch target's NIP-65, then query their write relays)
+        
+        // For now, all queries use discovery relays
+        // Individual hooks can use nostr.group() or nostr.relay() for specific relay routing
+        const relays = discoveryRelays.current;
+        
         // Creates a map where each relay gets the same filters
-        const relays = activeRelays.current;
         const map = new Map();
         for (const relay of relays) {
           map.set(relay, filters);
@@ -40,51 +47,52 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
         return map;
       },
       eventRouter(event: NostrEvent) {
-        // Special case: when publishing kind 10002 (NIP-65), also publish to
-        // the write relays specified in the event itself for bootstrapping
+        // Event routing for publishing through the default nostr pool
+        // NOTE: DMContext bypasses this by using nostr.group() with explicit relays for DM events
+        
+        // Profile metadata (kind 0) - publish to outbox relays only
+        if (event.kind === 0) {
+          console.log('[NostrProvider] Publishing kind 0 to:', outboxRelays.current);
+          return outboxRelays.current; // NIP-65 write relays → discovery fallback
+        }
+        
+        // NIP-65 relay list (kind 10002) - publish to discovery + write relays for bootstrapping
         if (event.kind === 10002) {
-          const writeRelays = new Set(discoveryRelays.current);
+          const writeRelaysSet = new Set(discoveryRelays.current);
           
-          // Add write relays from the event tags
+          // Add write relays from the event tags for bootstrapping
           for (const tag of event.tags) {
             if (tag[0] === 'r') {
               const url = tag[1];
               const marker = tag[2];
-              // Include relays marked as write or with no marker (both read+write)
               if (!marker || marker === 'write') {
-                writeRelays.add(url);
+                writeRelaysSet.add(url);
               }
             }
           }
           
-          return Array.from(writeRelays);
+          return Array.from(writeRelaysSet);
         }
         
-        // Special case: when publishing kind 10050 (DM inbox relays), also publish to
-        // the relays specified in the event itself for bootstrapping
+        // DM inbox relay list (kind 10050) - publish to discovery + write relays for bootstrapping
         if (event.kind === 10050) {
-          const dmRelays = new Set(discoveryRelays.current);
-          
-          // Add DM inbox relays from the event tags
-          for (const tag of event.tags) {
-            if (tag[0] === 'relay') {
-              const url = tag[1];
-              if (url) dmRelays.add(url);
-            }
-          }
-          
-          return Array.from(dmRelays);
+          // Publish to same places as kind 10002 (discovery + your write relays)
+          // The inbox relays in the event are READ relays, not where you publish configuration
+          return [...new Set([...discoveryRelays.current, ...outboxRelays.current])];
         }
         
-        // For all other events, publish to discovery relays
-        return activeRelays.current;
+        // For all other events, publish to outbox relays
+        return outboxRelays.current; // NIP-65 write relays → discovery fallback
       },
     });
   }
 
   return (
     <NostrContext.Provider value={{ nostr: pool.current }}>
-      <RelayResolver activeRelaysRef={activeRelays}>
+      <RelayResolver 
+        inboxRelaysRef={inboxRelays}
+        outboxRelaysRef={outboxRelays}
+      >
         {children}
       </RelayResolver>
     </NostrContext.Provider>

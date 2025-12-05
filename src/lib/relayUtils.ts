@@ -139,7 +139,7 @@ export function getOutboxRelays(relays: RelayEntry[]): string[] {
  * 2. 10002 read relays
  * 3. Discovery relays (fallback)
  * 
- * This is the canonical function for determining which relays to use for reading/queries.
+ * This is the canonical function for determining which relays to use for reading DMs.
  */
 export function extractInboxRelays(
   relayListResult: RelayListResult | null | undefined,
@@ -157,6 +157,27 @@ export function extractInboxRelays(
   }
   
   // Priority 3: Discovery relays
+  return discoveryRelays;
+}
+
+/**
+ * Extract outbox relays from RelayListResult using priority:
+ * 1. 10002 write relays
+ * 2. Discovery relays (fallback)
+ * 
+ * This is the canonical function for determining which relays to use for reading/writing profiles and other non-DM content.
+ */
+export function extractOutboxRelays(
+  relayListResult: RelayListResult | null | undefined,
+  discoveryRelays: string[]
+): string[] {
+  // Priority 1: NIP-65 write relays (kind 10002)
+  const writeRelays = relayListResult?.nip65?.relays?.filter(r => r.write)?.map(r => r.url);
+  if (writeRelays && writeRelays.length > 0) {
+    return writeRelays;
+  }
+  
+  // Priority 2: Discovery relays
   return discoveryRelays;
 }
 

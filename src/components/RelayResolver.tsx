@@ -2,14 +2,15 @@ import { useEffect, useRef, ReactNode } from 'react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useRelayLists } from '@/hooks/useRelayList';
 import { useAppContext } from '@/hooks/useAppContext';
-import { extractInboxRelays } from '@/lib/relayUtils';
+import { extractInboxRelays, extractOutboxRelays } from '@/lib/relayUtils';
 
 interface RelayResolverProps {
   children: ReactNode;
-  activeRelaysRef: React.MutableRefObject<string[]>;
+  inboxRelaysRef: React.MutableRefObject<string[]>;
+  outboxRelaysRef: React.MutableRefObject<string[]>;
 }
 
-export function RelayResolver({ children, activeRelaysRef }: RelayResolverProps) {
+export function RelayResolver({ children, inboxRelaysRef, outboxRelaysRef }: RelayResolverProps) {
   const { user } = useCurrentUser();
   const { data: relayLists, isLoading } = useRelayLists();
   const { config } = useAppContext();
@@ -23,22 +24,20 @@ export function RelayResolver({ children, activeRelaysRef }: RelayResolverProps)
 
     if (isLoading) return;
 
-    // Use shared utility to extract inbox relays (10050 > 10002 read > discovery)
+    // Inbox relays: for reading DMs (10050 > 10002 read > discovery)
     const inboxRelays = extractInboxRelays(relayLists, config.discoveryRelays);
-    activeRelaysRef.current = inboxRelays;
+    inboxRelaysRef.current = inboxRelays;
+    console.log('[RelayResolver] ✅ Inbox relays updated:', inboxRelays);
     
-    if (relayLists?.dmInbox?.relays && relayLists.dmInbox.relays.length > 0) {
-      console.log('[RelayResolver] Using kind 10050 relays:', inboxRelays);
-    } else if (relayLists?.nip65?.relays && relayLists.nip65.relays.length > 0) {
-      console.log('[RelayResolver] Using kind 10002 read relays:', inboxRelays);
-    } else {
-      console.log('[RelayResolver] No relay lists found, using discovery relays:', inboxRelays);
-    }
+    // Outbox relays: for reading/writing profiles and other content (10002 write > discovery)
+    const outboxRelays = extractOutboxRelays(relayLists, config.discoveryRelays);
+    outboxRelaysRef.current = outboxRelays;
+    console.log('[RelayResolver] ✅ Outbox relays updated:', outboxRelays);
 
     if (!hasResolved.current) {
       hasResolved.current = true;
     }
-  }, [user?.pubkey, relayLists, isLoading, activeRelaysRef, config.discoveryRelays]);
+  }, [user?.pubkey, relayLists, isLoading, inboxRelaysRef, outboxRelaysRef, config.discoveryRelays]);
 
   if (user?.pubkey && isLoading) {
     return (

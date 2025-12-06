@@ -204,7 +204,7 @@ export function useZaps(
 
       const zapRequest = nip57.makeZapRequest({
         profile: actualTarget.pubkey,
-        event: event,
+        event: event as string | Event,
         amount: zapAmount,
         relays: config.discoveryRelays,
         comment

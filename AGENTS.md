@@ -497,18 +497,26 @@ To display profile data for a user by their Nostr pubkey (such as an event autho
 ```tsx
 import type { NostrEvent, NostrMetadata } from '@nostrify/nostrify';
 import { useAuthor } from '@/hooks/useAuthor';
-import { genUserName } from '@/lib/genUserName';
+import { getDisplayName } from '@/lib/genUserName';
 
 function Post({ event }: { event: NostrEvent }) {
   const author = useAuthor(event.pubkey);
   const metadata: NostrMetadata | undefined = author.data?.metadata;
 
-  const displayName = metadata?.name ?? genUserName(event.pubkey);
+  // getDisplayName checks: display_name > name > truncated npub
+  const displayName = getDisplayName(event.pubkey, metadata);
   const profileImage = metadata?.picture;
 
   // ...render elements with this data
 }
 ```
+
+**IMPORTANT**: Always use `getDisplayName(pubkey, metadata)` to display user names. This function:
+1. First checks `metadata?.display_name` (richer display name)
+2. Then checks `metadata?.name` (basic name)
+3. Falls back to truncated npub format: `npub1u36g...8761`
+
+**Never** manually construct display names with `metadata?.name ?? genUserName()` or similar patterns. Use `getDisplayName()` everywhere for consistency.
 
 ### `NostrMetadata` type
 

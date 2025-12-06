@@ -102,7 +102,7 @@ describe('NoteContent', () => {
     expect(bitcoinHashtag).toHaveAttribute('href', '/t/bitcoin');
   });
 
-  it('generates deterministic names for users without metadata and styles them differently', () => {
+  it('shows truncated npub for users without metadata and styles them differently', () => {
     // Use a valid npub for testing
     const event: NostrEvent = {
       id: 'test-id',
@@ -120,17 +120,16 @@ describe('NoteContent', () => {
       </TestApp>
     );
 
-    // The mention should be rendered with a deterministic name
+    // The mention should be rendered with a truncated npub fallback
     const mention = screen.getByRole('link');
     expect(mention).toBeInTheDocument();
     
-    // Should have muted styling for generated names (gray instead of blue)
+    // Should have muted styling for fallback names (gray instead of blue)
     expect(mention).toHaveClass('text-gray-500');
     expect(mention).not.toHaveClass('text-blue-500');
     
-    // The text should start with @ and contain a generated name (not a truncated npub)
+    // The text should be @ followed by truncated npub format
     const linkText = mention.textContent;
-    expect(linkText).not.toMatch(/^@npub1/); // Should not be a truncated npub
-    expect(linkText).toEqual("@Swift Falcon");
+    expect(linkText).toMatch(/^@npub1.{4}\.\.\..{4}$/); // Should be truncated npub format
   });
 });

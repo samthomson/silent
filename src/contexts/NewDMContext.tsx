@@ -63,6 +63,9 @@ const mergeParticipants = (existing: Record<string, Participant>, incoming: Reco
 const computeSinceTimestamp = (lastCacheTime: number | null, nip17FuzzDays: number): number | null => {}
 const determineNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[], mode: StartupMode): string[] => {}
 const buildCachedData = (participants: Record<string, Participant>, messages: Message[], queriedRelays: string[], queryLimitReached: boolean): CachedData => {}
+const extractNewPubkeys = (messagesWithMetadata: MessageWithMetadata[], baseParticipants: Record<string, Participant>, myPubkey: string, mode: StartupMode): string[] => {}
+const findNewRelaysToQuery = (participants: Record<string, Participant>, alreadyQueried: string[]): string[] => {}
+const computeAllQueriedRelays = (mode: StartupMode, cached: CachedData | null, relaySet: string[], newRelays: string[]): string[] => {}
 
 // ============================================================================
 // Impure Functions
@@ -81,6 +84,18 @@ const refreshStaleParticipants = async (
   discoveryRelays: string[],
   relayTTL: number
 ): Promise<Record<string, Participant>> => {}
+const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubkey: string): Promise<{ myLists: RelayListsResult; myBlockedRelays: string[] }> => {}
+const queryMessages = async (nostr: NPool, signer: Signer, relays: string[], myPubkey: string, since: number | null, queryLimit: number): Promise<{ messagesWithMetadata: MessageWithMetadata[]; limitReached: boolean }> => {}
+const fetchAndMergeParticipants = async (
+  nostr: NPool,
+  baseParticipants: Record<string, Participant>,
+  newPubkeys: string[],
+  myBlockedRelays: string[],
+  relayMode: RelayMode,
+  discoveryRelays: string[]
+): Promise<Record<string, Participant>> => {}
+const queryNewRelays = async (nostr: NPool, signer: Signer, relays: string[], myPubkey: string, queryLimit: number): Promise<{ allMessages: MessageWithMetadata[]; limitReached: boolean }> => {}
+const buildAndSaveCache = async (myPubkey: string, participants: Record<string, Participant>, allQueriedRelays: string[], limitReached: boolean): Promise<CachedData> => {}
 
 // ============================================================================
 // Orchestrators
@@ -88,54 +103,26 @@ const refreshStaleParticipants = async (
 
 const startup = async (nostr: NPool, signer: Signer, myPubkey: string, settings: DMSettings, mode: StartupMode, cached: CachedData | null): Promise<CachedData> => {
   // A. Fetch my relay lists
-  const myRelayLists = await fetchRelayLists(nostr, settings.discoveryRelays, [myPubkey]);
-  const myLists = myRelayLists.get(myPubkey)!;
-  const myBlockedRelays = extractBlockedRelays(myLists.kind10006);
-
+  const { myLists, myBlockedRelays } = await fetchMyRelayInfo(nostr, settings.discoveryRelays, myPubkey);
   // B. Derive my relay set
   const relaySet = deriveRelaySet(myLists.kind10002, myLists.kind10050, myBlockedRelays, settings.relayMode, settings.discoveryRelays);
-
   // B.2/B.3 Refresh stale participants (warm start only)
-  const baseParticipants = mode === StartupMode.WARM 
-    ? await refreshStaleParticipants(nostr, cached.participants, myBlockedRelays, settings.relayMode, settings.discoveryRelays, settings.relayTTL)
-    : {};
-
+  const baseParticipants = mode === StartupMode.WARM ? await refreshStaleParticipants(nostr, cached.participants, myBlockedRelays, settings.relayMode, settings.discoveryRelays, settings.relayTTL) : {};
   // C. Query messages
   const since = mode === StartupMode.WARM ? computeSinceTimestamp(cached.syncState.lastCacheTime, 2) : null;
-  const filters = buildMessageFilters(myPubkey, since);
-  const { messages: rawMessages, limitReached: limitReached1 } = await fetchMessages(nostr, relaySet, filters, settings.queryLimit);
-  const messagesWithMetadata = await unwrapAllGiftWraps(rawMessages, signer);
-
+  const { messagesWithMetadata, limitReached: limitReached1 } = await queryMessages(nostr, signer, relaySet, myPubkey, since, settings.queryLimit);
   // D. Extract unique users
-  const foundPubkeys = extractPubkeysFromMessages(messagesWithMetadata, myPubkey);
-  const existingPubkeys = Object.keys(baseParticipants);
-  const newPubkeys = determineNewPubkeys(foundPubkeys, existingPubkeys, mode);
-
-  // E. Fetch relay lists for new users
-  const participantRelayLists = await fetchRelayLists(nostr, settings.discoveryRelays, newPubkeys);
-
-  // F. Build and merge participants
-  const newParticipants = buildParticipantsMap(newPubkeys, participantRelayLists, myBlockedRelays, settings.relayMode, settings.discoveryRelays);
-  const participants = mergeParticipants(baseParticipants, newParticipants);
-
+  const newPubkeys = extractNewPubkeys(messagesWithMetadata, baseParticipants, myPubkey, mode);
+  // E+F. Fetch relay lists and merge participants
+  const participants = await fetchAndMergeParticipants(nostr, baseParticipants, newPubkeys, myBlockedRelays, settings.relayMode, settings.discoveryRelays);
   // H. Find new relays to query
-  const relayUserMap = buildRelayToUsersMap(participants);
   const alreadyQueried = mode === StartupMode.WARM ? cached.syncState.queriedRelays : relaySet;
-  const newRelays = filterNewRelayUserCombos(relayUserMap, alreadyQueried);
-
-  // I. Query new relays (full history)
-  const newRelayFilters = buildMessageFilters(myPubkey);
-  const { messages: additionalMessages, limitReached: limitReached2 } = await fetchMessages(nostr, newRelays, newRelayFilters, settings.queryLimit);
-  const additionalWithMetadata = await unwrapAllGiftWraps(additionalMessages, signer);
-  const allMessages = [...messagesWithMetadata, ...additionalWithMetadata];
-
+  const newRelays = findNewRelaysToQuery(participants, alreadyQueried);
+  // I. Query new relays
+  const { allMessages, limitReached: limitReached2 } = await queryNewRelays(nostr, signer, newRelays, myPubkey, settings.queryLimit);
   // J. Build and save
-  const allQueriedRelays = mode === StartupMode.WARM
-    ? [...new Set([...cached.syncState.queriedRelays, ...newRelays])]
-    : [...relaySet, ...newRelays];
-  const cachedData = buildCachedData(participants, [], allQueriedRelays, limitReached1 || limitReached2);
-  await saveToCache(myPubkey, cachedData);
-  return cachedData;
+  const allQueriedRelays = computeAllQueriedRelays(mode, cached, relaySet, newRelays);
+  return await buildAndSaveCache(myPubkey, participants, allQueriedRelays, limitReached1 || limitReached2);
 }
 
 const init = async (nostr: NPool, signer: Signer, myPubkey: string, settings: DMSettings): Promise<CachedData> => {

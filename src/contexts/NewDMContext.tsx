@@ -47,7 +47,15 @@ const buildParticipant = (
   relayMode: RelayMode,
   discoveryRelays: string[]
 ): Participant => {}
+const buildParticipantsMap = (
+  pubkeys: string[],
+  relayListsMap: Map<string, RelayListsResult>,
+  myBlockedRelays: string[],
+  relayMode: RelayMode,
+  discoveryRelays: string[]
+): Record<string, Participant> => {}
 const mergeParticipants = (existing: Record<string, Participant>, incoming: Record<string, Participant>): Record<string, Participant> => {}
+const computeSinceTimestamp = (lastCacheTime: number | null, nip17FuzzDays: number): number | undefined => {}
 const buildCachedData = (participants: Record<string, Participant>, messages: Message[], queriedRelays: string[], queryLimitReached: boolean): CachedData => {}
 
 // ============================================================================
@@ -85,16 +93,7 @@ const coldStart = async (nostr: NPool, signer: Signer, myPubkey: string, setting
   const participantRelayLists = await fetchRelayLists(nostr, settings.discoveryRelays, foundPubkeys);
 
   // F. Build participants
-  const participants: Record<string, Participant> = {};
-  for (const publicKey of foundPubkeys) {
-    participants[publicKey] = buildParticipant(
-      publicKey,
-      participantRelayLists.get(publicKey),
-      myBlockedRelays,
-      settings.relayMode,
-      settings.discoveryRelays
-    );
-  }
+  const participants = buildParticipantsMap(foundPubkeys, participantRelayLists, myBlockedRelays, settings.relayMode, settings.discoveryRelays);
 
   // H. Find new relays to query
   const relayUserMap = buildRelayToUsersMap(participants);
@@ -125,20 +124,11 @@ const warmStart = async (nostr: NPool, signer: Signer, myPubkey: string, setting
 
   // B.3 Refresh stale participants
   const refreshedLists = await fetchRelayLists(nostr, settings.discoveryRelays, stalePubkeys);
-  const refreshedParticipants: Record<string, Participant> = {};
-  for (const publicKey of stalePubkeys) {
-    refreshedParticipants[publicKey] = buildParticipant(
-      publicKey,
-      refreshedLists.get(publicKey),
-      myBlockedRelays,
-      settings.relayMode,
-      settings.discoveryRelays
-    );
-  }
+  const refreshedParticipants = buildParticipantsMap(stalePubkeys, refreshedLists, myBlockedRelays, settings.relayMode, settings.discoveryRelays);
   const participants = mergeParticipants(cached.participants, refreshedParticipants);
 
   // C. Query messages since last cache
-  const since = cached.syncState.lastCacheTime ? cached.syncState.lastCacheTime - (2 * 24 * 60 * 60 * 1000) : undefined;
+  const since = computeSinceTimestamp(cached.syncState.lastCacheTime, 2);
   const filters = buildMessageFilters(myPubkey, since);
   const { messages: rawMessages, limitReached: limitReached1 } = await fetchMessages(nostr, relaySet, filters, settings.queryLimit);
   const messagesWithMetadata = await unwrapAllGiftWraps(rawMessages, signer);
@@ -150,16 +140,7 @@ const warmStart = async (nostr: NPool, signer: Signer, myPubkey: string, setting
 
   // E. Fetch relay lists for new users
   const newParticipantLists = await fetchRelayLists(nostr, settings.discoveryRelays, newPubkeys);
-  const newParticipants: Record<string, Participant> = {};
-  for (const publicKey of newPubkeys) {
-    newParticipants[publicKey] = buildParticipant(
-      publicKey,
-      newParticipantLists.get(publicKey),
-      myBlockedRelays,
-      settings.relayMode,
-      settings.discoveryRelays
-    );
-  }
+  const newParticipants = buildParticipantsMap(newPubkeys, newParticipantLists, myBlockedRelays, settings.relayMode, settings.discoveryRelays);
   const allParticipants = mergeParticipants(participants, newParticipants);
 
   // H. Find new relays

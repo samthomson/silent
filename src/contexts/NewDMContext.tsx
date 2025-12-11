@@ -110,7 +110,7 @@ const startup = async (nostr: NPool, signer: Signer, myPubkey: string, settings:
   const baseParticipants = mode === StartupMode.WARM ? await refreshStaleParticipants(nostr, cached.participants, myBlockedRelays, settings.relayMode, settings.discoveryRelays, settings.relayTTL) : {};
   // C. Query messages
   const since = mode === StartupMode.WARM ? computeSinceTimestamp(cached.syncState.lastCacheTime, 2) : null;
-  const { messagesWithMetadata, limitReached: limitReached1 } = await queryMessages(nostr, signer, relaySet, myPubkey, since, settings.queryLimit);
+  const { messagesWithMetadata, limitReached: isLimitReachedDuringInitialQuery } = await queryMessages(nostr, signer, relaySet, myPubkey, since, settings.queryLimit);
   // D. Extract unique users
   const newPubkeys = extractNewPubkeys(messagesWithMetadata, baseParticipants, myPubkey, mode);
   // E+F. Fetch relay lists and merge participants
@@ -119,10 +119,10 @@ const startup = async (nostr: NPool, signer: Signer, myPubkey: string, settings:
   const alreadyQueried = mode === StartupMode.WARM ? cached.syncState.queriedRelays : relaySet;
   const newRelays = findNewRelaysToQuery(participants, alreadyQueried);
   // I. Query new relays
-  const { allMessages, limitReached: limitReached2 } = await queryNewRelays(nostr, signer, newRelays, myPubkey, settings.queryLimit);
+  const { allMessages, limitReached: isLimitReachedDuringGapQuery } = await queryNewRelays(nostr, signer, newRelays, myPubkey, settings.queryLimit);
   // J. Build and save
   const allQueriedRelays = computeAllQueriedRelays(mode, cached, relaySet, newRelays);
-  return await buildAndSaveCache(myPubkey, participants, allQueriedRelays, limitReached1 || limitReached2);
+  return await buildAndSaveCache(myPubkey, participants, allQueriedRelays, isLimitReachedDuringInitialQuery || isLimitReachedDuringGapQuery);
 }
 
 const init = async (nostr: NPool, signer: Signer, myPubkey: string, settings: DMSettings): Promise<CachedData> => {

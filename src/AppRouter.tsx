@@ -3,7 +3,9 @@ import { ScrollToTop } from "./components/ScrollToTop";
 
 import Index from "./pages/Index";
 import { NIP19Page } from "./pages/NIP19Page";
+import Test from "./pages/Test";
 import NotFound from "./pages/NotFound";
+import { NewDMProvider } from "./contexts/NewDMContext";
 
 export function AppRouter() {
   return (
@@ -11,6 +13,7 @@ export function AppRouter() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />
+        <Route path="/test" element={<NewDMProvider><Test /></NewDMProvider>} />
         {/* NIP-19 route for npub1, note1, naddr1, nevent1, nprofile1 */}
         <Route path="/:nip19" element={<NIP19Page />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

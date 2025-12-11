@@ -101,7 +101,11 @@ const buildAndSaveCache = async (myPubkey: string, participants: Record<string, 
 // Orchestrators
 // ============================================================================
 
-const startup = async (nostr: NPool, signer: Signer, myPubkey: string, settings: DMSettings, mode: StartupMode, cached: CachedData | null): Promise<CachedData> => {
+const initialiseMessaging = async (nostr: NPool, signer: Signer, myPubkey: string, settings: DMSettings): Promise<CachedData> => {
+  const cached = await loadFromCache(myPubkey);
+  // todo: have a const define a ttl and compare it here
+  const mode = cached && cached.syncState.lastCacheTime ? StartupMode.WARM : StartupMode.COLD;
+  
   // A. Fetch my relay lists
   const { myLists, myBlockedRelays } = await fetchMyRelayInfo(nostr, settings.discoveryRelays, myPubkey);
   // B. Derive my relay set
@@ -123,13 +127,6 @@ const startup = async (nostr: NPool, signer: Signer, myPubkey: string, settings:
   // J. Build and save
   const allQueriedRelays = computeAllQueriedRelays(mode, cached, relaySet, newRelays);
   return await buildAndSaveCache(myPubkey, participants, allQueriedRelays, isLimitReachedDuringInitialQuery || isLimitReachedDuringGapQuery);
-}
-
-const init = async (nostr: NPool, signer: Signer, myPubkey: string, settings: DMSettings): Promise<CachedData> => {
-  const cached = await loadFromCache(myPubkey);
-  // todo: have a const define a ttl and compare it here
-  const mode = cached && cached.syncState.lastCacheTime ? StartupMode.WARM : StartupMode.COLD;
-  return startup(nostr, signer, myPubkey, settings, mode, cached);
 }
 
 // ============================================================================

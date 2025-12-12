@@ -11,7 +11,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { LOADING_PHASES } from '@/lib/dmConstants';
 import { NewConversationDialog } from '@/components/NewConversationDialog';
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
 
@@ -245,9 +244,17 @@ export const NewDMConversationList = ({
   className,
   onStatusClick
 }: DMConversationListProps) => {
-  const { conversations, isLoading, loadingPhase } = useNewDMContext();
+  // TODO: Add loadingPhase when new cold/warm start flow is finalized
+  // Old code: const { conversations, isLoading, loadingPhase } = useDMContext();
+  const { messagingState, isLoading } = useNewDMContext();
   const [activeTab, setActiveTab] = useState<'known' | 'requests'>('known');
   const prevWasRequestRef = useRef<Set<string>>(new Set());
+
+  // Get conversations from messagingState (one level deeper)
+  const conversations = useMemo(() => {
+    if (!messagingState) return [];
+    return Object.values(messagingState.conversations);
+  }, [messagingState]);
 
   // Filter conversations by type
   const { knownConversations, requestConversations } = useMemo(() => {
@@ -261,7 +268,7 @@ export const NewDMConversationList = ({
   useEffect(() => {
     if (!selectedPubkey) return;
     
-    const selectedConversation = conversations.find(c => c.pubkey === selectedPubkey);
+    const selectedConversation = conversations.find(c => c.id === selectedPubkey);
     if (!selectedConversation) return;
     
     // If this was a request but is now known, switch to known tab
@@ -276,8 +283,10 @@ export const NewDMConversationList = ({
   // Get the current list based on active tab
   const currentConversations = activeTab === 'known' ? knownConversations : requestConversations;
 
-  // Show skeleton during initial load (cache + relays) if we have no conversations yet
-  const isInitialLoad = (loadingPhase === LOADING_PHASES.CACHE || loadingPhase === LOADING_PHASES.RELAYS) && conversations.length === 0;
+  // Show skeleton during initial load if we have no conversations yet
+  // TODO: Re-implement with new loading phases when cold/warm start flow is finalized
+  // Old code: const isInitialLoad = (loadingPhase === LOADING_PHASES.CACHE || loadingPhase === LOADING_PHASES.RELAYS) && conversations.length === 0;
+  const isInitialLoad = isLoading && conversations.length === 0;
 
   return (
     <div className={cn("h-full flex flex-col overflow-hidden border-r border-border bg-card", className)}>
@@ -291,6 +300,8 @@ export const NewDMConversationList = ({
               </h1>
               <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{APP_DESCRIPTION}</p>
             </div>
+            {/* TODO: Re-implement with new loading phases when cold/warm start flow is finalized */}
+            {/* Old code:
             {(loadingPhase === LOADING_PHASES.CACHE ||
               loadingPhase === LOADING_PHASES.RELAYS ||
               loadingPhase === LOADING_PHASES.SUBSCRIPTIONS) && (
@@ -307,6 +318,21 @@ export const NewDMConversationList = ({
                       {loadingPhase === LOADING_PHASES.RELAYS && 'Querying relays for new messages...'}
                       {loadingPhase === LOADING_PHASES.SUBSCRIPTIONS && 'Setting up subscriptions...'}
                     </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            */}
+            {isLoading && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center pt-1">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Loading messages...</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -383,10 +409,10 @@ export const NewDMConversationList = ({
             <div className="block w-full px-2 py-2 space-y-1">
               {currentConversations.map((conversation) => (
                 <ConversationItem
-                  key={conversation.pubkey}
-                  pubkey={conversation.pubkey}
-                  isSelected={selectedPubkey === conversation.pubkey}
-                  onClick={() => onSelectConversation(conversation.pubkey)}
+                  key={conversation.id}
+                  pubkey={conversation.id}
+                  isSelected={selectedPubkey === conversation.id}
+                  onClick={() => onSelectConversation(conversation.id)}
                   lastMessage={conversation.lastMessage}
                   lastActivity={conversation.lastActivity}
                   hasNIP4Messages={conversation.hasNIP4Messages}

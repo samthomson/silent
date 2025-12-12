@@ -30,6 +30,10 @@ export interface Conversation {
   lastReadAt: number;
   hasNIP04: boolean;
   hasNIP17: boolean;
+  isKnown: boolean;
+  isRequest: boolean;
+  lastMessage: { decryptedContent?: string; error?: string } | null;
+  hasNIP4Messages: boolean;
 }
 
 export interface Message {

@@ -1,3 +1,5 @@
+import { DMMessagingInterface } from "@/components/dm/DMMessagingInterface";
+
 export function Test() {
   return (
     <div className="container mx-auto py-8">
@@ -5,6 +7,8 @@ export function Test() {
       <p className="text-muted-foreground">
         This page is wrapped in NewDMProvider. Add messaging UI components here to test the new DM system.
       </p>
+			<hr />
+			<DMMessagingInterface />
     </div>
   );
 }

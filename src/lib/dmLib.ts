@@ -1,6 +1,7 @@
 /* eslint-disable */
 // @ts-nocheck
 import type { NostrEvent, NPool } from '@nostrify/nostrify';
+import { openDB } from 'idb';
 import type {
   DMSettings,
   Participant,
@@ -137,8 +138,33 @@ const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys:
 const fetchMessages = async (nostr: NPool, relays: string[], filters: Array<{ kinds: number[]; '#p'?: string[]; since?: number }>, queryLimit: number): Promise<{ messages: NostrEvent[]; limitReached: boolean }> => { return { messages: [], limitReached: false }; }
 // TODO: Implement unwrapAllGiftWraps
 const unwrapAllGiftWraps = async (messages: NostrEvent[], signer: Signer): Promise<MessageWithMetadata[]> => { return []; }
-// TODO: Implement loadFromCache
-const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> => { return null; }
+const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> => {
+  try {
+    const db = await openDB('nostr-dm-cache-v2', 1, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains('dm-cache')) {
+          db.createObjectStore('dm-cache');
+        }
+      },
+    });
+    
+    const key = `dm-cache:${myPubkey}`;
+    const data = await db.get('dm-cache', key);
+    
+    if (!data) return null;
+    
+    // Basic structure validation
+    if (!data.participants || !data.conversations || !data.messages || !data.syncState || !data.relayInfo) {
+      console.error('[DM Cache] Invalid cache structure, missing required keys');
+      return null;
+    }
+    
+    return data as MessagingState;
+  } catch (error) {
+    console.error('[DM Cache] Error loading from cache:', error);
+    return null;
+  }
+}
 // TODO: Implement saveToCache
 const saveToCache = async (myPubkey: string, data: MessagingState): Promise<void> => { return; }
 // TODO: Implement refreshStaleParticipants

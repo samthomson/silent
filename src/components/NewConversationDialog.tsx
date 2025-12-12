@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MessageSquarePlus, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { useDMContext } from '@/contexts/DMContext';
+import { useNewDMContext } from '@/contexts/NewDMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useFollows } from '@/hooks/useFollows';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
@@ -37,8 +37,13 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { conversations } = useDMContext();
+  const { messagingState } = useNewDMContext();
   const { user } = useCurrentUser();
+  
+  const conversations = useMemo(() => 
+    Object.values(messagingState?.conversations ?? {}),
+    [messagingState?.conversations]
+  );
   const { data: follows = [], isLoading: isLoadingFollows } = useFollows();
 
   // Debounce search input
@@ -51,7 +56,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     // Extract individual pubkeys from conversations (including group members)
     const knownConversationPubkeys = conversations
       .filter(c => c.isKnown)
-      .flatMap(c => parseConversationId(c.pubkey));
+      .flatMap(c => parseConversationId(c.id));
     
     // Include current user explicitly (for self-messaging support)
     const allPubkeys = [

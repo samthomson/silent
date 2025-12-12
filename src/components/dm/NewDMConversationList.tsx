@@ -250,11 +250,10 @@ export const NewDMConversationList = ({
   const [activeTab, setActiveTab] = useState<'known' | 'requests'>('known');
   const prevWasRequestRef = useRef<Set<string>>(new Set());
 
-  // Get conversations from messagingState (one level deeper)
-  const conversations = useMemo(() => {
-    if (!messagingState) return [];
-    return Object.values(messagingState.conversations);
-  }, [messagingState]);
+  const conversations = useMemo(() => 
+    Object.values(messagingState?.conversations ?? {}),
+    [messagingState?.conversations]
+  );
 
   // Filter conversations by type
   const { knownConversations, requestConversations } = useMemo(() => {

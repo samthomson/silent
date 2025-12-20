@@ -101,8 +101,26 @@ const buildParticipantsMap = (
 ): Record<string, Participant> => { return {}; }
 // TODO: Implement mergeParticipants
 const mergeParticipants = (existing: Record<string, Participant>, incoming: Record<string, Participant>): Record<string, Participant> => { return {}; }
-// TODO: Implement computeSinceTimestamp
-const computeSinceTimestamp = (lastCacheTime: number | null, nip17FuzzDays: number): number | null => { return null; }
+/**
+ * Computes the 'since' timestamp for fetching messages, accounting for NIP-17 timestamp fuzzing.
+ * NIP-17 allows timestamps to be fuzzed for privacy, so we need to query from before the last cache time
+ * to ensure we don't miss messages that were timestamp-fuzzed.
+ * 
+ * @param lastCacheTime - The unix timestamp (in seconds) of the last cache time, or null if no cache exists
+ * @param nip17FuzzDays - The number of days of timestamp fuzzing to account for
+ * @returns The computed since timestamp (in seconds), or null if lastCacheTime is null
+ */
+const computeSinceTimestamp = (lastCacheTime: number | null, nip17FuzzDays: number): number | null => {
+  if (lastCacheTime === null) {
+    return null;
+  }
+  
+  // Convert days to seconds: days * 24 hours * 60 minutes * 60 seconds
+  const fuzzSeconds = nip17FuzzDays * 24 * 60 * 60;
+  
+  // Subtract the fuzz period from the last cache time to ensure we catch all messages
+  return lastCacheTime - fuzzSeconds;
+}
 // TODO: Implement determineNewPubkeys
 const determineNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[], mode: StartupMode): string[] => { return []; }
 // TODO: Implement buildCachedData

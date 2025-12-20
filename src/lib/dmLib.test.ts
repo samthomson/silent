@@ -230,7 +230,97 @@ describe('DMLib', () => {
     });
 
     describe('Sync', () => {
-      it.todo('computeSinceTimestamp');
+      describe('computeSinceTimestamp', () => {
+        const SECONDS_PER_DAY = 24 * 60 * 60; // 86400
+
+        it('should return null when lastCacheTime is null', () => {
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(null, 2);
+          expect(result).toBeNull();
+        });
+
+        it('should return lastCacheTime when nip17FuzzDays is 0', () => {
+          const lastCacheTime = 1000000;
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 0);
+          expect(result).toBe(1000000);
+        });
+
+        it('should subtract 1 day when nip17FuzzDays is 1', () => {
+          const lastCacheTime = 1000000;
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 1);
+          expect(result).toBe(lastCacheTime - SECONDS_PER_DAY);
+          expect(result).toBe(913600);
+        });
+
+        it('should subtract 2 days when nip17FuzzDays is 2', () => {
+          const lastCacheTime = 1000000;
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 2);
+          expect(result).toBe(lastCacheTime - 2 * SECONDS_PER_DAY);
+          expect(result).toBe(827200);
+        });
+
+        it('should subtract 7 days when nip17FuzzDays is 7', () => {
+          const lastCacheTime = 2000000;
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 7);
+          expect(result).toBe(lastCacheTime - 7 * SECONDS_PER_DAY);
+          expect(result).toBe(1395200);
+        });
+
+        it('should handle fractional days correctly', () => {
+          const lastCacheTime = 1000000;
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 0.5);
+          expect(result).toBe(lastCacheTime - 0.5 * SECONDS_PER_DAY);
+          expect(result).toBe(956800);
+        });
+
+        it('should handle very large timestamps (realistic Nostr timestamps)', () => {
+          const lastCacheTime = 1734700000; // Around Dec 2024
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 2);
+          expect(result).toBe(lastCacheTime - 2 * SECONDS_PER_DAY);
+          expect(result).toBe(1734527200);
+        });
+
+        it('should handle zero lastCacheTime', () => {
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(0, 2);
+          expect(result).toBe(-2 * SECONDS_PER_DAY);
+        });
+
+        it('should handle negative result (lastCacheTime smaller than fuzz period)', () => {
+          const lastCacheTime = 100000; // ~1.15 days in seconds
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 2);
+          expect(result).toBe(lastCacheTime - 2 * SECONDS_PER_DAY);
+          expect(result).toBe(-72800);
+        });
+
+        it('should return null for null lastCacheTime regardless of fuzz days', () => {
+          expect(DMLib.Pure.Sync.computeSinceTimestamp(null, 0)).toBeNull();
+          expect(DMLib.Pure.Sync.computeSinceTimestamp(null, 1)).toBeNull();
+          expect(DMLib.Pure.Sync.computeSinceTimestamp(null, 10)).toBeNull();
+          expect(DMLib.Pure.Sync.computeSinceTimestamp(null, 100)).toBeNull();
+        });
+
+        it('should handle real-world warm start scenario', () => {
+          const now = 1734700000;
+          const oneHourAgo = now - 3600;
+          
+          // With 2 days of fuzz, we should query from 2 days before the cache time
+          const result = DMLib.Pure.Sync.computeSinceTimestamp(oneHourAgo, 2);
+          expect(result).toBe(oneHourAgo - 2 * SECONDS_PER_DAY);
+          
+          // Verify the result is about 2 days and 1 hour before now
+          const expectedDiff = 2 * SECONDS_PER_DAY + 3600;
+          expect(now - result).toBe(expectedDiff);
+        });
+
+        it('should correctly calculate days to seconds conversion', () => {
+          const lastCacheTime = 1000000;
+          
+          const oneDayResult = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 1);
+          expect(oneDayResult).toBe(lastCacheTime - SECONDS_PER_DAY);
+          
+          const threeDaysResult = DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTime, 3);
+          expect(threeDaysResult).toBe(lastCacheTime - 3 * SECONDS_PER_DAY);
+        });
+      });
       it.todo('buildCachedData');
     });
   });

@@ -315,11 +315,26 @@ const refreshStaleParticipants = async (
   discoveryRelays: string[],
   relayTTL: number
 ): Promise<Record<string, Participant>> => { return {}; }
-// TODO: Implement fetchMyRelayInfo
+/**
+ * Fetches the current user's relay lists and extracts their blocked relays.
+ * Convenience function that combines fetchRelayLists + extractBlockedRelays for the current user.
+ * 
+ * @param nostr - Nostr pool instance
+ * @param discoveryRelays - Relays to query for relay lists
+ * @param myPubkey - The current user's pubkey
+ * @returns Object with raw relay list events and extracted blocked relay URLs
+ */
 const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubkey: string): Promise<{ myLists: RelayListsResult; myBlockedRelays: string[] }> => {
+  // Fetch relay lists for the current user
+  const relayListsMap = await fetchRelayLists(nostr, discoveryRelays, [myPubkey]);
+  const myLists = relayListsMap.get(myPubkey) || { kind10002: null, kind10050: null, kind10006: null };
+  
+  // Extract blocked relays from kind 10006
+  const myBlockedRelays = extractBlockedRelays(myLists.kind10006);
+  
   return {
-    myLists: { kind10002: null, kind10050: null, kind10006: null },
-    myBlockedRelays: [],
+    myLists,
+    myBlockedRelays,
   };
 }
 // TODO: Implement queryMessages

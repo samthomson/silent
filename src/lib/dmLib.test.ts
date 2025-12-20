@@ -769,7 +769,199 @@ describe('DMLib', () => {
         });
       });
       
-      it.todo('fetchMyRelayInfo');
+      describe('fetchMyRelayInfo', () => {
+        it('should fetch relay lists and extract blocked relays for current user', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'myPubkey', created_at: 100, kind: 10002, tags: [['r', 'wss://relay1.com']], content: '', sig: 'sig1' },
+            { id: 'e2', pubkey: 'myPubkey', created_at: 200, kind: 10050, tags: [['relay', 'wss://relay2.com']], content: '', sig: 'sig2' },
+            { id: 'e3', pubkey: 'myPubkey', created_at: 300, kind: 10006, tags: [['r', 'wss://blocked.com'], ['r', 'wss://spam.com']], content: '', sig: 'sig3' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'myPubkey');
+          
+          expect(result.myLists).toEqual({
+            kind10002: mockEvents[0],
+            kind10050: mockEvents[1],
+            kind10006: mockEvents[2]
+          });
+          expect(result.myBlockedRelays).toEqual(['wss://blocked.com', 'wss://spam.com']);
+        });
+
+        it('should return empty blocked relays when no kind 10006 event exists', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'myPubkey', created_at: 100, kind: 10002, tags: [['r', 'wss://relay1.com']], content: '', sig: 'sig1' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'myPubkey');
+          
+          expect(result.myLists.kind10006).toBeNull();
+          expect(result.myBlockedRelays).toEqual([]);
+        });
+
+        it('should return empty blocked relays when kind 10006 has no r tags', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'myPubkey', created_at: 100, kind: 10006, tags: [['p', 'somepubkey']], content: '', sig: 'sig1' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'myPubkey');
+          
+          expect(result.myLists.kind10006).toEqual(mockEvents[0]);
+          expect(result.myBlockedRelays).toEqual([]);
+        });
+
+        it('should handle user with no relay list events at all', async () => {
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue([])
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'myPubkey');
+          
+          expect(result.myLists).toEqual({
+            kind10002: null,
+            kind10050: null,
+            kind10006: null
+          });
+          expect(result.myBlockedRelays).toEqual([]);
+        });
+
+        it('should deduplicate blocked relays from kind 10006', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'myPubkey', created_at: 100, kind: 10006, tags: [['r', 'wss://blocked.com'], ['r', 'wss://spam.com'], ['r', 'wss://blocked.com']], content: '', sig: 'sig1' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'myPubkey');
+          
+          expect(result.myBlockedRelays).toEqual(['wss://blocked.com', 'wss://spam.com']);
+        });
+
+        it('should query correct relays and pubkey', async () => {
+          const queryMock = vi.fn().mockResolvedValue([]);
+          const mockNostr = {
+            group: (relays: string[]) => {
+              expect(relays).toEqual(['wss://discovery1.com', 'wss://discovery2.com']);
+              return { query: queryMock };
+            }
+          };
+          
+          await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery1.com', 'wss://discovery2.com'], 'testPubkey');
+          
+          expect(queryMock).toHaveBeenCalledWith(
+            [{ kinds: [10002, 10050, 10006], authors: ['testPubkey'] }],
+            expect.objectContaining({ signal: expect.any(AbortSignal) })
+          );
+        });
+
+        it('should handle query errors gracefully', async () => {
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockRejectedValue(new Error('Network error'))
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'myPubkey');
+          
+          // Should return default empty structure
+          expect(result.myLists).toEqual({
+            kind10002: null,
+            kind10050: null,
+            kind10006: null
+          });
+          expect(result.myBlockedRelays).toEqual([]);
+        });
+
+        it('should work with realistic relay data', async () => {
+          const mockEvents = [
+            {
+              id: 'nip65-event',
+              pubkey: 'alice123',
+              created_at: 1734700000,
+              kind: 10002,
+              tags: [
+                ['r', 'wss://relay.damus.io'],
+                ['r', 'wss://nos.lol', 'read'],
+                ['r', 'wss://relay.nostr.band', 'write']
+              ],
+              content: '',
+              sig: 'sig1'
+            },
+            {
+              id: 'dm-inbox-event',
+              pubkey: 'alice123',
+              created_at: 1734700100,
+              kind: 10050,
+              tags: [
+                ['relay', 'wss://inbox.nostr.wine']
+              ],
+              content: '',
+              sig: 'sig2'
+            },
+            {
+              id: 'blocked-event',
+              pubkey: 'alice123',
+              created_at: 1734700200,
+              kind: 10006,
+              tags: [
+                ['r', 'wss://spam-relay.xyz'],
+                ['r', 'wss://malicious-relay.com']
+              ],
+              content: 'My blocked relays',
+              sig: 'sig3'
+            }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://purplepag.es'], 'alice123');
+          
+          expect(result.myLists.kind10002?.id).toBe('nip65-event');
+          expect(result.myLists.kind10050?.id).toBe('dm-inbox-event');
+          expect(result.myLists.kind10006?.id).toBe('blocked-event');
+          expect(result.myBlockedRelays).toEqual(['wss://spam-relay.xyz', 'wss://malicious-relay.com']);
+        });
+
+        it('should only query for single pubkey (current user)', async () => {
+          const queryMock = vi.fn().mockResolvedValue([]);
+          const mockNostr = {
+            group: () => ({ query: queryMock })
+          };
+          
+          await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'currentUser');
+          
+          const authors = queryMock.mock.calls[0][0][0].authors;
+          expect(authors).toEqual(['currentUser']);
+          expect(authors.length).toBe(1);
+        });
+      });
     });
 
     describe('Message', () => {

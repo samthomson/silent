@@ -594,7 +594,181 @@ describe('DMLib', () => {
 
   describe('Impure', () => {
     describe('Relay', () => {
-      it.todo('fetchRelayLists');
+      describe('fetchRelayLists', () => {
+        it('should return empty map when pubkeys array is empty', async () => {
+          const mockNostr = {
+            group: () => ({ query: vi.fn() })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://relay.com'], []);
+          expect(result).toBeInstanceOf(Map);
+          expect(result.size).toBe(0);
+        });
+
+        it('should fetch relay lists for single pubkey', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://relay1.com']], content: '', sig: 'sig1' },
+            { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://relay2.com']], content: '', sig: 'sig2' },
+            { id: 'e3', pubkey: 'pk1', created_at: 300, kind: 10006, tags: [['r', 'wss://blocked.com']], content: '', sig: 'sig3' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          
+          expect(result.size).toBe(1);
+          expect(result.get('pk1')).toEqual({
+            kind10002: mockEvents[0],
+            kind10050: mockEvents[1],
+            kind10006: mockEvents[2]
+          });
+        });
+
+        it('should fetch relay lists for multiple pubkeys', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [], content: '', sig: 'sig1' },
+            { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [], content: '', sig: 'sig2' },
+            { id: 'e3', pubkey: 'pk2', created_at: 150, kind: 10002, tags: [], content: '', sig: 'sig3' },
+            { id: 'e4', pubkey: 'pk3', created_at: 300, kind: 10006, tags: [], content: '', sig: 'sig4' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2', 'pk3']);
+          
+          expect(result.size).toBe(3);
+          expect(result.get('pk1')?.kind10002).toEqual(mockEvents[0]);
+          expect(result.get('pk1')?.kind10050).toEqual(mockEvents[1]);
+          expect(result.get('pk2')?.kind10002).toEqual(mockEvents[2]);
+          expect(result.get('pk3')?.kind10006).toEqual(mockEvents[3]);
+        });
+
+        it('should handle pubkeys with no relay list events', async () => {
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue([])
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          
+          expect(result.size).toBe(1);
+          expect(result.get('pk1')).toEqual({
+            kind10002: null,
+            kind10050: null,
+            kind10006: null
+          });
+        });
+
+        it('should keep only latest event per pubkey+kind', async () => {
+          const mockEvents = [
+            { id: 'old', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://old.com']], content: '', sig: 'sig1' },
+            { id: 'new', pubkey: 'pk1', created_at: 200, kind: 10002, tags: [['r', 'wss://new.com']], content: '', sig: 'sig2' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          
+          expect(result.get('pk1')?.kind10002?.id).toBe('new');
+          expect(result.get('pk1')?.kind10002?.created_at).toBe(200);
+        });
+
+        it('should handle partial relay lists (only some kinds present)', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [], content: '', sig: 'sig1' }
+            // Only 10050, no 10002 or 10006
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          
+          expect(result.get('pk1')).toEqual({
+            kind10002: null,
+            kind10050: mockEvents[0],
+            kind10006: null
+          });
+        });
+
+        it('should use correct query filters', async () => {
+          const queryMock = vi.fn().mockResolvedValue([]);
+          const mockNostr = {
+            group: () => ({ query: queryMock })
+          };
+          
+          await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2']);
+          
+          expect(queryMock).toHaveBeenCalledWith(
+            [{ kinds: [10002, 10050, 10006], authors: ['pk1', 'pk2'] }],
+            expect.objectContaining({ signal: expect.any(AbortSignal) })
+          );
+        });
+
+        it('should return empty map on query error', async () => {
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockRejectedValue(new Error('Network error'))
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          
+          expect(result).toBeInstanceOf(Map);
+          expect(result.size).toBe(0);
+        });
+
+        it('should handle mix of pubkeys with and without events', async () => {
+          const mockEvents = [
+            { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [], content: '', sig: 'sig1' },
+            // pk2 has no events
+            { id: 'e2', pubkey: 'pk3', created_at: 200, kind: 10050, tags: [], content: '', sig: 'sig2' }
+          ];
+          
+          const mockNostr = {
+            group: () => ({
+              query: vi.fn().mockResolvedValue(mockEvents)
+            })
+          };
+          
+          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2', 'pk3']);
+          
+          expect(result.size).toBe(3);
+          expect(result.get('pk1')?.kind10002).toEqual(mockEvents[0]);
+          expect(result.get('pk2')).toEqual({ kind10002: null, kind10050: null, kind10006: null });
+          expect(result.get('pk3')?.kind10050).toEqual(mockEvents[1]);
+        });
+
+        it('should query with timeout', async () => {
+          const queryMock = vi.fn().mockResolvedValue([]);
+          const mockNostr = {
+            group: () => ({ query: queryMock })
+          };
+          
+          await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          
+          const callArgs = queryMock.mock.calls[0][1];
+          expect(callArgs).toHaveProperty('signal');
+          expect(callArgs.signal).toBeInstanceOf(AbortSignal);
+        });
+      });
+      
       it.todo('fetchMyRelayInfo');
     });
 

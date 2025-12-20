@@ -204,8 +204,59 @@ export const Pure = {
 // Impure Functions
 // ============================================================================
 
-// TODO: Implement fetchRelayLists
-const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys: string[]): Promise<Map<string, RelayListsResult>> => { return new Map(); }
+/**
+ * Fetches relay list events (kinds 10002, 10050, 10006) for multiple pubkeys.
+ * Returns raw Nostr events instead of parsed relay lists.
+ * Similar to fetchRelayListsBulk in relayUtils.ts but returns raw events.
+ * 
+ * @param nostr - Nostr pool instance
+ * @param discoveryRelays - Relays to query for relay lists
+ * @param pubkeys - Array of pubkeys to fetch relay lists for
+ * @returns Map of pubkey to RelayListsResult with raw events
+ */
+const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys: string[]): Promise<Map<string, RelayListsResult>> => {
+  if (pubkeys.length === 0) {
+    return new Map();
+  }
+
+  const relayGroup = nostr.group(discoveryRelays);
+  const results = new Map<string, RelayListsResult>();
+
+  try {
+    // Single query for all pubkeys, fetch kinds 10002, 10050, and 10006
+    // Replaceable events: each relay stores only the latest per pubkey+kind
+    const events = await relayGroup.query(
+      [{ kinds: [10002, 10050, 10006], authors: pubkeys }],
+      { signal: AbortSignal.timeout(15000) }
+    );
+
+    // Group events by pubkey and kind, keep only latest per pubkey+kind
+    // This handles cases where different relays return different "latest" events
+    const eventsByPubkeyAndKind = new Map<string, NostrEvent>();
+    for (const event of events) {
+      const key = `${event.pubkey}:${event.kind}`;
+      const existing = eventsByPubkeyAndKind.get(key);
+      if (!existing || event.created_at > existing.created_at) {
+        eventsByPubkeyAndKind.set(key, event);
+      }
+    }
+
+    // Build RelayListsResult for each pubkey
+    for (const pubkey of pubkeys) {
+      const result: RelayListsResult = {
+        kind10002: eventsByPubkeyAndKind.get(`${pubkey}:10002`) || null,
+        kind10050: eventsByPubkeyAndKind.get(`${pubkey}:10050`) || null,
+        kind10006: eventsByPubkeyAndKind.get(`${pubkey}:10006`) || null,
+      };
+      
+      results.set(pubkey, result);
+    }
+  } catch (error) {
+    console.error('[DM] Failed to fetch relay lists:', error);
+  }
+
+  return results;
+}
 // TODO: Implement fetchMessages
 const fetchMessages = async (nostr: NPool, relays: string[], filters: Array<{ kinds: number[]; '#p'?: string[]; since?: number }>, queryLimit: number): Promise<{ messages: NostrEvent[]; limitReached: boolean }> => { return { messages: [], limitReached: false }; }
 // TODO: Implement unwrapAllGiftWraps

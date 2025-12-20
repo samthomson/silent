@@ -219,7 +219,109 @@ describe('DMLib', () => {
       it.todo('buildParticipantsMap');
       it.todo('mergeParticipants');
       it.todo('getStaleParticipants');
-      it.todo('getNewPubkeys');
+      
+      describe('getNewPubkeys', () => {
+        it('should return empty array when foundPubkeys is empty', () => {
+          const result = DMLib.Pure.Participant.getNewPubkeys([], ['existing1', 'existing2']);
+          expect(result).toEqual([]);
+        });
+
+        it('should return empty array when existingPubkeys is empty and foundPubkeys is empty', () => {
+          const result = DMLib.Pure.Participant.getNewPubkeys([], []);
+          expect(result).toEqual([]);
+        });
+
+        it('should return all pubkeys when existingPubkeys is empty', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, []);
+          expect(result).toEqual(['pk1', 'pk2', 'pk3']);
+        });
+
+        it('should return empty array when all foundPubkeys already exist', () => {
+          const foundPubkeys = ['pk1', 'pk2'];
+          const existingPubkeys = ['pk1', 'pk2', 'pk3'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual([]);
+        });
+
+        it('should return only new pubkeys', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3', 'pk4'];
+          const existingPubkeys = ['pk1', 'pk3'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual(['pk2', 'pk4']);
+        });
+
+        it('should preserve order from foundPubkeys', () => {
+          const foundPubkeys = ['pk5', 'pk1', 'pk3', 'pk2'];
+          const existingPubkeys = ['pk1'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual(['pk5', 'pk3', 'pk2']);
+        });
+
+        it('should deduplicate foundPubkeys', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk1', 'pk3', 'pk2'];
+          const existingPubkeys = [];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual(['pk1', 'pk2', 'pk3']);
+        });
+
+        it('should deduplicate and filter existing pubkeys', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk1', 'pk3', 'pk2', 'pk4'];
+          const existingPubkeys = ['pk2'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual(['pk1', 'pk3', 'pk4']);
+        });
+
+        it('should handle single new pubkey', () => {
+          const foundPubkeys = ['new-pubkey'];
+          const existingPubkeys = ['old1', 'old2'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual(['new-pubkey']);
+        });
+
+        it('should handle realistic hex pubkeys', () => {
+          const foundPubkeys = [
+            'a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890',
+            'b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890ab',
+            'c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890abc3'
+          ];
+          const existingPubkeys = [
+            'b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890ab'
+          ];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual([
+            'a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890',
+            'c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890abc3'
+          ]);
+        });
+
+        it('should handle large arrays efficiently', () => {
+          const foundPubkeys = Array.from({ length: 100 }, (_, i) => `pk${i}`);
+          const existingPubkeys = Array.from({ length: 50 }, (_, i) => `pk${i * 2}`);
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          
+          // Should contain odd numbered pubkeys (pk1, pk3, pk5, etc.)
+          expect(result.length).toBe(50);
+          expect(result[0]).toBe('pk1');
+          expect(result[1]).toBe('pk3');
+          expect(result[2]).toBe('pk5');
+        });
+
+        it('should handle duplicates in existingPubkeys without issue', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3'];
+          const existingPubkeys = ['pk1', 'pk1', 'pk2', 'pk2'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual(['pk3']);
+        });
+
+        it('should return empty when all found are duplicates of existing', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk1', 'pk2'];
+          const existingPubkeys = ['pk1', 'pk2'];
+          const result = DMLib.Pure.Participant.getNewPubkeys(foundPubkeys, existingPubkeys);
+          expect(result).toEqual([]);
+        });
+      });
+      
       it.todo('extractNewPubkeys');
       it.todo('determineNewPubkeys');
     });

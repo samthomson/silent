@@ -67,8 +67,26 @@ const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
 const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | null, blockedRelays: string[], relayMode: RelayMode, discoveryRelays: string[]): string[] => { return []; }
 // TODO: Implement getStaleParticipants
 const getStaleParticipants = (participants: Record<string, Participant>, relayTTL: number, now: number): string[] => { return []; }
-// TODO: Implement getNewPubkeys
-const getNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[]): string[] => { return []; }
+/**
+ * Returns pubkeys that are in foundPubkeys but not in existingPubkeys.
+ * This is used to identify new participants that need to be fetched.
+ * 
+ * @param foundPubkeys - Array of pubkeys that were discovered
+ * @param existingPubkeys - Array of pubkeys we already have
+ * @returns Array of new pubkeys (preserves order from foundPubkeys, deduplicates)
+ */
+const getNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[]): string[] => {
+  const existingSet = new Set(existingPubkeys);
+  const newSet = new Set<string>();
+  
+  for (const pubkey of foundPubkeys) {
+    if (!existingSet.has(pubkey)) {
+      newSet.add(pubkey);
+    }
+  }
+  
+  return Array.from(newSet);
+}
 // TODO: Implement extractPubkeysFromMessages
 const extractPubkeysFromMessages = (messages: MessageWithMetadata[], myPubkey: string): string[] => { return []; }
 // TODO: Implement buildMessageFilters

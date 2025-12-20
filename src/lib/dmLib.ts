@@ -38,8 +38,31 @@ export enum StartupMode {
 // Pure Functions
 // ============================================================================
 
-// TODO: Implement extractBlockedRelays
-const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => { return []; }
+/**
+ * Extracts blocked relay URLs from a kind 10006 Nostr event.
+ * Kind 10006 events contain relay list metadata with blocked relays.
+ * Relays are stored in tags with format: ['r', relay_url]
+ * 
+ * @param kind10006 - The kind 10006 Nostr event or null
+ * @returns Array of blocked relay URLs (empty if event is null or has no relay tags)
+ */
+const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
+  if (!kind10006) return [];
+  
+  const relays: string[] = [];
+  
+  for (const tag of kind10006.tags) {
+    // Look for 'r' tags which contain relay URLs
+    if (tag[0] === 'r' && tag[1] && typeof tag[1] === 'string') {
+      const relayUrl = tag[1].trim();
+      if (relayUrl && !relays.includes(relayUrl)) {
+        relays.push(relayUrl);
+      }
+    }
+  }
+  
+  return relays;
+}
 // TODO: Implement deriveRelaySet
 const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | null, blockedRelays: string[], relayMode: RelayMode, discoveryRelays: string[]): string[] => { return []; }
 // TODO: Implement getStaleParticipants

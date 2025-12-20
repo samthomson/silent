@@ -9,7 +9,198 @@ import type { MessagingState } from './dmTypes';
 describe('DMLib', () => {
   describe('Pure', () => {
     describe('Relay', () => {
-      it.todo('extractBlockedRelays');
+      describe('extractBlockedRelays', () => {
+        it('should return empty array when event is null', () => {
+          const result = DMLib.Pure.Relay.extractBlockedRelays(null);
+          expect(result).toEqual([]);
+        });
+
+        it('should return empty array when event has no tags', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual([]);
+        });
+
+        it('should extract single relay from r tag', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', 'wss://relay1.com']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com']);
+        });
+
+        it('should extract multiple relays from r tags', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', 'wss://relay1.com'],
+              ['r', 'wss://relay2.com'],
+              ['r', 'wss://relay3.com']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com', 'wss://relay2.com', 'wss://relay3.com']);
+        });
+
+        it('should ignore non-r tags', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', 'wss://relay1.com'],
+              ['p', 'somepubkey'],
+              ['e', 'someevent'],
+              ['r', 'wss://relay2.com']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com', 'wss://relay2.com']);
+        });
+
+        it('should deduplicate relay URLs', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', 'wss://relay1.com'],
+              ['r', 'wss://relay2.com'],
+              ['r', 'wss://relay1.com'],
+              ['r', 'wss://relay2.com']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com', 'wss://relay2.com']);
+        });
+
+        it('should ignore r tags with missing or empty relay URL', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r'],
+              ['r', ''],
+              ['r', 'wss://relay1.com'],
+              ['r', '   ']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com']);
+        });
+
+        it('should trim whitespace from relay URLs', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', '  wss://relay1.com  '],
+              ['r', 'wss://relay2.com']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com', 'wss://relay2.com']);
+        });
+
+        it('should ignore r tags with non-string relay values', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', 'wss://relay1.com'],
+              ['r', 123],
+              ['r', null],
+              ['r', undefined],
+              ['r', 'wss://relay2.com']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual(['wss://relay1.com', 'wss://relay2.com']);
+        });
+
+        it('should handle event with only invalid tags', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['p', 'pubkey'],
+              ['e', 'eventid'],
+              ['d', 'identifier']
+            ],
+            content: '',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual([]);
+        });
+
+        it('should handle complex real-world scenario', () => {
+          const event = {
+            id: 'event1',
+            pubkey: 'pubkey1',
+            created_at: 123456,
+            kind: 10006,
+            tags: [
+              ['r', 'wss://spam-relay.com'],
+              ['r', '  wss://malicious-relay.com  '],
+              ['p', 'somepubkey'],
+              ['r', 'wss://spam-relay.com'], // duplicate
+              ['r', ''],
+              ['r', 'wss://blocked-relay.io'],
+              ['alt', 'Blocked relay list']
+            ],
+            content: 'My blocked relays',
+            sig: 'sig1'
+          };
+          const result = DMLib.Pure.Relay.extractBlockedRelays(event);
+          expect(result).toEqual([
+            'wss://spam-relay.com',
+            'wss://malicious-relay.com',
+            'wss://blocked-relay.io'
+          ]);
+        });
+      });
       it.todo('deriveRelaySet');
       it.todo('findNewRelaysToQuery');
       it.todo('computeAllQueriedRelays');

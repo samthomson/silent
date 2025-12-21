@@ -197,13 +197,30 @@ const buildParticipant = (
     lastFetched: Date.now()
   };
 }
-// TODO: Implement buildParticipantsMap
+/**
+ * Builds a map of Participants from a list of pubkeys and their relay lists.
+ * 
+ * @param pubkeys - Array of public keys to build participants for
+ * @param relayListsMap - Map of pubkey to relay lists
+ * @param relayMode - The relay mode to use
+ * @param discoveryRelays - Fallback discovery relays
+ * @returns Record mapping pubkey to Participant
+ */
 const buildParticipantsMap = (
   pubkeys: string[],
   relayListsMap: Map<string, RelayListsResult>,
   relayMode: RelayMode,
   discoveryRelays: string[]
-): Record<string, Participant> => { return {}; }
+): Record<string, Participant> => {
+  const participants: Record<string, Participant> = {};
+  
+  for (const pubkey of pubkeys) {
+    const lists = relayListsMap.get(pubkey)!;
+    participants[pubkey] = buildParticipant(pubkey, lists, relayMode, discoveryRelays);
+  }
+  
+  return participants;
+}
 /**
  * Merges two participant records, with incoming participants taking precedence.
  * If a participant exists in both records, the incoming one replaces the existing one.

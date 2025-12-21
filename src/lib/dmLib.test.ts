@@ -585,7 +585,132 @@ describe('DMLib', () => {
         });
       });
       
-      it.todo('buildParticipantsMap');
+      describe('buildParticipantsMap', () => {
+        const discoveryRelays = ['wss://discovery1.com', 'wss://discovery2.com'];
+        
+        it('should return empty object for empty pubkeys array', () => {
+          const relayListsMap = new Map<string, any>();
+          
+          const result = DMLib.Pure.Participant.buildParticipantsMap([], relayListsMap, 'strict_outbox', discoveryRelays);
+          
+          expect(result).toEqual({});
+        });
+
+        it('should build participant for single pubkey', () => {
+          const relayListsMap = new Map([
+            ['alice', {
+              kind10002: null,
+              kind10050: { id: 'e1', pubkey: 'alice', created_at: 100, kind: 10050, tags: [['relay', 'wss://alice.com']], content: '', sig: 'sig1' },
+              kind10006: null
+            }]
+          ]);
+          
+          const result = DMLib.Pure.Participant.buildParticipantsMap(['alice'], relayListsMap, 'strict_outbox', discoveryRelays);
+          
+          expect(result.alice).toBeDefined();
+          expect(result.alice.pubkey).toBe('alice');
+          expect(result.alice.derivedRelays).toEqual(['wss://alice.com']);
+        });
+
+        it('should build participants for multiple pubkeys', () => {
+          const relayListsMap = new Map([
+            ['alice', {
+              kind10002: null,
+              kind10050: { id: 'e1', pubkey: 'alice', created_at: 100, kind: 10050, tags: [['relay', 'wss://alice.com']], content: '', sig: 'sig1' },
+              kind10006: null
+            }],
+            ['bob', {
+              kind10002: { id: 'e2', pubkey: 'bob', created_at: 100, kind: 10002, tags: [['r', 'wss://bob.com', 'read']], content: '', sig: 'sig2' },
+              kind10050: null,
+              kind10006: null
+            }],
+            ['charlie', {
+              kind10002: null,
+              kind10050: null,
+              kind10006: null
+            }]
+          ]);
+          
+          const result = DMLib.Pure.Participant.buildParticipantsMap(['alice', 'bob', 'charlie'], relayListsMap, 'strict_outbox', discoveryRelays);
+          
+          expect(Object.keys(result)).toHaveLength(3);
+          expect(result.alice.derivedRelays).toEqual(['wss://alice.com']);
+          expect(result.bob.derivedRelays).toEqual(['wss://bob.com']);
+          expect(result.charlie.derivedRelays).toEqual([]);
+        });
+
+        it('should respect relay mode when building participants', () => {
+          const relayListsMap = new Map([
+            ['alice', {
+              kind10002: null,
+              kind10050: { id: 'e1', pubkey: 'alice', created_at: 100, kind: 10050, tags: [['relay', 'wss://alice.com']], content: '', sig: 'sig1' },
+              kind10006: null
+            }]
+          ]);
+          
+          const result = DMLib.Pure.Participant.buildParticipantsMap(['alice'], relayListsMap, 'hybrid', discoveryRelays);
+          
+          expect(result.alice.derivedRelays).toContain('wss://alice.com');
+          expect(result.alice.derivedRelays).toContain('wss://discovery1.com');
+          expect(result.alice.derivedRelays).toContain('wss://discovery2.com');
+        });
+
+        it('should extract blocked relays for all participants', () => {
+          const relayListsMap = new Map([
+            ['alice', {
+              kind10002: null,
+              kind10050: { id: 'e1', pubkey: 'alice', created_at: 100, kind: 10050, tags: [['relay', 'wss://alice.com']], content: '', sig: 'sig1' },
+              kind10006: { id: 'e2', pubkey: 'alice', created_at: 200, kind: 10006, tags: [['r', 'wss://spam1.com']], content: '', sig: 'sig2' }
+            }],
+            ['bob', {
+              kind10002: null,
+              kind10050: { id: 'e3', pubkey: 'bob', created_at: 100, kind: 10050, tags: [['relay', 'wss://bob.com']], content: '', sig: 'sig3' },
+              kind10006: { id: 'e4', pubkey: 'bob', created_at: 200, kind: 10006, tags: [['r', 'wss://spam2.com']], content: '', sig: 'sig4' }
+            }]
+          ]);
+          
+          const result = DMLib.Pure.Participant.buildParticipantsMap(['alice', 'bob'], relayListsMap, 'strict_outbox', discoveryRelays);
+          
+          expect(result.alice.blockedRelays).toEqual(['wss://spam1.com']);
+          expect(result.bob.blockedRelays).toEqual(['wss://spam2.com']);
+        });
+
+        it('should handle realistic multi-user scenario', () => {
+          const relayListsMap = new Map([
+            ['alice', {
+              kind10002: { id: 'e1', pubkey: 'alice', created_at: 100, kind: 10002, tags: [['r', 'wss://relay.damus.io'], ['r', 'wss://nos.lol', 'read']], content: '', sig: 'sig1' },
+              kind10050: { id: 'e2', pubkey: 'alice', created_at: 200, kind: 10050, tags: [['relay', 'wss://inbox.alice.com']], content: '', sig: 'sig2' },
+              kind10006: { id: 'e3', pubkey: 'alice', created_at: 300, kind: 10006, tags: [['r', 'wss://spam.com']], content: '', sig: 'sig3' }
+            }],
+            ['bob', {
+              kind10002: { id: 'e4', pubkey: 'bob', created_at: 100, kind: 10002, tags: [['r', 'wss://relay.nostr.band', 'read']], content: '', sig: 'sig4' },
+              kind10050: null,
+              kind10006: null
+            }],
+            ['charlie', {
+              kind10002: null,
+              kind10050: null,
+              kind10006: null
+            }]
+          ]);
+          
+          const result = DMLib.Pure.Participant.buildParticipantsMap(['alice', 'bob', 'charlie'], relayListsMap, 'strict_outbox', discoveryRelays);
+          
+          expect(Object.keys(result)).toHaveLength(3);
+          
+          // Alice: has kind 10050 (prioritized)
+          expect(result.alice.derivedRelays).toEqual(['wss://inbox.alice.com']);
+          expect(result.alice.blockedRelays).toEqual(['wss://spam.com']);
+          
+          // Bob: falls back to kind 10002
+          expect(result.bob.derivedRelays).toEqual(['wss://relay.nostr.band']);
+          expect(result.bob.blockedRelays).toEqual([]);
+          
+          // Charlie: no relays
+          expect(result.charlie.derivedRelays).toEqual([]);
+          expect(result.charlie.blockedRelays).toEqual([]);
+        });
+      });
       
       describe('mergeParticipants', () => {
         it('should return empty object when both records are empty', () => {

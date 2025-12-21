@@ -63,8 +63,68 @@ const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
   
   return relays;
 }
-// TODO: Implement deriveRelaySet
-const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | null, blockedRelays: string[], relayMode: RelayMode, discoveryRelays: string[]): string[] => { return []; }
+/**
+ * Derives the set of relays to use for querying messages based on relay mode and user's relay lists.
+ * 
+ * Priority for relay selection (when using user's lists):
+ * 1. Kind 10050 (DM inbox relays) - highest priority
+ * 2. Kind 10002 read relays (NIP-65)
+ * 
+ * Relay modes:
+ * - DISCOVERY: Use only discovery relays (ignore user's lists completely)
+ * - HYBRID: Use user's relays + discovery relays (combine both)
+ * - STRICT_OUTBOX: Use only user's relays (no fallback - returns empty if user has no relays)
+ * 
+ * @param kind10002 - NIP-65 relay list event (kind 10002)
+ * @param kind10050 - DM inbox relay list event (kind 10050)
+ * @param blockedRelays - List of relay URLs to exclude
+ * @param relayMode - Relay mode determining which relays to use
+ * @param discoveryRelays - Default discovery relays
+ * @returns Deduplicated array of relay URLs to query, with blocked relays filtered out
+ */
+const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | null, blockedRelays: string[], relayMode: RelayMode, discoveryRelays: string[]): string[] => {
+  const blockedSet = new Set(blockedRelays);
+  
+  // Discovery mode: only use discovery relays, ignore user's lists
+  if (relayMode === 'discovery') {
+    return discoveryRelays.filter(relay => !blockedSet.has(relay));
+  }
+  
+  // For hybrid and strict_outbox modes: extract user's relays
+  const relaySet = new Set<string>();
+  
+  // Priority 1: Kind 10050 (DM inbox relays)
+  if (kind10050) {
+    kind10050.tags
+      .filter(tag => tag[0] === 'relay' && tag[1])
+      .map(tag => tag[1].trim())
+      .filter(url => url && !blockedSet.has(url))
+      .forEach(relay => relaySet.add(relay));
+  }
+  
+  // Priority 2: Kind 10002 read relays (if no 10050 or in hybrid mode)
+  if (kind10002 && (relaySet.size === 0 || relayMode === 'hybrid')) {
+    kind10002.tags
+      .filter(tag => {
+        if (tag[0] !== 'r' || !tag[1]) return false;
+        const marker = tag[2];
+        // Include if no marker (both read/write) or explicitly marked as 'read'
+        return !marker || marker === 'read';
+      })
+      .map(tag => tag[1].trim())
+      .filter(url => url && !blockedSet.has(url))
+      .forEach(relay => relaySet.add(relay));
+  }
+  
+  // Hybrid mode: add discovery relays too
+  if (relayMode === 'hybrid') {
+    discoveryRelays
+      .filter(relay => !blockedSet.has(relay))
+      .forEach(relay => relaySet.add(relay));
+  }
+  
+  return Array.from(relaySet);
+}
 // TODO: Implement getStaleParticipants
 const getStaleParticipants = (participants: Record<string, Participant>, relayTTL: number, now: number): string[] => { return []; }
 /**

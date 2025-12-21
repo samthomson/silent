@@ -201,7 +201,224 @@ describe('DMLib', () => {
           ]);
         });
       });
-      it.todo('deriveRelaySet');
+      
+      describe('deriveRelaySet', () => {
+        const discoveryRelays = ['wss://discovery1.com', 'wss://discovery2.com'];
+        
+        describe('discovery mode', () => {
+          it('should return only discovery relays', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://user-relay.com']], content: '', sig: 'sig1' };
+            const kind10050 = { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://dm-relay.com']], content: '', sig: 'sig2' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, kind10050, [], 'discovery', discoveryRelays);
+            
+            expect(result).toEqual(discoveryRelays);
+          });
+
+          it('should filter blocked relays from discovery relays', () => {
+            const blocked = ['wss://discovery2.com'];
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, null, blocked, 'discovery', discoveryRelays);
+            
+            expect(result).toEqual(['wss://discovery1.com']);
+          });
+        });
+
+        describe('strict_outbox mode', () => {
+          it('should use kind 10050 relays when present', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm1.com'], ['relay', 'wss://dm2.com']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://dm1.com', 'wss://dm2.com']);
+          });
+
+          it('should use kind 10002 read relays when no kind 10050', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://read1.com', 'read'], ['r', 'wss://read2.com']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, null, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://read1.com', 'wss://read2.com']);
+          });
+
+          it('should exclude write-only relays from kind 10002', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://read.com', 'read'], ['r', 'wss://write.com', 'write']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, null, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://read.com']);
+          });
+
+          it('should return empty array when no user relays (no fallback)', () => {
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, null, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual([]);
+          });
+
+          it('should prefer kind 10050 over kind 10002', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://nip65.com']], content: '', sig: 'sig1' };
+            const kind10050 = { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig2' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, kind10050, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://dm.com']);
+            expect(result).not.toContain('wss://nip65.com');
+          });
+
+          it('should filter blocked relays from user relays', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm1.com'], ['relay', 'wss://blocked.com']], content: '', sig: 'sig1' };
+            const blocked = ['wss://blocked.com'];
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, blocked, 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://dm1.com']);
+          });
+
+          it('should fall back to kind 10002 when all kind 10050 relays are blocked', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://nip65.com', 'read']], content: '', sig: 'sig1' };
+            const kind10050 = { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://blocked1.com'], ['relay', 'wss://blocked2.com']], content: '', sig: 'sig2' };
+            const blocked = ['wss://blocked1.com', 'wss://blocked2.com'];
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, kind10050, blocked, 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://nip65.com']);
+          });
+        });
+
+        describe('hybrid mode', () => {
+          it('should combine user relays and discovery relays', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'hybrid', discoveryRelays);
+            
+            expect(result).toContain('wss://dm.com');
+            expect(result).toContain('wss://discovery1.com');
+            expect(result).toContain('wss://discovery2.com');
+            expect(result.length).toBe(3);
+          });
+
+          it('should include both kind 10050 and kind 10002 relays', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://nip65.com', 'read']], content: '', sig: 'sig1' };
+            const kind10050 = { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig2' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, kind10050, [], 'hybrid', discoveryRelays);
+            
+            expect(result).toContain('wss://dm.com');
+            expect(result).toContain('wss://nip65.com');
+            expect(result).toContain('wss://discovery1.com');
+            expect(result).toContain('wss://discovery2.com');
+          });
+
+          it('should deduplicate relays', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://discovery1.com']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'hybrid', discoveryRelays);
+            
+            expect(result.filter(r => r === 'wss://discovery1.com').length).toBe(1);
+          });
+
+          it('should filter blocked relays from all sources', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig1' };
+            const blocked = ['wss://dm.com', 'wss://discovery2.com'];
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, blocked, 'hybrid', discoveryRelays);
+            
+            expect(result).toEqual(['wss://discovery1.com']);
+          });
+
+          it('should use only discovery relays when kind 10002 has only write relays', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://write1.com', 'write'], ['r', 'wss://write2.com', 'write']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, null, [], 'hybrid', discoveryRelays);
+            
+            // No read relays from user, should only have discovery relays
+            expect(result).toEqual(discoveryRelays);
+          });
+        });
+
+        describe('edge cases', () => {
+          it('should handle empty tags in events', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual([]); // strict_outbox = no fallback
+          });
+
+          it('should handle malformed relay tags', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay'], ['relay', ''], ['relay', '  ']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual([]); // strict_outbox = no fallback
+          });
+
+          it('should trim whitespace from relay URLs', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', '  wss://dm.com  ']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toEqual(['wss://dm.com']);
+          });
+
+          it('should handle empty discovery relays', () => {
+            const kind10050 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig1' };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, kind10050, [], 'strict_outbox', []);
+            
+            expect(result).toEqual(['wss://dm.com']);
+          });
+
+          it('should handle all relays blocked in discovery mode', () => {
+            const blocked = ['wss://discovery1.com', 'wss://discovery2.com'];
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(null, null, blocked, 'discovery', discoveryRelays);
+            
+            expect(result).toEqual([]);
+          });
+        });
+
+        describe('realistic scenarios', () => {
+          it('should handle typical NIP-65 relay list', () => {
+            const kind10002 = {
+              id: 'e1',
+              pubkey: 'alice',
+              created_at: 1734700000,
+              kind: 10002,
+              tags: [
+                ['r', 'wss://relay.damus.io'],
+                ['r', 'wss://nos.lol', 'read'],
+                ['r', 'wss://relay.nostr.band', 'write'],
+                ['r', 'wss://nostr.wine', 'read']
+              ],
+              content: '',
+              sig: 'sig1'
+            };
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, null, [], 'strict_outbox', discoveryRelays);
+            
+            expect(result).toContain('wss://relay.damus.io'); // no marker = both
+            expect(result).toContain('wss://nos.lol'); // read
+            expect(result).not.toContain('wss://relay.nostr.band'); // write-only
+            expect(result).toContain('wss://nostr.wine'); // read
+          });
+
+          it('should handle complete relay setup with blocking', () => {
+            const kind10002 = { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://nip65.com', 'read']], content: '', sig: 'sig1' };
+            const kind10050 = { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig2' };
+            const blocked = ['wss://spam.com'];
+            
+            const result = DMLib.Pure.Relay.deriveRelaySet(kind10002, kind10050, blocked, 'hybrid', [...discoveryRelays, 'wss://spam.com']);
+            
+            expect(result).toContain('wss://dm.com');
+            expect(result).toContain('wss://nip65.com');
+            expect(result).toContain('wss://discovery1.com');
+            expect(result).toContain('wss://discovery2.com');
+            expect(result).not.toContain('wss://spam.com');
+          });
+        });
+      });
+      
       it.todo('findNewRelaysToQuery');
       it.todo('computeAllQueriedRelays');
       it.todo('buildRelayToUsersMap');

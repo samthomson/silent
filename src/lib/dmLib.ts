@@ -166,19 +166,41 @@ const groupMessagesIntoConversations = (messages: Message[], myPubkey: string): 
 const buildRelayToUsersMap = (participants: Record<string, Participant>): Map<string, string[]> => { return new Map(); }
 // TODO: Implement filterNewRelayUserCombos
 const filterNewRelayUserCombos = (relayUserMap: Map<string, string[]>, alreadyQueriedRelays: string[]): string[] => { return []; }
-// TODO: Implement buildParticipant
+/**
+ * Builds a Participant object from relay lists.
+ * Uses deriveRelaySet to extract relays based on priority and relay mode.
+ * 
+ * @param pubkey - The participant's public key
+ * @param lists - The participant's relay lists (kind 10002, 10050, 10006)
+ * @param relayMode - The relay mode to use (discovery/strict_outbox/hybrid)
+ * @param discoveryRelays - Fallback discovery relays
+ * @returns A complete Participant object
+ */
 const buildParticipant = (
-  publicKey: string,
-  lists: RelayListsResult | null,
-  myBlockedRelays: string[],
+  pubkey: string,
+  lists: RelayListsResult,
   relayMode: RelayMode,
   discoveryRelays: string[]
-): Participant => { return { pubkey: publicKey, derivedRelays: [], blockedRelays: [], lastFetched: 0 }; }
+): Participant => {
+  const { derivedRelays, blockedRelays } = deriveRelaySet(
+    lists.kind10002,
+    lists.kind10050,
+    lists.kind10006,
+    relayMode,
+    discoveryRelays
+  );
+  
+  return {
+    pubkey,
+    derivedRelays,
+    blockedRelays,
+    lastFetched: Date.now()
+  };
+}
 // TODO: Implement buildParticipantsMap
 const buildParticipantsMap = (
   pubkeys: string[],
   relayListsMap: Map<string, RelayListsResult>,
-  myBlockedRelays: string[],
   relayMode: RelayMode,
   discoveryRelays: string[]
 ): Record<string, Participant> => { return {}; }

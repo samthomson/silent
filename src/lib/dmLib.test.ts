@@ -448,7 +448,143 @@ describe('DMLib', () => {
     });
 
     describe('Participant', () => {
-      it.todo('buildParticipant');
+      describe('buildParticipant', () => {
+        const discoveryRelays = ['wss://discovery1.com', 'wss://discovery2.com'];
+        
+        it('should build participant from relay lists', () => {
+          const lists = {
+            kind10002: { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://relay1.com', 'read']], content: '', sig: 'sig1' },
+            kind10050: null,
+            kind10006: null
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('pubkey123', lists, 'strict_outbox', discoveryRelays);
+          
+          expect(result.pubkey).toBe('pubkey123');
+          expect(result.derivedRelays).toEqual(['wss://relay1.com']);
+          expect(result.blockedRelays).toEqual([]);
+        });
+
+        it('should prioritize kind 10050 over kind 10002', () => {
+          const lists = {
+            kind10002: { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10002, tags: [['r', 'wss://nip65.com', 'read']], content: '', sig: 'sig1' },
+            kind10050: { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig2' },
+            kind10006: null
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('pubkey123', lists, 'strict_outbox', discoveryRelays);
+          
+          expect(result.derivedRelays).toEqual(['wss://dm.com']);
+          expect(result.derivedRelays).not.toContain('wss://nip65.com');
+        });
+
+        it('should extract blocked relays from kind 10006', () => {
+          const lists = {
+            kind10002: null,
+            kind10050: { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig1' },
+            kind10006: { id: 'e2', pubkey: 'pk1', created_at: 200, kind: 10006, tags: [['r', 'wss://blocked1.com'], ['r', 'wss://blocked2.com']], content: '', sig: 'sig2' }
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('pubkey123', lists, 'strict_outbox', discoveryRelays);
+          
+          expect(result.derivedRelays).toEqual(['wss://dm.com']);
+          expect(result.blockedRelays).toEqual(['wss://blocked1.com', 'wss://blocked2.com']);
+        });
+
+        it('should handle hybrid mode correctly', () => {
+          const lists = {
+            kind10002: null,
+            kind10050: { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig1' },
+            kind10006: null
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('pubkey123', lists, 'hybrid', discoveryRelays);
+          
+          expect(result.derivedRelays).toContain('wss://dm.com');
+          expect(result.derivedRelays).toContain('wss://discovery1.com');
+          expect(result.derivedRelays).toContain('wss://discovery2.com');
+        });
+
+        it('should handle participant with no relay events', () => {
+          const lists = {
+            kind10002: null,
+            kind10050: null,
+            kind10006: null
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('pubkey123', lists, 'strict_outbox', discoveryRelays);
+          
+          expect(result.pubkey).toBe('pubkey123');
+          expect(result.derivedRelays).toEqual([]);
+          expect(result.blockedRelays).toEqual([]);
+        });
+
+        it('should set lastFetched to current timestamp', () => {
+          const beforeTime = Date.now();
+          const lists = {
+            kind10002: null,
+            kind10050: { id: 'e1', pubkey: 'pk1', created_at: 100, kind: 10050, tags: [['relay', 'wss://dm.com']], content: '', sig: 'sig1' },
+            kind10006: null
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('pubkey123', lists, 'strict_outbox', discoveryRelays);
+          const afterTime = Date.now();
+          
+          expect(result.lastFetched).toBeGreaterThanOrEqual(beforeTime);
+          expect(result.lastFetched).toBeLessThanOrEqual(afterTime);
+        });
+
+        it('should handle complete realistic scenario', () => {
+          const lists = {
+            kind10002: { 
+              id: 'e1', 
+              pubkey: 'alice', 
+              created_at: 1734700000, 
+              kind: 10002, 
+              tags: [
+                ['r', 'wss://relay.damus.io'],
+                ['r', 'wss://nos.lol', 'read'],
+                ['r', 'wss://relay.nostr.band', 'write']
+              ], 
+              content: '', 
+              sig: 'sig1' 
+            },
+            kind10050: { 
+              id: 'e2', 
+              pubkey: 'alice', 
+              created_at: 1734700100, 
+              kind: 10050, 
+              tags: [
+                ['relay', 'wss://inbox.nostr.wine']
+              ], 
+              content: '', 
+              sig: 'sig2' 
+            },
+            kind10006: { 
+              id: 'e3', 
+              pubkey: 'alice', 
+              created_at: 1734700200, 
+              kind: 10006, 
+              tags: [
+                ['r', 'wss://spam-relay.com']
+              ], 
+              content: '', 
+              sig: 'sig3' 
+            }
+          };
+          
+          const result = DMLib.Pure.Participant.buildParticipant('alice', lists, 'hybrid', discoveryRelays);
+          
+          expect(result.pubkey).toBe('alice');
+          expect(result.derivedRelays).toContain('wss://inbox.nostr.wine'); // kind 10050 priority
+          expect(result.derivedRelays).toContain('wss://relay.damus.io'); // kind 10002 (hybrid includes both)
+          expect(result.derivedRelays).toContain('wss://nos.lol'); // kind 10002 read
+          expect(result.derivedRelays).not.toContain('wss://relay.nostr.band'); // write-only excluded
+          expect(result.derivedRelays).toContain('wss://discovery1.com'); // hybrid includes discovery
+          expect(result.blockedRelays).toEqual(['wss://spam-relay.com']);
+        });
+      });
+      
       it.todo('buildParticipantsMap');
       
       describe('mergeParticipants', () => {

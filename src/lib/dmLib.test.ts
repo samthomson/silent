@@ -442,7 +442,6 @@ describe('DMLib', () => {
     });
 
     describe('Message', () => {
-      it.todo('buildMessageFilters');
       it.todo('dedupeMessages');
       it.todo('extractPubkeysFromMessages');
     });

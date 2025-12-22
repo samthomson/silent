@@ -172,8 +172,6 @@ const getNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[]): strin
 }
 // TODO: Implement extractPubkeysFromMessages
 const extractPubkeysFromMessages = (messages: MessageWithMetadata[], myPubkey: string): string[] => { return []; }
-// TODO: Implement buildMessageFilters
-const buildMessageFilters = (myPubkey: string, since: number | null): Array<{ kinds: number[]; '#p'?: string[]; since?: number }> => { return []; }
 // TODO: Implement dedupeMessages
 const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => { return []; }
 // TODO: Implement computeConversationId
@@ -299,7 +297,6 @@ export const Pure = {
     filterNewRelayUserCombos,
   },
   Message: {
-    buildMessageFilters,
     dedupeMessages,
     extractPubkeysFromMessages,
   },

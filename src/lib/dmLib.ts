@@ -428,15 +428,41 @@ const saveToCache = async (myPubkey: string, data: MessagingState): Promise<void
     throw error;
   }
 }
-// TODO: Implement refreshStaleParticipants
+/**
+ * Refreshes participants whose relay information is stale (exceeds TTL).
+ * Fetches updated relay lists for stale participants and merges with existing.
+ * 
+ * @param nostr - Nostr pool for querying
+ * @param participants - Existing participants to check for staleness
+ * @param relayMode - Relay mode to use when building updated participants
+ * @param discoveryRelays - Discovery relays for fetching
+ * @param relayTTL - Time-to-live for relay info in milliseconds
+ * @returns Updated participants record with refreshed stale entries
+ */
 const refreshStaleParticipants = async (
   nostr: NPool,
   participants: Record<string, Participant>,
-  myBlockedRelays: string[],
   relayMode: RelayMode,
   discoveryRelays: string[],
   relayTTL: number
-): Promise<Record<string, Participant>> => { return {}; }
+): Promise<Record<string, Participant>> => {
+  // 1. Find stale participants
+  const stalePubkeys = getStaleParticipants(participants, relayTTL, Date.now());
+  
+  // 2. If no stale participants, return original
+  if (stalePubkeys.length === 0) {
+    return participants;
+  }
+  
+  // 3. Fetch fresh relay lists for stale participants
+  const relayListsMap = await fetchRelayLists(nostr, discoveryRelays, stalePubkeys);
+  
+  // 4. Build updated participants
+  const updatedParticipants = buildParticipantsMap(stalePubkeys, relayListsMap, relayMode, discoveryRelays);
+  
+  // 5. Merge with existing (updated take precedence)
+  return mergeParticipants(participants, updatedParticipants);
+}
 /**
  * Fetches the current user's relay lists and extracts their blocked relays.
  * Convenience function that combines fetchRelayLists + extractBlockedRelays for the current user.

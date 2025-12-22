@@ -1596,7 +1596,66 @@ describe('DMLib', () => {
     });
 
     describe('Participant', () => {
-      it.todo('refreshStaleParticipants');
+      describe('refreshStaleParticipants', () => {
+        const discoveryRelays = ['wss://discovery1.com'];
+        const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+        
+        afterEach(() => {
+          vi.restoreAllMocks();
+        });
+        
+        it('should return original participants immediately when none are stale (early return optimization)', async () => {
+          const now = Date.now();
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: ['wss://alice.com'], blockedRelays: [], lastFetched: now - 1000 }
+          };
+          
+          const fetchSpy = vi.spyOn(DMLib.Impure.Relay, 'fetchRelayLists');
+          
+          const result = await DMLib.Impure.Participant.refreshStaleParticipants(
+            {} as any,
+            participants,
+            'strict_outbox',
+            discoveryRelays,
+            ONE_WEEK
+          );
+          
+          // Verify early return: no fetch call was made
+          expect(fetchSpy).not.toHaveBeenCalled();
+          expect(result).toBe(participants);
+        });
+
+        it('should fetch and update stale participants', async () => {
+          const now = Date.now();
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: ['wss://old.com'], blockedRelays: [], lastFetched: now - (ONE_WEEK + 1000) }
+          };
+          
+          const mockEvents = [
+            { id: 'e1', pubkey: 'alice', created_at: now, kind: 10050, tags: [['relay', 'wss://new.com']], content: '', sig: 'sig1' }
+          ];
+          
+          const mockQuery = vi.fn().mockResolvedValue(mockEvents);
+          const mockNostr = {
+            group: () => ({ query: mockQuery })
+          } as any;
+          
+          const result = await DMLib.Impure.Participant.refreshStaleParticipants(
+            mockNostr,
+            participants,
+            'strict_outbox',
+            discoveryRelays,
+            ONE_WEEK
+          );
+          
+          // Verify network call was made
+          expect(mockQuery).toHaveBeenCalled();
+          // Verify stale participant was updated
+          expect(result.alice.derivedRelays).toEqual(['wss://new.com']);
+          expect(result.alice.lastFetched).toBeGreaterThan(participants.alice.lastFetched);
+        });
+      });
+      
       it.todo('fetchAndMergeParticipants');
     });
 

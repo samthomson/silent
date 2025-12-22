@@ -15,7 +15,16 @@ export const CACHE_DB_NAME = 'nostr-dm-cache-v2';
 export const CACHE_STORE_NAME = 'dm-cache';
 export const CACHE_KEY_PREFIX = 'dm-cache:';
 
+const DM_QUERY_CONSTANTS = {
+  BATCH_SIZE: 1000,
+  QUERY_TIMEOUT_MS: 30000, // 30 seconds
+} as const;
+
 export interface Signer {
+  nip04?: {
+    encrypt(pubkey: string, plaintext: string): Promise<string>;
+    decrypt(pubkey: string, ciphertext: string): Promise<string>;
+  };
   nip44?: {
     encrypt(pubkey: string, plaintext: string): Promise<string>;
     decrypt(pubkey: string, ciphertext: string): Promise<string>;
@@ -376,10 +385,233 @@ const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys:
 
   return results;
 }
-// TODO: Implement fetchMessages
-const fetchMessages = async (nostr: NPool, relays: string[], filters: Array<{ kinds: number[]; '#p'?: string[]; since?: number }>, queryLimit: number): Promise<{ messages: NostrEvent[]; limitReached: boolean }> => { return { messages: [], limitReached: false }; }
-// TODO: Implement unwrapAllGiftWraps
-const unwrapAllGiftWraps = async (messages: NostrEvent[], signer: Signer): Promise<MessageWithMetadata[]> => { return []; }
+interface FilterState {
+  kind: number;
+  pTag?: string;
+  author?: string;
+  currentSince: number;
+  messagesCollected: number;
+}
+
+/**
+ * Fetches messages from relays with batched pagination.
+ * Queries 3 separate filters in parallel (NIP-04 TO, NIP-04 FROM, NIP-17).
+ * Each filter maintains independent timestamp tracking for pagination.
+ * Queries all relays in parallel per batch for performance.
+ * 
+ * @param nostr - Nostr pool
+ * @param relays - List of relay URLs to query
+ * @param myPubkey - Current user's pubkey
+ * @param since - Starting timestamp (null = from beginning)
+ * @param queryLimit - Maximum total messages to fetch
+ * @returns Object with messages array and limitReached flag
+ */
+const fetchMessages = async (
+  nostr: NPool,
+  relays: string[],
+  myPubkey: string,
+  since: number | null,
+  queryLimit: number
+): Promise<{ messages: NostrEvent[]; limitReached: boolean }> => {
+  const { BATCH_SIZE, QUERY_TIMEOUT_MS } = DM_QUERY_CONSTANTS;
+  
+  // Initialize 3 separate filter states for independent pagination
+  const filterStates: FilterState[] = [
+    { kind: 4, pTag: myPubkey, currentSince: since || 0, messagesCollected: 0 },     // NIP-04 TO me
+    { kind: 4, author: myPubkey, currentSince: since || 0, messagesCollected: 0 },   // NIP-04 FROM me
+    { kind: 1059, pTag: myPubkey, currentSince: since || 0, messagesCollected: 0 }   // NIP-17
+  ];
+  
+  const allMessages: NostrEvent[] = [];
+  let totalCollected = 0;
+  
+  // Iterate until all filters exhausted or limit reached
+  while (totalCollected < queryLimit) {
+    // Get filters that haven't reached their limit yet
+    const activeFilters = filterStates.filter(f => f.messagesCollected < queryLimit);
+    if (activeFilters.length === 0) break;
+    
+    // Query each active filter in parallel
+    const batchPromises = activeFilters.map(async (state) => {
+      const batchLimit = Math.min(BATCH_SIZE, queryLimit - state.messagesCollected);
+      
+      // Build filter for this specific type
+      const filter: any = {
+        kinds: [state.kind],
+        limit: batchLimit,
+        since: state.currentSince,
+        ...(state.pTag && { '#p': [state.pTag] }),
+        ...(state.author && { authors: [state.author] })
+      };
+      
+      // Query all relays in parallel for this filter
+      const relayResults = await Promise.allSettled(
+        relays.map(relay =>
+          nostr.relay(relay).query([filter], { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) })
+        )
+      );
+      
+      // Combine results from all relays (ignore failures)
+      const messages = relayResults
+        .filter((r): r is PromiseFulfilledResult<NostrEvent[]> => r.status === 'fulfilled')
+        .flatMap(r => r.value);
+      
+      // Deduplicate by event ID (same message from multiple relays)
+      const seen = new Set<string>();
+      const uniqueMessages = messages.filter(msg => {
+        if (seen.has(msg.id)) return false;
+        seen.add(msg.id);
+        return true;
+      });
+      
+      // Update state for next iteration
+      if (uniqueMessages.length > 0) {
+        state.messagesCollected += uniqueMessages.length;
+        // Update currentSince to oldest message timestamp for backward pagination
+        state.currentSince = Math.min(...uniqueMessages.map(m => m.created_at));
+      }
+      
+      return {
+        state,
+        messages: uniqueMessages,
+        exhausted: uniqueMessages.length < batchLimit
+      };
+    });
+    
+    const batchResults = await Promise.all(batchPromises);
+    
+    // Collect all messages from this batch
+    for (const result of batchResults) {
+      allMessages.push(...result.messages);
+      totalCollected += result.messages.length;
+      
+      // Mark filter as exhausted if we got fewer messages than requested
+      if (result.exhausted) {
+        result.state.messagesCollected = queryLimit; // Mark as done
+      }
+    }
+    
+    // Break if all filters are exhausted
+    if (batchResults.every(r => r.exhausted)) break;
+  }
+  
+  return {
+    messages: allMessages,
+    limitReached: totalCollected >= queryLimit
+  };
+}
+/**
+ * Unwraps and decrypts messages to extract metadata.
+ * - NIP-04 (kind 4): Decrypts content using NIP-04 encryption
+ * - NIP-17 (kind 1059): Fully unwraps gift wrap → seal → inner message
+ * 
+ * @param messages - Raw Nostr events (kind 4 or 1059)
+ * @param signer - Signer with NIP-04 and NIP-44 decryption capability
+ * @returns Array of messages with extracted metadata
+ */
+const unwrapAllGiftWraps = async (messages: NostrEvent[], signer: Signer): Promise<MessageWithMetadata[]> => {
+  const results: MessageWithMetadata[] = [];
+  let nip17FailCount = 0;
+  
+  for (const msg of messages) {
+    if (msg.kind === 4) {
+      // NIP-04: Decrypt content
+      const recipientPubkey = msg.tags.find(t => t[0] === 'p')?.[1];
+      const participants = [msg.pubkey, recipientPubkey].filter(Boolean) as string[];
+      
+      // For NIP-04, we need the "other pubkey" to decrypt
+      // The other pubkey is the recipient (from p tag)
+      const otherPubkey = recipientPubkey;
+      
+      let decryptedContent: string | undefined;
+      if (otherPubkey && signer.nip04) {
+        try {
+          decryptedContent = await signer.nip04.decrypt(otherPubkey, msg.content);
+        } catch (error) {
+          console.warn('[DM] Failed to decrypt NIP-04 message:', msg.id, error);
+        }
+      }
+      
+      // Store decrypted content in the event's content field for MessageWithMetadata
+      const eventWithDecrypted = {
+        ...msg,
+        content: decryptedContent || msg.content // Use decrypted or fallback to encrypted
+      };
+      
+      results.push({
+        event: eventWithDecrypted,
+        senderPubkey: msg.pubkey,
+        participants,
+        subject: '' // Empty string for NIP-04 (no subject support)
+      });
+    } else if (msg.kind === 1059) {
+      // NIP-17: Unwrap gift wrap → seal → inner message
+      try {
+        if (!signer.nip44) {
+          console.warn('[DM] NIP-44 not available, skipping gift wrap:', msg.id);
+          continue;
+        }
+        
+        // Step 1: Decrypt gift wrap (kind 1059) to get seal (kind 13)
+        const sealContent = await signer.nip44.decrypt(msg.pubkey, msg.content);
+        
+        // Check if decryption failed
+        if (!sealContent || typeof sealContent !== 'string') {
+          // Silently skip - likely not intended for us or malformed
+          continue;
+        }
+        
+        const seal = JSON.parse(sealContent) as NostrEvent;
+        
+        if (seal.kind !== 13) {
+          console.warn('[DM] Invalid seal kind:', seal.kind, 'expected 13');
+          continue;
+        }
+        
+        // Step 2: Decrypt seal to get inner message (kind 14 or 15)
+        const innerContent = await signer.nip44.decrypt(seal.pubkey, seal.content);
+        const inner = JSON.parse(innerContent) as NostrEvent;
+        
+        if (inner.kind !== 14 && inner.kind !== 15) {
+          console.warn('[DM] Invalid inner kind:', inner.kind, 'expected 14 or 15');
+          continue;
+        }
+        
+        // Step 3: Extract participants from p tags
+        const recipients = inner.tags
+          .filter(t => t[0] === 'p')
+          .map(t => t[1]);
+        
+        const participants = [seal.pubkey, ...recipients];
+        
+        // Extract optional subject tag (default to empty string)
+        const subject = inner.tags.find(t => t[0] === 'subject')?.[1] || '';
+        
+        results.push({
+          event: inner, // Store the INNER event (kind 14/15), not the gift wrap
+          senderPubkey: seal.pubkey, // Real sender is in the seal
+          participants,
+          subject
+        });
+      } catch (error) {
+        nip17FailCount++;
+        // Silently skip gift wraps we can't decrypt
+        // (likely not intended for us, corrupted, or wrong protocol version)
+        // Log only in debug mode to reduce noise
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[DM] Failed to unwrap gift wrap:', msg.id, error instanceof Error ? error.message : error);
+        }
+      }
+    }
+  }
+  
+  // Log summary if there were failures
+  if (nip17FailCount > 0) {
+    console.log(`[DM] Successfully processed ${results.length} messages, skipped ${nip17FailCount} undecryptable NIP-17 gift wraps`);
+  }
+  
+  return results;
+}
 const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> => {
   try {
     const db = await openDB(CACHE_DB_NAME, 1, {
@@ -482,9 +714,33 @@ const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubke
     myBlockedRelays,
   };
 }
-// TODO: Implement queryMessages
-const queryMessages = async (nostr: NPool, signer: Signer, relays: string[], myPubkey: string, since: number | null, queryLimit: number): Promise<{ messagesWithMetadata: MessageWithMetadata[]; limitReached: boolean }> => {
-  return { messagesWithMetadata: [], limitReached: false };
+/**
+ * Queries messages from specified relays for the current user (Step C in cold/warm start).
+ * Fetches both NIP-04 and NIP-17 messages, unwraps gift wraps, and returns metadata.
+ * 
+ * @param nostr - Nostr pool
+ * @param signer - Signer for decryption
+ * @param relays - Relays to query
+ * @param myPubkey - Current user's pubkey
+ * @param since - Starting timestamp (null for cold start, timestamp for warm start)
+ * @param queryLimit - Maximum messages to fetch
+ * @returns Messages with metadata and limitReached flag
+ */
+const queryMessages = async (
+  nostr: NPool,
+  signer: Signer,
+  relays: string[],
+  myPubkey: string,
+  since: number | null,
+  queryLimit: number
+): Promise<{ messagesWithMetadata: MessageWithMetadata[]; limitReached: boolean }> => {
+  // Fetch raw messages (batched iteration with 3 filters)
+  const { messages, limitReached } = await fetchMessages(nostr, relays, myPubkey, since, queryLimit);
+  
+  // Unwrap and decrypt to extract metadata
+  const messagesWithMetadata = await unwrapAllGiftWraps(messages, signer);
+  
+  return { messagesWithMetadata, limitReached };
 }
 /**
  * Fetches relay lists for new pubkeys and merges them with existing participants.
@@ -518,9 +774,31 @@ const fetchAndMergeParticipants = async (
   // Merge with base participants (base takes precedence - keeps current user intact)
   return mergeParticipants(newParticipants, baseParticipants);
 }
-// TODO: Implement queryNewRelays
-const queryNewRelays = async (nostr: NPool, signer: Signer, relays: string[], myPubkey: string, queryLimit: number): Promise<{ allMessages: MessageWithMetadata[]; limitReached: boolean }> => {
-  return { allMessages: [], limitReached: false };
+/**
+ * Queries newly discovered relays for messages (Step I in cold/warm start).
+ * Always queries from the beginning (since=null) to find gaps in message history.
+ * 
+ * @param nostr - Nostr pool
+ * @param signer - Signer for decryption
+ * @param relays - New relays to query
+ * @param myPubkey - Current user's pubkey
+ * @param queryLimit - Maximum messages to fetch
+ * @returns Messages with metadata and limitReached flag
+ */
+const queryNewRelays = async (
+  nostr: NPool,
+  signer: Signer,
+  relays: string[],
+  myPubkey: string,
+  queryLimit: number
+): Promise<{ allMessages: MessageWithMetadata[]; limitReached: boolean }> => {
+  // Fetch raw messages from beginning (since=null for gap filling)
+  const { messages, limitReached } = await fetchMessages(nostr, relays, myPubkey, null, queryLimit);
+  
+  // Unwrap and decrypt to extract metadata
+  const allMessages = await unwrapAllGiftWraps(messages, signer);
+  
+  return { allMessages, limitReached };
 }
 // TODO: Implement buildAndSaveCache
 const buildAndSaveCache = async (myPubkey: string, participants: Record<string, Participant>, allQueriedRelays: string[], limitReached: boolean): Promise<MessagingState> => {

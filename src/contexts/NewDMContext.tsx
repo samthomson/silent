@@ -24,11 +24,17 @@ const initialiseMessaging = async (nostr: NPool, signer: Signer, myPubkey: strin
   const cached = await DMLib.Impure.Cache.loadFromCache(myPubkey);
   // todo: have a const define a ttl and compare it here
   const mode = cached && cached.syncState.lastCacheTime ? DMLib.StartupMode.WARM : DMLib.StartupMode.COLD;
+  console.log('[NewDM] Mode:', mode);
   
   // A. Fetch my relay lists
+  console.log('[NewDM] A. Fetching my relay lists...');
   const { myLists, myBlockedRelays } = await DMLib.Impure.Relay.fetchMyRelayInfo(nostr, settings.discoveryRelays, myPubkey);
+  console.log('[NewDM] A. My relay lists:', { has10002: !!myLists.kind10002, has10050: !!myLists.kind10050, has10006: !!myLists.kind10006 });
+  
   // B. Derive my relay set and blocked relays
+  console.log('[NewDM] B. Deriving my relay set...');
   const { derivedRelays, blockedRelays } = DMLib.Pure.Relay.deriveRelaySet(myLists.kind10002, myLists.kind10050, myLists.kind10006, settings.relayMode, settings.discoveryRelays);
+  console.log('[NewDM] B. My derived relays:', { count: derivedRelays.length, relays: derivedRelays, blockedCount: blockedRelays.length });
   
   // B.1 Create my participant entry (single source of truth for my relay info)
   const myParticipant: Participant = {
@@ -43,14 +49,24 @@ const initialiseMessaging = async (nostr: NPool, signer: Signer, myPubkey: strin
     ? await DMLib.Impure.Participant.refreshStaleParticipants(nostr, cached.participants, settings.relayMode, settings.discoveryRelays, settings.relayTTL)
     : {};
   const baseParticipants = { ...refreshedParticipants, [myPubkey]: myParticipant };
+  console.log('[NewDM] B.2 Base participants:', Object.keys(baseParticipants));
   
   // C. Query messages (use current user's relays from participants)
+  console.log('[NewDM] C. Querying messages...');
   const since = mode === DMLib.StartupMode.WARM ? DMLib.Pure.Sync.computeSinceTimestamp(cached.syncState.lastCacheTime, 2) : null;
   const { messagesWithMetadata, limitReached: isLimitReachedDuringInitialQuery } = await DMLib.Impure.Message.queryMessages(nostr, signer, baseParticipants[myPubkey].derivedRelays, myPubkey, since, settings.queryLimit);
+  console.log('[NewDM] C. Got messages:', messagesWithMetadata.length);
+  
   // D. Extract unique users
+  console.log('[NewDM] D. Extracting new pubkeys...');
   const newPubkeys = DMLib.Pure.Participant.extractNewPubkeys(messagesWithMetadata, baseParticipants, myPubkey, mode);
+  console.log('[NewDM] D. New pubkeys:', newPubkeys);
+  
   // E+F. Fetch relay lists and merge participants
+  console.log('[NewDM] E+F. Fetching and merging participants...');
   const participants = await DMLib.Impure.Participant.fetchAndMergeParticipants(nostr, baseParticipants, newPubkeys, settings.relayMode, settings.discoveryRelays);
+  console.log('[NewDM] E+F. Final participants:', Object.keys(participants), 'includes me?', myPubkey in participants);
+  
   // H. Find new relays to query
   const alreadyQueried = mode === DMLib.StartupMode.WARM ? cached.syncState.queriedRelays : participants[myPubkey].derivedRelays;
   const newRelays = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
@@ -98,16 +114,33 @@ export const NewDMProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     
     (async () => {
-      const settings: DMSettings = {
-        discoveryRelays: appConfig.discoveryRelays,
-        relayMode: RELAY_MODE.HYBRID,
-        relayTTL: 7 * 24 * 60 * 60 * 1000,
-        queryLimit: 20000,
-      };
-      
-      const result = await initialiseMessaging(nostr, user.signer, user.pubkey, settings);
-      setMessagingState(result);
-      setIsLoading(false);
+      try {
+        console.log('[NewDM] Starting initialization...');
+        const settings: DMSettings = {
+          discoveryRelays: appConfig.discoveryRelays,
+          relayMode: RELAY_MODE.HYBRID,
+          relayTTL: 7 * 24 * 60 * 60 * 1000,
+          queryLimit: 20000,
+        };
+        
+        const result = await initialiseMessaging(nostr, user.signer, user.pubkey, settings);
+        console.log('[NewDM] Success! Conversations:', Object.keys(result.conversations).length);
+        setMessagingState(result);
+      } catch (error) {
+        console.error('[NewDM] Initialization failed:', error);
+        console.error('[NewDM] Stack:', error instanceof Error ? error.stack : 'No stack');
+        
+        // Set empty state so UI doesn't hang
+        setMessagingState({
+          participants: {},
+          conversations: {},
+          messages: {},
+          syncState: { lastCacheTime: null, queriedRelays: [], queryLimitReached: false },
+          relayInfo: {}
+        });
+      } finally {
+        setIsLoading(false);
+      }
     })();
   }, [user?.pubkey, nostr, appConfig.discoveryRelays]);
   

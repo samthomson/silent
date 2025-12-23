@@ -104,7 +104,7 @@ const initialiseMessaging = async (nostr: NPool, signer: Signer, myPubkey: strin
   // I. Query new relays
   const { allMessages, limitReached: isLimitReachedDuringGapQuery } = await DMLib.Impure.Message.queryNewRelays(nostr, signer, newRelays, myPubkey, settings.queryLimit);
   // J. Build and save
-  const allQueriedRelays = DMLib.Pure.Relay.computeAllQueriedRelays(mode, cached, participants[myPubkey].derivedRelays, newRelays);
+  const allQueriedRelays = DMLib.Pure.Relay.computeAllQueriedRelays(mode, cached, participants[myPubkey].derivedRelays, newRelays); // cached = data from last session
   return await DMLib.Impure.Cache.buildAndSaveCache(myPubkey, participants, allQueriedRelays, isLimitReachedDuringInitialQuery || isLimitReachedDuringGapQuery);
 }
 

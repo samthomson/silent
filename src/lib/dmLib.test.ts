@@ -894,7 +894,186 @@ describe('DMLib', () => {
         });
       });
       
-      it.todo('computeAllQueriedRelays');
+      describe('computeAllQueriedRelays', () => {
+        it('should combine relaySet and newRelays in cold start', () => {
+          const relaySet = ['wss://relay1.com', 'wss://relay2.com'];
+          const newRelays = ['wss://relay3.com', 'wss://relay4.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.COLD, null, relaySet, newRelays);
+          
+          expect(result).toHaveLength(4);
+          expect(result).toContain('wss://relay1.com');
+          expect(result).toContain('wss://relay2.com');
+          expect(result).toContain('wss://relay3.com');
+          expect(result).toContain('wss://relay4.com');
+        });
+
+        it('should use cached queriedRelays in warm start', () => {
+          const cached: DMLib.MessagingState = {
+            participants: {},
+            conversations: {},
+            messages: {},
+            syncState: { 
+              lastCacheTime: 1000, 
+              queriedRelays: ['wss://cached1.com', 'wss://cached2.com'], 
+              queryLimitReached: false 
+            },
+            relayInfo: {}
+          };
+          const relaySet = ['wss://relay1.com', 'wss://relay2.com']; // Should be ignored
+          const newRelays = ['wss://relay3.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.WARM, cached, relaySet, newRelays);
+          
+          expect(result).toHaveLength(3);
+          expect(result).toContain('wss://cached1.com');
+          expect(result).toContain('wss://cached2.com');
+          expect(result).toContain('wss://relay3.com');
+          expect(result).not.toContain('wss://relay1.com'); // relaySet ignored in warm start
+        });
+
+        it('should deduplicate overlapping relays in cold start', () => {
+          const relaySet = ['wss://relay1.com', 'wss://relay2.com'];
+          const newRelays = ['wss://relay2.com', 'wss://relay3.com']; // relay2 is duplicate
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.COLD, null, relaySet, newRelays);
+          
+          expect(result).toHaveLength(3);
+          expect(result.filter(r => r === 'wss://relay2.com')).toHaveLength(1); // Only one relay2
+        });
+
+        it('should deduplicate overlapping relays in warm start', () => {
+          const cached: DMLib.MessagingState = {
+            participants: {},
+            conversations: {},
+            messages: {},
+            syncState: { 
+              lastCacheTime: 1000, 
+              queriedRelays: ['wss://relay1.com', 'wss://relay2.com'], 
+              queryLimitReached: false 
+            },
+            relayInfo: {}
+          };
+          const newRelays = ['wss://relay2.com', 'wss://relay3.com']; // relay2 is duplicate
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.WARM, cached, [], newRelays);
+          
+          expect(result).toHaveLength(3);
+          expect(result.filter(r => r === 'wss://relay2.com')).toHaveLength(1);
+        });
+
+        it('should handle empty newRelays in cold start', () => {
+          const relaySet = ['wss://relay1.com', 'wss://relay2.com'];
+          const newRelays: string[] = [];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.COLD, null, relaySet, newRelays);
+          
+          expect(result).toEqual(relaySet);
+        });
+
+        it('should handle empty newRelays in warm start', () => {
+          const cached: DMLib.MessagingState = {
+            participants: {},
+            conversations: {},
+            messages: {},
+            syncState: { 
+              lastCacheTime: 1000, 
+              queriedRelays: ['wss://cached1.com'], 
+              queryLimitReached: false 
+            },
+            relayInfo: {}
+          };
+          const newRelays: string[] = [];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.WARM, cached, [], newRelays);
+          
+          expect(result).toEqual(['wss://cached1.com']);
+        });
+
+        it('should handle empty relaySet in cold start', () => {
+          const relaySet: string[] = [];
+          const newRelays = ['wss://relay1.com', 'wss://relay2.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.COLD, null, relaySet, newRelays);
+          
+          expect(result).toEqual(newRelays);
+        });
+
+        it('should handle empty cached queriedRelays in warm start', () => {
+          const cached: DMLib.MessagingState = {
+            participants: {},
+            conversations: {},
+            messages: {},
+            syncState: { 
+              lastCacheTime: 1000, 
+              queriedRelays: [], 
+              queryLimitReached: false 
+            },
+            relayInfo: {}
+          };
+          const newRelays = ['wss://relay1.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.WARM, cached, [], newRelays);
+          
+          expect(result).toEqual(['wss://relay1.com']);
+        });
+
+        it('should handle realistic cold start scenario', () => {
+          // Cold start: User has 2 relays, we discover 3 new ones
+          const myRelays = ['wss://relay.damus.io', 'wss://nos.lol'];
+          const discoveredNewRelays = ['wss://inbox.alice.com', 'wss://relay.nostr.band', 'wss://inbox.bob.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.COLD, null, myRelays, discoveredNewRelays);
+          
+          expect(result).toHaveLength(5);
+          expect(result).toContain('wss://relay.damus.io');
+          expect(result).toContain('wss://nos.lol');
+          expect(result).toContain('wss://inbox.alice.com');
+          expect(result).toContain('wss://relay.nostr.band');
+          expect(result).toContain('wss://inbox.bob.com');
+        });
+
+        it('should handle realistic warm start scenario', () => {
+          // Warm start: We queried 3 relays from cache, discovered 2 new ones
+          const cached: DMLib.MessagingState = {
+            participants: {},
+            conversations: {},
+            messages: {},
+            syncState: { 
+              lastCacheTime: 1000, 
+              queriedRelays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://inbox.alice.com'], 
+              queryLimitReached: false 
+            },
+            relayInfo: {}
+          };
+          const myCurrentRelays = ['wss://relay.damus.io', 'wss://nos.lol']; // Might have changed
+          const discoveredNewRelays = ['wss://relay.nostr.band', 'wss://inbox.bob.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.WARM, cached, myCurrentRelays, discoveredNewRelays);
+          
+          // Should use cached relays, not myCurrentRelays
+          expect(result).toHaveLength(5);
+          expect(result).toContain('wss://relay.damus.io');
+          expect(result).toContain('wss://nos.lol');
+          expect(result).toContain('wss://inbox.alice.com'); // From cache
+          expect(result).toContain('wss://relay.nostr.band');
+          expect(result).toContain('wss://inbox.bob.com');
+        });
+
+        it('should fallback to relaySet if warm start has null cached', () => {
+          // Edge case: warm start but cached is null (shouldn't happen but handle gracefully)
+          const relaySet = ['wss://relay1.com', 'wss://relay2.com'];
+          const newRelays = ['wss://relay3.com'];
+          
+          const result = DMLib.Pure.Relay.computeAllQueriedRelays(DMLib.StartupMode.WARM, null, relaySet, newRelays);
+          
+          // Should behave like cold start
+          expect(result).toHaveLength(3);
+          expect(result).toContain('wss://relay1.com');
+          expect(result).toContain('wss://relay2.com');
+          expect(result).toContain('wss://relay3.com');
+        });
+      });
     });
 
     describe('Message', () => {

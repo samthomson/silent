@@ -400,8 +400,31 @@ const findNewRelaysToQuery = (participants: Record<string, Participant>, already
   // 2. Filter to only new relays
   return filterNewRelayUserCombos(relayUserMap, alreadyQueried);
 }
-// TODO: Implement computeAllQueriedRelays
-const computeAllQueriedRelays = (mode: StartupMode, cached: MessagingState | null, relaySet: string[], newRelays: string[]): string[] => { return []; }
+/**
+ * Computes the complete list of relays queried during initialization
+ * Combines initial relays (step C) with new relays (step I) based on startup mode
+ * 
+ * @param mode - Startup mode (cold or warm)
+ * @param lastSessionCache - Cached state from previous session (null in cold start)
+ * @param relaySet - Current user's derived relays
+ * @param newRelays - New relays discovered in step H/I
+ * @returns Complete array of all relays queried
+ */
+const computeAllQueriedRelays = (mode: StartupMode, lastSessionCache: MessagingState | null, relaySet: string[], newRelays: string[]): string[] => {
+  let initialRelays: string[];
+  
+  if (mode === StartupMode.WARM && lastSessionCache) {
+    // Warm start: We queried the relays from last session in step C
+    initialRelays = lastSessionCache.syncState.queriedRelays;
+  } else {
+    // Cold start: We queried the user's current relays in step C
+    initialRelays = relaySet;
+  }
+  
+  // Combine initial relays with new relays and deduplicate
+  const allRelays = [...initialRelays, ...newRelays];
+  return Array.from(new Set(allRelays));
+}
 
 export const Pure = {
   Relay: {

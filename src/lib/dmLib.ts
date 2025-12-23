@@ -303,8 +303,21 @@ const computeSinceTimestamp = (lastCacheTime: number | null, nip17FuzzDays: numb
   // Subtract the fuzz period from the last cache time to ensure we catch all messages
   return lastCacheTime - fuzzSeconds;
 }
-// TODO: Implement determineNewPubkeys
-const determineNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[], mode: StartupMode): string[] => { return []; }
+/**
+ * Determines which pubkeys are new based on startup mode
+ * 
+ * NOTE: Currently just delegates to getNewPubkeys - may be redundant.
+ * Revisit to see if mode-specific logic is needed, or remove entirely.
+ * 
+ * @param foundPubkeys - Pubkeys discovered from messages
+ * @param existingPubkeys - Pubkeys we already have participant data for
+ * @param mode - Startup mode (cold or warm) - currently unused
+ * @returns Array of new pubkeys that need to be fetched
+ */
+const determineNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[], mode: StartupMode): string[] => {
+  // TODO: Revisit if mode-specific logic is needed, or if this function should be removed
+  return getNewPubkeys(foundPubkeys, existingPubkeys);
+}
 // TODO: Implement buildCachedData
 const buildCachedData = (participants: Record<string, Participant>, messages: Message[], queriedRelays: string[], queryLimitReached: boolean): MessagingState => {
   return {

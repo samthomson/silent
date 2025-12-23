@@ -1307,8 +1307,124 @@ describe('DMLib', () => {
         });
       });
       
+      describe('determineNewPubkeys', () => {
+        it('should return empty array when foundPubkeys is empty (cold start)', () => {
+          const result = DMLib.Pure.Participant.determineNewPubkeys([], ['existing1', 'existing2'], DMLib.StartupMode.COLD);
+          expect(result).toEqual([]);
+        });
+
+        it('should return empty array when foundPubkeys is empty (warm start)', () => {
+          const result = DMLib.Pure.Participant.determineNewPubkeys([], ['existing1', 'existing2'], DMLib.StartupMode.WARM);
+          expect(result).toEqual([]);
+        });
+
+        it('should return all pubkeys when existingPubkeys is empty (cold start)', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, [], DMLib.StartupMode.COLD);
+          expect(result).toEqual(['pk1', 'pk2', 'pk3']);
+        });
+
+        it('should return all pubkeys when existingPubkeys is empty (warm start)', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, [], DMLib.StartupMode.WARM);
+          expect(result).toEqual(['pk1', 'pk2', 'pk3']);
+        });
+
+        it('should return empty array when all foundPubkeys already exist (cold start)', () => {
+          const foundPubkeys = ['pk1', 'pk2'];
+          const existingPubkeys = ['pk1', 'pk2', 'pk3'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.COLD);
+          expect(result).toEqual([]);
+        });
+
+        it('should return empty array when all foundPubkeys already exist (warm start)', () => {
+          const foundPubkeys = ['pk1', 'pk2'];
+          const existingPubkeys = ['pk1', 'pk2', 'pk3'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.WARM);
+          expect(result).toEqual([]);
+        });
+
+        it('should return only new pubkeys (cold start)', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3', 'pk4'];
+          const existingPubkeys = ['pk1', 'pk3'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.COLD);
+          expect(result).toEqual(['pk2', 'pk4']);
+        });
+
+        it('should return only new pubkeys (warm start)', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3', 'pk4'];
+          const existingPubkeys = ['pk1', 'pk3'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.WARM);
+          expect(result).toEqual(['pk2', 'pk4']);
+        });
+
+        it('should preserve order from foundPubkeys', () => {
+          const foundPubkeys = ['pk5', 'pk1', 'pk3', 'pk2'];
+          const existingPubkeys = ['pk1'];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.COLD);
+          expect(result).toEqual(['pk5', 'pk3', 'pk2']);
+        });
+
+        it('should deduplicate foundPubkeys', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk1', 'pk3', 'pk2'];
+          const existingPubkeys = [];
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.WARM);
+          expect(result).toEqual(['pk1', 'pk2', 'pk3']);
+        });
+
+        it('should handle realistic scenario with multiple existing and new pubkeys (cold start)', () => {
+          const foundPubkeys = [
+            'alice',
+            'bob',
+            'charlie',
+            'dave',
+            'eve'
+          ];
+          const existingPubkeys = ['alice', 'charlie'];
+          
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.COLD);
+          
+          expect(result).toHaveLength(3);
+          expect(result).toContain('bob');
+          expect(result).toContain('dave');
+          expect(result).toContain('eve');
+          expect(result).not.toContain('alice');
+          expect(result).not.toContain('charlie');
+        });
+
+        it('should handle realistic scenario with multiple existing and new pubkeys (warm start)', () => {
+          const foundPubkeys = [
+            'alice',
+            'bob',
+            'charlie',
+            'dave',
+            'eve'
+          ];
+          const existingPubkeys = ['alice', 'charlie'];
+          
+          const result = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.WARM);
+          
+          expect(result).toHaveLength(3);
+          expect(result).toContain('bob');
+          expect(result).toContain('dave');
+          expect(result).toContain('eve');
+          expect(result).not.toContain('alice');
+          expect(result).not.toContain('charlie');
+        });
+
+        it('should behave identically for cold and warm starts (current implementation)', () => {
+          const foundPubkeys = ['pk1', 'pk2', 'pk3'];
+          const existingPubkeys = ['pk1'];
+          
+          const coldResult = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.COLD);
+          const warmResult = DMLib.Pure.Participant.determineNewPubkeys(foundPubkeys, existingPubkeys, DMLib.StartupMode.WARM);
+          
+          expect(coldResult).toEqual(warmResult);
+          expect(coldResult).toEqual(['pk2', 'pk3']);
+        });
+      });
+      
       it.todo('extractNewPubkeys');
-      it.todo('determineNewPubkeys');
     });
 
     describe('Conversation', () => {

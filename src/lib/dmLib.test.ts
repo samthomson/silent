@@ -442,8 +442,205 @@ describe('DMLib', () => {
     });
 
     describe('Message', () => {
+      describe('extractOtherPubkeysFromMessages', () => {
+        const myPubkey = 'mypubkey';
+
+        it('should return empty array for empty messages', () => {
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages([], myPubkey);
+          expect(result).toEqual([]);
+        });
+
+        it('should extract senderPubkey from single message', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'sender1', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'sender1',
+              participants: ['sender1', myPubkey]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toEqual(['sender1']);
+        });
+
+        it('should exclude myPubkey from results', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: myPubkey, created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: myPubkey,
+              participants: [myPubkey, 'other1']
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toEqual(['other1']);
+          expect(result).not.toContain(myPubkey);
+        });
+
+        it('should deduplicate pubkeys from multiple messages', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 4, pubkey: 'alice', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg3', kind: 4, pubkey: 'bob', created_at: 102, tags: [], content: '', sig: 'sig3' },
+              senderPubkey: 'bob',
+              participants: ['bob', myPubkey]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toHaveLength(2);
+          expect(result).toContain('alice');
+          expect(result).toContain('bob');
+        });
+
+        it('should extract all participants from group conversation', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 14, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', 'bob', 'charlie', myPubkey]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toHaveLength(3);
+          expect(result).toContain('alice');
+          expect(result).toContain('bob');
+          expect(result).toContain('charlie');
+          expect(result).not.toContain(myPubkey);
+        });
+
+        it('should handle messages with no senderPubkey', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'pk1', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              participants: ['alice', myPubkey]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toEqual(['alice']);
+        });
+
+        it('should handle messages with no participants', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'pk1', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice'
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toEqual(['alice']);
+        });
+
+        it('should handle messages with empty participants array', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'pk1', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: []
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toEqual(['alice']);
+        });
+
+        it('should handle mixed NIP-04 and NIP-17 messages', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 14, pubkey: 'bob', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'bob',
+              participants: ['bob', 'charlie', myPubkey]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toHaveLength(3);
+          expect(result).toContain('alice');
+          expect(result).toContain('bob');
+          expect(result).toContain('charlie');
+        });
+
+        it('should handle participants array with empty strings or null values', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'pk1', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', '', 'bob', null as any, myPubkey, undefined as any]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          expect(result).toHaveLength(2);
+          expect(result).toContain('alice');
+          expect(result).toContain('bob');
+        });
+
+        it('should handle large number of messages efficiently', () => {
+          const messages: DMLib.MessageWithMetadata[] = Array.from({ length: 1000 }, (_, i) => ({
+            event: { id: `msg${i}`, kind: 4, pubkey: `pk${i % 50}`, created_at: 100 + i, tags: [], content: '', sig: `sig${i}` },
+            senderPubkey: `pk${i % 50}`,
+            participants: [`pk${i % 50}`, myPubkey]
+          }));
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          
+          // Should have 50 unique pubkeys (pk0 through pk49)
+          expect(result).toHaveLength(50);
+          expect(result).not.toContain(myPubkey);
+        });
+
+        it('should handle realistic conversation scenario', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 4, pubkey: myPubkey, created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: myPubkey,
+              participants: [myPubkey, 'alice']
+            },
+            {
+              event: { id: 'msg3', kind: 14, pubkey: 'bob', created_at: 102, tags: [], content: '', sig: 'sig3' },
+              senderPubkey: 'bob',
+              participants: ['bob', myPubkey]
+            },
+            {
+              event: { id: 'msg4', kind: 14, pubkey: 'alice', created_at: 103, tags: [], content: '', sig: 'sig4' },
+              senderPubkey: 'alice',
+              participants: ['alice', 'bob', 'charlie', myPubkey]
+            }
+          ];
+          
+          const result = DMLib.Pure.Message.extractOtherPubkeysFromMessages(messages, myPubkey);
+          
+          expect(result).toHaveLength(3);
+          expect(result).toContain('alice');
+          expect(result).toContain('bob');
+          expect(result).toContain('charlie');
+          expect(result).not.toContain(myPubkey);
+        });
+      });
+      
       it.todo('dedupeMessages');
-      it.todo('extractPubkeysFromMessages');
     });
 
     describe('Participant', () => {

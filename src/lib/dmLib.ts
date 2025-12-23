@@ -179,8 +179,34 @@ const getNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[]): strin
   
   return Array.from(newSet);
 }
-// TODO: Implement extractPubkeysFromMessages
-const extractPubkeysFromMessages = (messages: MessageWithMetadata[], myPubkey: string): string[] => { return []; }
+/**
+ * Extracts all unique pubkeys from messages (excluding current user)
+ * Used to discover other participants whose relay info we need to fetch
+ * @param messages - Array of messages with metadata
+ * @param myPubkey - Current user's pubkey to exclude
+ * @returns Array of unique pubkeys found in messages (other participants only)
+ */
+const extractOtherPubkeysFromMessages = (messages: MessageWithMetadata[], myPubkey: string): string[] => {
+  const pubkeysSet = new Set<string>();
+  
+  for (const msg of messages) {
+    // Add sender pubkey
+    if (msg.senderPubkey && msg.senderPubkey !== myPubkey) {
+      pubkeysSet.add(msg.senderPubkey);
+    }
+    
+    // Add all participants
+    if (msg.participants) {
+      for (const pubkey of msg.participants) {
+        if (pubkey && pubkey !== myPubkey) {
+          pubkeysSet.add(pubkey);
+        }
+      }
+    }
+  }
+  
+  return Array.from(pubkeysSet);
+}
 // TODO: Implement dedupeMessages
 const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => { return []; }
 // TODO: Implement computeConversationId
@@ -307,7 +333,7 @@ export const Pure = {
   },
   Message: {
     dedupeMessages,
-    extractPubkeysFromMessages,
+    extractOtherPubkeysFromMessages,
   },
   Participant: {
     buildParticipant,

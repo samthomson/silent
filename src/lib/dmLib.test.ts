@@ -1424,7 +1424,182 @@ describe('DMLib', () => {
         });
       });
       
-      it.todo('extractNewPubkeys');
+      describe('extractNewPubkeys', () => {
+        const myPubkey = 'mypubkey';
+
+        it('should return empty array when messages are empty', () => {
+          const baseParticipants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 }
+          };
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys([], baseParticipants, myPubkey, DMLib.StartupMode.COLD);
+          expect(result).toEqual([]);
+        });
+
+        it('should return empty array when all message participants are already in base', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            }
+          ];
+          
+          const baseParticipants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 }
+          };
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.COLD);
+          expect(result).toEqual([]);
+        });
+
+        it('should return new pubkeys from messages', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 4, pubkey: 'bob', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'bob',
+              participants: ['bob', myPubkey]
+            }
+          ];
+          
+          const baseParticipants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 }
+          };
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.COLD);
+          expect(result).toEqual(['bob']);
+        });
+
+        it('should exclude myPubkey from results', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: myPubkey, created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: myPubkey,
+              participants: [myPubkey, 'alice']
+            }
+          ];
+          
+          const baseParticipants = {};
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.WARM);
+          expect(result).toEqual(['alice']);
+          expect(result).not.toContain(myPubkey);
+        });
+
+        it('should return all pubkeys when baseParticipants is empty', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 14, pubkey: 'bob', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'bob',
+              participants: ['bob', 'charlie', myPubkey]
+            }
+          ];
+          
+          const baseParticipants = {};
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.COLD);
+          expect(result).toHaveLength(3);
+          expect(result).toContain('alice');
+          expect(result).toContain('bob');
+          expect(result).toContain('charlie');
+        });
+
+        it('should handle group conversations and deduplicate', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 14, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', 'bob', 'charlie', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 14, pubkey: 'bob', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'bob',
+              participants: ['alice', 'bob', 'charlie', myPubkey]
+            }
+          ];
+          
+          const baseParticipants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 }
+          };
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.WARM);
+          expect(result).toHaveLength(2);
+          expect(result).toContain('bob');
+          expect(result).toContain('charlie');
+          expect(result).not.toContain('alice'); // Already in base
+        });
+
+        it('should work identically for cold and warm modes (current implementation)', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            {
+              event: { id: 'msg2', kind: 4, pubkey: 'bob', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'bob',
+              participants: ['bob', myPubkey]
+            }
+          ];
+          
+          const baseParticipants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 }
+          };
+          
+          const coldResult = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.COLD);
+          const warmResult = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.WARM);
+          
+          expect(coldResult).toEqual(warmResult);
+          expect(coldResult).toEqual(['bob']);
+        });
+
+        it('should handle realistic messaging scenario', () => {
+          const messages: DMLib.MessageWithMetadata[] = [
+            // Existing conversation with alice
+            {
+              event: { id: 'msg1', kind: 4, pubkey: 'alice', created_at: 100, tags: [], content: '', sig: 'sig1' },
+              senderPubkey: 'alice',
+              participants: ['alice', myPubkey]
+            },
+            // New message from bob
+            {
+              event: { id: 'msg2', kind: 14, pubkey: 'bob', created_at: 101, tags: [], content: '', sig: 'sig2' },
+              senderPubkey: 'bob',
+              participants: ['bob', myPubkey]
+            },
+            // Group message introduces charlie and dave
+            {
+              event: { id: 'msg3', kind: 14, pubkey: 'charlie', created_at: 102, tags: [], content: '', sig: 'sig3' },
+              senderPubkey: 'charlie',
+              participants: ['charlie', 'dave', 'bob', myPubkey]
+            }
+          ];
+          
+          const baseParticipants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 }
+          };
+          
+          const result = DMLib.Pure.Participant.extractNewPubkeys(messages, baseParticipants, myPubkey, DMLib.StartupMode.WARM);
+          
+          expect(result).toHaveLength(3);
+          expect(result).toContain('bob');
+          expect(result).toContain('charlie');
+          expect(result).toContain('dave');
+          expect(result).not.toContain('alice'); // Already in base
+          expect(result).not.toContain(myPubkey); // Never include self
+        });
+      });
     });
 
     describe('Conversation', () => {

@@ -328,8 +328,26 @@ const buildCachedData = (participants: Record<string, Participant>, messages: Me
     relayInfo: {},
   };
 }
-// TODO: Implement extractNewPubkeys
-const extractNewPubkeys = (messagesWithMetadata: MessageWithMetadata[], baseParticipants: Record<string, Participant>, myPubkey: string, mode: StartupMode): string[] => { return []; }
+/**
+ * High-level orchestrator: Extracts new pubkeys from messages that aren't in baseParticipants
+ * Combines: extract pubkeys from messages → filter against existing → return new ones
+ * 
+ * @param messagesWithMetadata - Decrypted messages with metadata
+ * @param baseParticipants - Existing participants we already have
+ * @param myPubkey - Current user's pubkey to exclude
+ * @param mode - Startup mode (currently unused)
+ * @returns Pubkeys that need to be fetched
+ */
+const extractNewPubkeys = (messagesWithMetadata: MessageWithMetadata[], baseParticipants: Record<string, Participant>, myPubkey: string, mode: StartupMode): string[] => {
+  // 1. Extract all other pubkeys from messages
+  const foundPubkeys = extractOtherPubkeysFromMessages(messagesWithMetadata, myPubkey);
+  
+  // 2. Get existing pubkeys from baseParticipants
+  const existingPubkeys = Object.keys(baseParticipants);
+  
+  // 3. Determine which are new based on mode
+  return determineNewPubkeys(foundPubkeys, existingPubkeys, mode);
+}
 // TODO: Implement findNewRelaysToQuery
 const findNewRelaysToQuery = (participants: Record<string, Participant>, alreadyQueried: string[]): string[] => { return []; }
 // TODO: Implement computeAllQueriedRelays

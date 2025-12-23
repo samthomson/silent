@@ -509,98 +509,112 @@ const fetchMessages = async (
  * @param signer - Signer with NIP-04 and NIP-44 decryption capability
  * @returns Array of messages with extracted metadata
  */
-const unwrapAllGiftWraps = async (messages: NostrEvent[], signer: Signer): Promise<MessageWithMetadata[]> => {
+const processNIP04Message = async (msg: NostrEvent, signer: Signer, myPubkey: string): Promise<MessageWithMetadata | null> => {
+  const recipientPubkey = msg.tags.find(t => t[0] === 'p')?.[1];
+  const participants = [msg.pubkey, recipientPubkey].filter(Boolean) as string[];
+  
+  // For NIP-04, we need the "other pubkey" to decrypt
+  // If I'm the sender, decrypt with recipient's pubkey; if I'm the recipient, decrypt with sender's pubkey
+  const otherPubkey = msg.pubkey === myPubkey ? recipientPubkey : msg.pubkey;
+  
+  let decryptedContent: string | undefined;
+  if (otherPubkey && signer.nip04) {
+    try {
+      decryptedContent = await signer.nip04.decrypt(otherPubkey, msg.content);
+    } catch (error) {
+      console.warn('[DM] Failed to decrypt NIP-04 message:', msg.id, error);
+    }
+  }
+  
+  // Store decrypted content in the event's content field for MessageWithMetadata
+  const eventWithDecrypted = {
+    ...msg,
+    content: decryptedContent || msg.content // Use decrypted or fallback to encrypted
+  };
+  
+  return {
+    event: eventWithDecrypted,
+    senderPubkey: msg.pubkey,
+    participants,
+    subject: '' // Empty string for NIP-04 (no subject support)
+  };
+};
+
+const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<MessageWithMetadata | null> => {
+  if (!signer.nip44) {
+    console.warn('[DM] NIP-44 not available, skipping gift wrap:', msg.id);
+    return null;
+  }
+  
+  try {
+    // Step 1: Decrypt gift wrap (kind 1059) to get seal (kind 13)
+    const sealContent = await signer.nip44.decrypt(msg.pubkey, msg.content);
+    
+    // Check if decryption failed
+    if (!sealContent || typeof sealContent !== 'string') {
+      // Silently skip - likely not intended for us or malformed
+      return null;
+    }
+    
+    const seal = JSON.parse(sealContent) as NostrEvent;
+    
+    if (seal.kind !== 13) {
+      console.warn('[DM] Invalid seal kind:', seal.kind, 'expected 13');
+      return null;
+    }
+    
+    // Step 2: Decrypt seal to get inner message (kind 14 or 15)
+    const innerContent = await signer.nip44.decrypt(seal.pubkey, seal.content);
+    const inner = JSON.parse(innerContent) as NostrEvent;
+    
+    if (inner.kind !== 14 && inner.kind !== 15) {
+      console.warn('[DM] Invalid inner kind:', inner.kind, 'expected 14 or 15');
+      return null;
+    }
+    
+    // Step 3: Extract participants from p tags
+    const recipients = inner.tags
+      .filter(t => t[0] === 'p')
+      .map(t => t[1]);
+    
+    const participants = [seal.pubkey, ...recipients];
+    
+    // Extract optional subject tag (default to empty string)
+    const subject = inner.tags.find(t => t[0] === 'subject')?.[1] || '';
+    
+    return {
+      event: inner, // Store the INNER event (kind 14/15), not the gift wrap
+      senderPubkey: seal.pubkey, // Real sender is in the seal
+      participants,
+      subject
+    };
+  } catch (error) {
+    // Silently skip gift wraps we can't decrypt
+    // (likely not intended for us, corrupted, or wrong protocol version)
+    // Log only in debug mode to reduce noise
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[DM] Failed to unwrap gift wrap:', msg.id, error instanceof Error ? error.message : error);
+    }
+    return null;
+  }
+};
+
+const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubkey: string): Promise<MessageWithMetadata[]> => {
   const results: MessageWithMetadata[] = [];
   let nip17FailCount = 0;
   
   for (const msg of messages) {
     if (msg.kind === 4) {
-      // NIP-04: Decrypt content
-      const recipientPubkey = msg.tags.find(t => t[0] === 'p')?.[1];
-      const participants = [msg.pubkey, recipientPubkey].filter(Boolean) as string[];
-      
-      // For NIP-04, we need the "other pubkey" to decrypt
-      // The other pubkey is the recipient (from p tag)
-      const otherPubkey = recipientPubkey;
-      
-      let decryptedContent: string | undefined;
-      if (otherPubkey && signer.nip04) {
-        try {
-          decryptedContent = await signer.nip04.decrypt(otherPubkey, msg.content);
-        } catch (error) {
-          console.warn('[DM] Failed to decrypt NIP-04 message:', msg.id, error);
-        }
+      const result = await processNIP04Message(msg, signer, myPubkey);
+      if (result) {
+        results.push(result);
       }
-      
-      // Store decrypted content in the event's content field for MessageWithMetadata
-      const eventWithDecrypted = {
-        ...msg,
-        content: decryptedContent || msg.content // Use decrypted or fallback to encrypted
-      };
-      
-      results.push({
-        event: eventWithDecrypted,
-        senderPubkey: msg.pubkey,
-        participants,
-        subject: '' // Empty string for NIP-04 (no subject support)
-      });
     } else if (msg.kind === 1059) {
-      // NIP-17: Unwrap gift wrap → seal → inner message
-      try {
-        if (!signer.nip44) {
-          console.warn('[DM] NIP-44 not available, skipping gift wrap:', msg.id);
-          continue;
-        }
-        
-        // Step 1: Decrypt gift wrap (kind 1059) to get seal (kind 13)
-        const sealContent = await signer.nip44.decrypt(msg.pubkey, msg.content);
-        
-        // Check if decryption failed
-        if (!sealContent || typeof sealContent !== 'string') {
-          // Silently skip - likely not intended for us or malformed
-          continue;
-        }
-        
-        const seal = JSON.parse(sealContent) as NostrEvent;
-        
-        if (seal.kind !== 13) {
-          console.warn('[DM] Invalid seal kind:', seal.kind, 'expected 13');
-          continue;
-        }
-        
-        // Step 2: Decrypt seal to get inner message (kind 14 or 15)
-        const innerContent = await signer.nip44.decrypt(seal.pubkey, seal.content);
-        const inner = JSON.parse(innerContent) as NostrEvent;
-        
-        if (inner.kind !== 14 && inner.kind !== 15) {
-          console.warn('[DM] Invalid inner kind:', inner.kind, 'expected 14 or 15');
-          continue;
-        }
-        
-        // Step 3: Extract participants from p tags
-        const recipients = inner.tags
-          .filter(t => t[0] === 'p')
-          .map(t => t[1]);
-        
-        const participants = [seal.pubkey, ...recipients];
-        
-        // Extract optional subject tag (default to empty string)
-        const subject = inner.tags.find(t => t[0] === 'subject')?.[1] || '';
-        
-        results.push({
-          event: inner, // Store the INNER event (kind 14/15), not the gift wrap
-          senderPubkey: seal.pubkey, // Real sender is in the seal
-          participants,
-          subject
-        });
-      } catch (error) {
+      const result = await processNIP17Message(msg, signer);
+      if (result) {
+        results.push(result);
+      } else {
         nip17FailCount++;
-        // Silently skip gift wraps we can't decrypt
-        // (likely not intended for us, corrupted, or wrong protocol version)
-        // Log only in debug mode to reduce noise
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('[DM] Failed to unwrap gift wrap:', msg.id, error instanceof Error ? error.message : error);
-        }
       }
     }
   }
@@ -611,7 +625,7 @@ const unwrapAllGiftWraps = async (messages: NostrEvent[], signer: Signer): Promi
   }
   
   return results;
-}
+};
 const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> => {
   try {
     const db = await openDB(CACHE_DB_NAME, 1, {
@@ -737,8 +751,8 @@ const queryMessages = async (
   // Fetch raw messages (batched iteration with 3 filters)
   const { messages, limitReached } = await fetchMessages(nostr, relays, myPubkey, since, queryLimit);
   
-  // Unwrap and decrypt to extract metadata
-  const messagesWithMetadata = await unwrapAllGiftWraps(messages, signer);
+  // Decrypt all messages (NIP-04 and NIP-17)
+  const messagesWithMetadata = await decryptAllMessages(messages, signer, myPubkey);
   
   return { messagesWithMetadata, limitReached };
 }
@@ -795,8 +809,8 @@ const queryNewRelays = async (
   // Fetch raw messages from beginning (since=null for gap filling)
   const { messages, limitReached } = await fetchMessages(nostr, relays, myPubkey, null, queryLimit);
   
-  // Unwrap and decrypt to extract metadata
-  const allMessages = await unwrapAllGiftWraps(messages, signer);
+  // Decrypt all messages (NIP-04 and NIP-17)
+  const allMessages = await decryptAllMessages(messages, signer, myPubkey);
   
   return { allMessages, limitReached };
 }
@@ -818,7 +832,9 @@ export const Impure = {
   },
   Message: {
     fetchMessages,
-    unwrapAllGiftWraps,
+    processNIP04Message,
+    processNIP17Message,
+    decryptAllMessages,
     queryMessages,
     queryNewRelays,
   },

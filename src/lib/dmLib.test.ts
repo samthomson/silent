@@ -1589,9 +1589,567 @@ describe('DMLib', () => {
 
     describe('Message', () => {
       it.todo('fetchMessages');
-      it.todo('unwrapAllGiftWraps');
-      it.todo('queryMessages');
-      it.todo('queryNewRelays');
+
+      describe('decryptAllMessages', () => {
+        it('decrypts NIP-04 messages successfully', async () => {
+          const myPubkey = 'mypubkey';
+          const otherPubkey = 'otherpubkey';
+          
+          const nip04Message: NostrEvent = {
+            id: 'msg1',
+            kind: 4,
+            pubkey: otherPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-content',
+            sig: 'sig1',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip04: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockResolvedValue('decrypted message'),
+            },
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn(),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([nip04Message], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(1);
+          expect(result[0].event.id).toBe('msg1');
+          expect(result[0].senderPubkey).toBe(otherPubkey);
+          expect(result[0].participants).toEqual([otherPubkey, myPubkey]);
+          expect(result[0].subject).toBe('');
+          expect(result[0].event.content).toBe('decrypted message'); // Decrypted content is in event.content
+          expect(mockSigner.nip04!.decrypt).toHaveBeenCalledWith(otherPubkey, 'encrypted-content');
+        });
+
+        it('handles NIP-04 decryption failure gracefully', async () => {
+          const myPubkey = 'mypubkey';
+          const otherPubkey = 'otherpubkey';
+          
+          const nip04Message: NostrEvent = {
+            id: 'msg1',
+            kind: 4,
+            pubkey: otherPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-content',
+            sig: 'sig1',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip04: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockRejectedValue(new Error('Decryption failed')),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([nip04Message], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(1);
+          expect(result[0].event.content).toBe('encrypted-content'); // Falls back to encrypted content
+        });
+
+        it('handles NIP-04 when signer not available', async () => {
+          const myPubkey = 'mypubkey';
+          const otherPubkey = 'otherpubkey';
+          
+          const nip04Message: NostrEvent = {
+            id: 'msg1',
+            kind: 4,
+            pubkey: otherPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-content',
+            sig: 'sig1',
+          };
+
+          const mockSigner: DMLib.Signer = {}; // No nip04
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([nip04Message], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(1);
+          expect(result[0].event.content).toBe('encrypted-content'); // Falls back to encrypted content when signer unavailable
+        });
+
+        it('unwraps NIP-17 gift wraps successfully', async () => {
+          const myPubkey = 'mypubkey';
+          const senderPubkey = 'senderpubkey';
+          const randomPubkey = 'randompubkey';
+
+          const innerMessage: NostrEvent = {
+            id: 'inner1',
+            kind: 14,
+            pubkey: senderPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey], ['subject', 'Hello']],
+            content: 'Hello there',
+            sig: 'innersig',
+          };
+
+          const seal: NostrEvent = {
+            id: 'seal1',
+            kind: 13,
+            pubkey: senderPubkey,
+            created_at: 999,
+            tags: [],
+            content: 'encrypted-seal',
+            sig: 'sealsig',
+          };
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn()
+                .mockResolvedValueOnce(JSON.stringify(seal)) // First call: unwrap gift → seal
+                .mockResolvedValueOnce(JSON.stringify(innerMessage)), // Second call: unwrap seal → inner
+            },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(1);
+          expect(result[0].event).toEqual(innerMessage);
+          expect(result[0].senderPubkey).toBe(senderPubkey);
+          expect(result[0].participants).toEqual([senderPubkey, myPubkey]);
+          expect(result[0].subject).toBe('Hello');
+          expect(result[0].event.content).toBe('Hello there'); // Decrypted content is in event.content
+          expect(mockSigner.nip44!.decrypt).toHaveBeenCalledTimes(2);
+          expect(mockSigner.nip44!.decrypt).toHaveBeenNthCalledWith(1, randomPubkey, 'encrypted-gift');
+          expect(mockSigner.nip44!.decrypt).toHaveBeenNthCalledWith(2, senderPubkey, 'encrypted-seal');
+        });
+
+        it('handles NIP-17 with missing subject tag', async () => {
+          const myPubkey = 'mypubkey';
+          const senderPubkey = 'senderpubkey';
+          const randomPubkey = 'randompubkey';
+
+          const innerMessage: NostrEvent = {
+            id: 'inner1',
+            kind: 14,
+            pubkey: senderPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey]], // No subject tag
+            content: 'Hello there',
+            sig: 'innersig',
+          };
+
+          const seal: NostrEvent = {
+            id: 'seal1',
+            kind: 13,
+            pubkey: senderPubkey,
+            created_at: 999,
+            tags: [],
+            content: 'encrypted-seal',
+            sig: 'sealsig',
+          };
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn()
+                .mockResolvedValueOnce(JSON.stringify(seal))
+                .mockResolvedValueOnce(JSON.stringify(innerMessage)),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(1);
+          expect(result[0].subject).toBe(''); // Defaults to empty string
+        });
+
+        it('skips NIP-17 gift wraps with invalid seal kind', async () => {
+          const myPubkey = 'mypubkey';
+          const randomPubkey = 'randompubkey';
+
+          const invalidSeal = {
+            id: 'seal1',
+            kind: 999, // Invalid kind
+            pubkey: 'senderpubkey',
+            created_at: 999,
+            tags: [],
+            content: 'encrypted-seal',
+            sig: 'sealsig',
+          };
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockResolvedValue(JSON.stringify(invalidSeal)),
+            },
+          };
+
+          // Should log but continue
+          const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(0); // Skipped
+          expect(consoleSpy).toHaveBeenCalled();
+          consoleSpy.mockRestore();
+        });
+
+        it('skips NIP-17 gift wraps with invalid inner kind', async () => {
+          const myPubkey = 'mypubkey';
+          const senderPubkey = 'senderpubkey';
+          const randomPubkey = 'randompubkey';
+
+          const invalidInner = {
+            id: 'inner1',
+            kind: 1, // Invalid kind (should be 14 or 15)
+            pubkey: senderPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey]],
+            content: 'Hello there',
+            sig: 'innersig',
+          };
+
+          const seal: NostrEvent = {
+            id: 'seal1',
+            kind: 13,
+            pubkey: senderPubkey,
+            created_at: 999,
+            tags: [],
+            content: 'encrypted-seal',
+            sig: 'sealsig',
+          };
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn()
+                .mockResolvedValueOnce(JSON.stringify(seal))
+                .mockResolvedValueOnce(JSON.stringify(invalidInner)),
+            },
+          };
+
+          const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(0); // Skipped
+          expect(consoleSpy).toHaveBeenCalled();
+          consoleSpy.mockRestore();
+        });
+
+        it('handles NIP-17 decryption failure', async () => {
+          const myPubkey = 'mypubkey';
+          const randomPubkey = 'randompubkey';
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockRejectedValue(new Error('Decryption failed')),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(0); // Skipped due to decryption error
+        });
+
+        it('handles NIP-17 when signer not available', async () => {
+          const myPubkey = 'mypubkey';
+          const randomPubkey = 'randompubkey';
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {}; // No nip44
+
+          const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(0); // Skipped
+          expect(consoleWarnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('NIP-44 not available'),
+            'gift1'
+          );
+          consoleWarnSpy.mockRestore();
+        });
+
+        it('processes mixed NIP-04 and NIP-17 messages', async () => {
+          const myPubkey = 'mypubkey';
+          const otherPubkey = 'otherpubkey';
+          const senderPubkey = 'senderpubkey';
+          const randomPubkey = 'randompubkey';
+
+          const nip04Message: NostrEvent = {
+            id: 'msg1',
+            kind: 4,
+            pubkey: otherPubkey,
+            created_at: 1000,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-nip04',
+            sig: 'sig1',
+          };
+
+          const innerMessage: NostrEvent = {
+            id: 'inner1',
+            kind: 14,
+            pubkey: senderPubkey,
+            created_at: 1001,
+            tags: [['p', myPubkey]],
+            content: 'Hello NIP-17',
+            sig: 'innersig',
+          };
+
+          const seal: NostrEvent = {
+            id: 'seal1',
+            kind: 13,
+            pubkey: senderPubkey,
+            created_at: 999,
+            tags: [],
+            content: 'encrypted-seal',
+            sig: 'sealsig',
+          };
+
+          const giftWrap: NostrEvent = {
+            id: 'gift1',
+            kind: 1059,
+            pubkey: randomPubkey,
+            created_at: 998,
+            tags: [['p', myPubkey]],
+            content: 'encrypted-gift',
+            sig: 'giftsig',
+          };
+
+          const mockSigner: DMLib.Signer = {
+            nip04: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockResolvedValue('decrypted NIP-04'),
+            },
+            nip44: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn()
+                .mockResolvedValueOnce(JSON.stringify(seal))
+                .mockResolvedValueOnce(JSON.stringify(innerMessage)),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([nip04Message, giftWrap], mockSigner, myPubkey);
+
+          expect(result).toHaveLength(2);
+          expect(result[0].event.kind).toBe(4);
+          expect(result[0].event.content).toBe('decrypted NIP-04'); // Decrypted content is in event.content
+          expect(result[1].event.kind).toBe(14);
+          expect(result[1].event.content).toBe('Hello NIP-17'); // Decrypted content is in event.content
+        });
+
+        it('handles empty messages array', async () => {
+          const mockSigner: DMLib.Signer = {
+            nip04: { encrypt: vi.fn(), decrypt: vi.fn() },
+            nip44: { encrypt: vi.fn(), decrypt: vi.fn() },
+          };
+
+          const result = await DMLib.Impure.Message.decryptAllMessages([], mockSigner, 'mypubkey');
+
+          expect(result).toHaveLength(0);
+        });
+      });
+
+      describe('queryMessages', () => {
+        it('should fetch and decrypt messages successfully', async () => {
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue([])
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {
+            nip04: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockResolvedValue('Hello!'),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.queryMessages(mockNostr, mockSigner, ['wss://relay1.com'], 'mypubkey', 1000, 150);
+
+          // Should return empty with no messages from relay
+          expect(result.messagesWithMetadata).toEqual([]);
+          expect(result.limitReached).toBe(false);
+        });
+
+        it('should handle limit reached flag', async () => {
+          const messages = Array.from({ length: 1000 }, (_, i) => ({
+            id: `msg${i}`,
+            kind: 4,
+            pubkey: 'pk1',
+            created_at: 2000 + i,
+            tags: [['p', 'mypubkey']],
+            content: 'encrypted',
+            sig: `sig${i}`,
+          }));
+
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue(messages)
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {
+            nip04: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockResolvedValue('test'),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.queryMessages(mockNostr, mockSigner, ['wss://relay1.com'], 'mypubkey', null, 150);
+
+          expect(result.limitReached).toBe(true);
+        });
+
+        it('should pass null since timestamp', async () => {
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue([])
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {};
+
+          const result = await DMLib.Impure.Message.queryMessages(mockNostr, mockSigner, ['wss://relay1.com'], 'mypubkey', null, 100);
+
+          expect(result.messagesWithMetadata).toEqual([]);
+          expect(result.limitReached).toBe(false);
+        });
+
+        it('should return empty array when no messages found', async () => {
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue([])
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {};
+
+          const result = await DMLib.Impure.Message.queryMessages(mockNostr, mockSigner, ['wss://relay1.com'], 'mypubkey', 1000, 150);
+
+          expect(result.messagesWithMetadata).toEqual([]);
+          expect(result.limitReached).toBe(false);
+        });
+      });
+
+      describe('queryNewRelays', () => {
+        it('should always query from beginning (null since)', async () => {
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue([])
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {};
+
+          const result = await DMLib.Impure.Message.queryNewRelays(mockNostr, mockSigner, ['wss://newrelay.com'], 'mypubkey', 150);
+
+          expect(result.allMessages).toEqual([]);
+          expect(result.limitReached).toBe(false);
+        });
+
+        it('should handle limit reached flag from new relays', async () => {
+          const messages = Array.from({ length: 1000 }, (_, i) => ({
+            id: `msg${i}`,
+            kind: 4,
+            pubkey: 'pk1',
+            created_at: 2000 + i,
+            tags: [['p', 'mypubkey']],
+            content: 'encrypted',
+            sig: `sig${i}`,
+          }));
+
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue(messages)
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {
+            nip04: {
+              encrypt: vi.fn(),
+              decrypt: vi.fn().mockResolvedValue('test'),
+            },
+          };
+
+          const result = await DMLib.Impure.Message.queryNewRelays(mockNostr, mockSigner, ['wss://newrelay.com'], 'mypubkey', 150);
+
+          expect(result.limitReached).toBe(true);
+        });
+
+        it('should return empty array when no messages found on new relays', async () => {
+          const mockNostr = {
+            relay: vi.fn(() => ({
+              query: vi.fn().mockResolvedValue([])
+            }))
+          } as any;
+
+          const mockSigner: DMLib.Signer = {};
+
+          const result = await DMLib.Impure.Message.queryNewRelays(mockNostr, mockSigner, ['wss://newrelay.com'], 'mypubkey', 150);
+
+          expect(result.allMessages).toEqual([]);
+          expect(result.limitReached).toBe(false);
+        });
+      });
     });
 
     describe('Participant', () => {

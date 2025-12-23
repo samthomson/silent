@@ -384,8 +384,22 @@ const extractNewPubkeys = (messagesWithMetadata: MessageWithMetadata[], basePart
   // 3. Determine which are new based on mode
   return determineNewPubkeys(foundPubkeys, existingPubkeys, mode);
 }
-// TODO: Implement findNewRelaysToQuery
-const findNewRelaysToQuery = (participants: Record<string, Participant>, alreadyQueried: string[]): string[] => { return []; }
+/**
+ * High-level orchestrator: Finds new relays to query based on participants
+ * Combines: build relay→users map → filter against already-queried → return new relays
+ * Used in Step H to identify relays we should query for gap-filling
+ * 
+ * @param participants - All participants with their relay info
+ * @param alreadyQueried - Relays we've already queried
+ * @returns Array of new relay URLs to query
+ */
+const findNewRelaysToQuery = (participants: Record<string, Participant>, alreadyQueried: string[]): string[] => {
+  // 1. Build map of relay -> users
+  const relayUserMap = buildRelayToUsersMap(participants);
+  
+  // 2. Filter to only new relays
+  return filterNewRelayUserCombos(relayUserMap, alreadyQueried);
+}
 // TODO: Implement computeAllQueriedRelays
 const computeAllQueriedRelays = (mode: StartupMode, cached: MessagingState | null, relaySet: string[], newRelays: string[]): string[] => { return []; }
 

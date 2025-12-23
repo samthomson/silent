@@ -725,7 +725,175 @@ describe('DMLib', () => {
         });
       });
       
-      it.todo('findNewRelaysToQuery');
+      describe('findNewRelaysToQuery', () => {
+        it('should return empty array when participants is empty', () => {
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery({}, ['wss://relay1.com']);
+          expect(result).toEqual([]);
+        });
+
+        it('should return all participant relays when alreadyQueried is empty', () => {
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: ['wss://relay1.com'], blockedRelays: [], lastFetched: 1000 },
+            bob: { pubkey: 'bob', derivedRelays: ['wss://relay2.com'], blockedRelays: [], lastFetched: 2000 }
+          };
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, []);
+          
+          expect(result).toHaveLength(2);
+          expect(result).toContain('wss://relay1.com');
+          expect(result).toContain('wss://relay2.com');
+        });
+
+        it('should return empty array when all participant relays already queried', () => {
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: ['wss://relay1.com'], blockedRelays: [], lastFetched: 1000 },
+            bob: { pubkey: 'bob', derivedRelays: ['wss://relay2.com'], blockedRelays: [], lastFetched: 2000 }
+          };
+          const alreadyQueried = ['wss://relay1.com', 'wss://relay2.com'];
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+          expect(result).toEqual([]);
+        });
+
+        it('should return only new relays', () => {
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: ['wss://relay1.com', 'wss://relay2.com'], blockedRelays: [], lastFetched: 1000 },
+            bob: { pubkey: 'bob', derivedRelays: ['wss://relay2.com', 'wss://relay3.com'], blockedRelays: [], lastFetched: 2000 },
+            charlie: { pubkey: 'charlie', derivedRelays: ['wss://relay4.com'], blockedRelays: [], lastFetched: 3000 }
+          };
+          const alreadyQueried = ['wss://relay1.com', 'wss://relay2.com'];
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+          
+          expect(result).toHaveLength(2);
+          expect(result).toContain('wss://relay3.com');
+          expect(result).toContain('wss://relay4.com');
+          expect(result).not.toContain('wss://relay1.com');
+          expect(result).not.toContain('wss://relay2.com');
+        });
+
+        it('should deduplicate relays across participants', () => {
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: ['wss://relay1.com', 'wss://relay2.com'], blockedRelays: [], lastFetched: 1000 },
+            bob: { pubkey: 'bob', derivedRelays: ['wss://relay2.com', 'wss://relay3.com'], blockedRelays: [], lastFetched: 2000 }
+          };
+          const alreadyQueried = ['wss://relay1.com'];
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+          
+          expect(result).toHaveLength(2);
+          expect(result).toContain('wss://relay2.com');
+          expect(result).toContain('wss://relay3.com');
+        });
+
+        it('should handle participants with no relays', () => {
+          const participants = {
+            alice: { pubkey: 'alice', derivedRelays: [], blockedRelays: [], lastFetched: 1000 },
+            bob: { pubkey: 'bob', derivedRelays: ['wss://relay1.com'], blockedRelays: [], lastFetched: 2000 }
+          };
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, []);
+          expect(result).toEqual(['wss://relay1.com']);
+        });
+
+        it('should handle realistic Step H scenario (warm start)', () => {
+          // Step H: Find new relays to query
+          // We've fetched relay info for all participants
+          // Now we want to find relays we haven't queried yet
+          const participants = {
+            myPubkey: { 
+              pubkey: 'myPubkey', 
+              derivedRelays: ['wss://relay.damus.io', 'wss://nos.lol'], 
+              blockedRelays: [], 
+              lastFetched: 1000 
+            },
+            alice: { 
+              pubkey: 'alice', 
+              derivedRelays: ['wss://relay.damus.io', 'wss://inbox.alice.com'], 
+              blockedRelays: [], 
+              lastFetched: 2000 
+            },
+            bob: { 
+              pubkey: 'bob', 
+              derivedRelays: ['wss://relay.nostr.band', 'wss://inbox.bob.com'], 
+              blockedRelays: [], 
+              lastFetched: 3000 
+            }
+          };
+          
+          // In warm start, we already queried relays from cache
+          const alreadyQueried = ['wss://relay.damus.io', 'wss://nos.lol'];
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+          
+          // Should return the relays we haven't queried yet
+          expect(result).toHaveLength(3);
+          expect(result).toContain('wss://inbox.alice.com');
+          expect(result).toContain('wss://relay.nostr.band');
+          expect(result).toContain('wss://inbox.bob.com');
+          expect(result).not.toContain('wss://relay.damus.io');
+          expect(result).not.toContain('wss://nos.lol');
+        });
+
+        it('should handle realistic Step H scenario (cold start)', () => {
+          // Step H: Find new relays to query
+          // In cold start, we've only queried current user's relays so far
+          const participants = {
+            myPubkey: { 
+              pubkey: 'myPubkey', 
+              derivedRelays: ['wss://relay.damus.io', 'wss://nos.lol'], 
+              blockedRelays: [], 
+              lastFetched: 1000 
+            },
+            alice: { 
+              pubkey: 'alice', 
+              derivedRelays: ['wss://relay.damus.io', 'wss://inbox.alice.com'], 
+              blockedRelays: [], 
+              lastFetched: 2000 
+            },
+            bob: { 
+              pubkey: 'bob', 
+              derivedRelays: ['wss://relay.nostr.band'], 
+              blockedRelays: [], 
+              lastFetched: 3000 
+            }
+          };
+          
+          // In cold start, we already queried our own relays
+          const alreadyQueried = participants.myPubkey.derivedRelays;
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+          
+          // Should return the relays from other participants we haven't queried yet
+          expect(result).toHaveLength(2);
+          expect(result).toContain('wss://inbox.alice.com');
+          expect(result).toContain('wss://relay.nostr.band');
+          expect(result).not.toContain('wss://relay.damus.io'); // Already queried (my relay)
+          expect(result).not.toContain('wss://nos.lol'); // Already queried (my relay)
+        });
+
+        it('should return empty when all participant relays are current users relays', () => {
+          const participants = {
+            myPubkey: { 
+              pubkey: 'myPubkey', 
+              derivedRelays: ['wss://relay1.com', 'wss://relay2.com'], 
+              blockedRelays: [], 
+              lastFetched: 1000 
+            },
+            alice: { 
+              pubkey: 'alice', 
+              derivedRelays: ['wss://relay1.com'], 
+              blockedRelays: [], 
+              lastFetched: 2000 
+            }
+          };
+          const alreadyQueried = ['wss://relay1.com', 'wss://relay2.com'];
+          
+          const result = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+          expect(result).toEqual([]);
+        });
+      });
+      
       it.todo('computeAllQueriedRelays');
     });
 

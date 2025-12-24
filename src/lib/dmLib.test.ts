@@ -2564,7 +2564,222 @@ describe('DMLib', () => {
           expect(result).toBe('group:alice,bob:🎉 Party planning 日本語');
         });
       });
-      it.todo('groupMessagesIntoConversations');
+      describe('groupMessagesIntoConversations', () => {
+        const createMessage = (
+          id: string,
+          conversationId: string,
+          protocol: 'nip04' | 'nip17' = 'nip04',
+          createdAt: number = 100
+        ): DMLib.Message => ({
+          id,
+          event: {
+            id,
+            kind: protocol === 'nip04' ? 4 : 14,
+            pubkey: 'sender',
+            created_at: createdAt,
+            tags: [],
+            content: 'content',
+            sig: 'sig'
+          },
+          conversationId,
+          protocol
+        });
+
+        it('should return empty object for empty messages array', () => {
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations([], 'myPubkey');
+          expect(result).toEqual({});
+        });
+
+        it('should group single message', () => {
+          const messages = [createMessage('msg1', 'group:alice,bob:')];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(1);
+          expect(result['group:alice,bob:']).toHaveLength(1);
+          expect(result['group:alice,bob:'][0].id).toBe('msg1');
+        });
+
+        it('should group multiple messages in same conversation', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
+            createMessage('msg2', 'group:alice,bob:', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob:', 'nip04', 300)
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(1);
+          expect(result['group:alice,bob:']).toHaveLength(3);
+          expect(result['group:alice,bob:'].map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
+        });
+
+        it('should separate messages into different conversations', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:'),
+            createMessage('msg2', 'group:alice,charlie:'),
+            createMessage('msg3', 'group:bob,charlie:')
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(3);
+          expect(result['group:alice,bob:']).toHaveLength(1);
+          expect(result['group:alice,charlie:']).toHaveLength(1);
+          expect(result['group:bob,charlie:']).toHaveLength(1);
+        });
+
+        it('should handle mixed conversations', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
+            createMessage('msg2', 'group:alice,charlie:', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob:', 'nip04', 300),
+            createMessage('msg4', 'group:alice,charlie:', 'nip17', 400),
+            createMessage('msg5', 'group:alice,bob:', 'nip17', 500)
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(2);
+          expect(result['group:alice,bob:']).toHaveLength(3);
+          expect(result['group:alice,bob:'].map(m => m.id)).toEqual(['msg1', 'msg3', 'msg5']);
+          expect(result['group:alice,charlie:']).toHaveLength(2);
+          expect(result['group:alice,charlie:'].map(m => m.id)).toEqual(['msg2', 'msg4']);
+        });
+
+        it('should preserve message order within conversations', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
+            createMessage('msg2', 'group:alice,bob:', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob:', 'nip04', 300)
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(result['group:alice,bob:'].map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
+        });
+
+        it('should handle conversations with subjects', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:Meeting'),
+            createMessage('msg2', 'group:alice,bob:Project'),
+            createMessage('msg3', 'group:alice,bob:Meeting')
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(2);
+          expect(result['group:alice,bob:Meeting']).toHaveLength(2);
+          expect(result['group:alice,bob:Project']).toHaveLength(1);
+        });
+
+        it('should handle group conversations (3+ participants)', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob,charlie:'),
+            createMessage('msg2', 'group:alice,bob,charlie:'),
+            createMessage('msg3', 'group:alice,bob:')
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(2);
+          expect(result['group:alice,bob,charlie:']).toHaveLength(2);
+          expect(result['group:alice,bob:']).toHaveLength(1);
+        });
+
+        it('should handle mixed NIP-04 and NIP-17 messages', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:', 'nip04'),
+            createMessage('msg2', 'group:alice,bob:', 'nip17')
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(result['group:alice,bob:']).toHaveLength(2);
+          expect(result['group:alice,bob:'][0].protocol).toBe('nip04');
+          expect(result['group:alice,bob:'][1].protocol).toBe('nip17');
+        });
+
+        it('should handle self-conversations', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice:'),
+            createMessage('msg2', 'group:alice:')
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(1);
+          expect(result['group:alice:']).toHaveLength(2);
+        });
+
+        it('should handle large number of conversations', () => {
+          const messages: DMLib.Message[] = [];
+          for (let i = 0; i < 100; i++) {
+            messages.push(createMessage(`msg${i}`, `group:alice,user${i}:`));
+          }
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(100);
+          for (let i = 0; i < 100; i++) {
+            expect(result[`group:alice,user${i}:`]).toHaveLength(1);
+          }
+        });
+
+        it('should handle large number of messages in single conversation', () => {
+          const messages: DMLib.Message[] = [];
+          for (let i = 0; i < 1000; i++) {
+            messages.push(createMessage(`msg${i}`, 'group:alice,bob:'));
+          }
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(1);
+          expect(result['group:alice,bob:']).toHaveLength(1000);
+        });
+
+        it('should handle realistic scenario with multiple conversations and messages', () => {
+          const messages = [
+            // Conversation with Bob (3 messages)
+            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
+            createMessage('msg2', 'group:alice,bob:', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob:', 'nip17', 300),
+            
+            // Conversation with Charlie (2 messages)
+            createMessage('msg4', 'group:alice,charlie:', 'nip04', 150),
+            createMessage('msg5', 'group:alice,charlie:', 'nip17', 250),
+            
+            // Group conversation (2 messages)
+            createMessage('msg6', 'group:alice,bob,charlie:', 'nip17', 400),
+            createMessage('msg7', 'group:alice,bob,charlie:', 'nip17', 500),
+            
+            // Another conversation with Bob but different subject (1 message)
+            createMessage('msg8', 'group:alice,bob:Project', 'nip17', 600)
+          ];
+          
+          const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(Object.keys(result)).toHaveLength(4);
+          expect(result['group:alice,bob:']).toHaveLength(3);
+          expect(result['group:alice,charlie:']).toHaveLength(2);
+          expect(result['group:alice,bob,charlie:']).toHaveLength(2);
+          expect(result['group:alice,bob:Project']).toHaveLength(1);
+        });
+
+        it('should not mutate input array', () => {
+          const messages = [
+            createMessage('msg1', 'group:alice,bob:'),
+            createMessage('msg2', 'group:alice,charlie:')
+          ];
+          const originalLength = messages.length;
+          const originalIds = messages.map(m => m.id);
+          
+          DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
+          
+          expect(messages).toHaveLength(originalLength);
+          expect(messages.map(m => m.id)).toEqual(originalIds);
+        });
+      });
     });
 
     describe('Sync', () => {

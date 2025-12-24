@@ -247,8 +247,28 @@ const computeConversationId = (participantPubkeys: string[], subject: string): s
   // This makes parsing simple and consistent everywhere
   return `group:${uniqueSorted.join(',')}:${subject}`;
 }
-// TODO: Implement groupMessagesIntoConversations
-const groupMessagesIntoConversations = (messages: Message[], myPubkey: string): Record<string, Message[]> => { return {}; }
+/**
+ * Groups messages into conversations by their conversationId
+ * 
+ * @param messages - Array of messages with conversationId already computed
+ * @param myPubkey - The current user's pubkey (currently unused, kept for future validation)
+ * @returns Record mapping conversationId to array of messages in that conversation
+ */
+const groupMessagesIntoConversations = (messages: Message[], myPubkey: string): Record<string, Message[]> => {
+  const conversations: Record<string, Message[]> = {};
+  
+  for (const message of messages) {
+    const convId = message.conversationId;
+    
+    if (!conversations[convId]) {
+      conversations[convId] = [];
+    }
+    
+    conversations[convId].push(message);
+  }
+  
+  return conversations;
+}
 /**
  * Inverts participant->relays structure to relay->users structure
  * Used to determine which users should be queried on each relay

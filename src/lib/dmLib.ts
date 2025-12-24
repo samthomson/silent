@@ -207,8 +207,24 @@ const extractOtherPubkeysFromMessages = (messages: MessageWithMetadata[], myPubk
   
   return Array.from(pubkeysSet);
 }
-// TODO: Implement dedupeMessages
-const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => { return []; }
+/**
+ * Deduplicates messages by ID, preferring existing messages over incoming
+ * Used when merging cached messages with newly queried messages
+ * 
+ * @param existing - Messages we already have (from cache)
+ * @param incoming - New messages just queried
+ * @returns Combined array with duplicates removed (existing takes precedence)
+ */
+const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => {
+  // Build a set of existing message IDs for O(1) lookup
+  const existingIds = new Set(existing.map(m => m.id));
+  
+  // Filter incoming to only include messages we don't already have
+  const newMessages = incoming.filter(m => !existingIds.has(m.id));
+  
+  // Return existing + new messages
+  return [...existing, ...newMessages];
+}
 // TODO: Implement computeConversationId
 const computeConversationId = (participantPubkeys: string[], subject: string): string => { return ''; }
 // TODO: Implement groupMessagesIntoConversations

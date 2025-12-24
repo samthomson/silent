@@ -1275,7 +1275,190 @@ describe('DMLib', () => {
         });
       });
       
-      it.todo('dedupeMessages');
+      describe('dedupeMessages', () => {
+        const createMessage = (id: string, conversationId: string, protocol: 'nip04' | 'nip17' = 'nip04'): DMLib.Message => ({
+          id,
+          event: { id, kind: protocol === 'nip04' ? 4 : 14, pubkey: 'pk1', created_at: 100, tags: [], content: '', sig: 'sig' },
+          conversationId,
+          protocol
+        });
+
+        it('should return empty array when both inputs are empty', () => {
+          const result = DMLib.Pure.Message.dedupeMessages([], []);
+          expect(result).toEqual([]);
+        });
+
+        it('should return existing when incoming is empty', () => {
+          const existing = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1')
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, []);
+          expect(result).toEqual(existing);
+        });
+
+        it('should return incoming when existing is empty', () => {
+          const incoming = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1')
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages([], incoming);
+          expect(result).toEqual(incoming);
+        });
+
+        it('should combine non-overlapping messages', () => {
+          const existing = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1')
+          ];
+          const incoming = [
+            createMessage('msg3', 'conv1'),
+            createMessage('msg4', 'conv1')
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result).toHaveLength(4);
+          expect(result).toContain(existing[0]);
+          expect(result).toContain(existing[1]);
+          expect(result).toContain(incoming[0]);
+          expect(result).toContain(incoming[1]);
+        });
+
+        it('should remove duplicate messages (keep existing)', () => {
+          const existingMsg = createMessage('msg1', 'conv1');
+          const existing = [existingMsg, createMessage('msg2', 'conv1')];
+          
+          const incomingMsg = createMessage('msg1', 'conv1'); // Duplicate ID
+          const incoming = [incomingMsg, createMessage('msg3', 'conv1')];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result).toHaveLength(3);
+          expect(result[0]).toBe(existingMsg); // Existing message kept
+          expect(result.filter(m => m.id === 'msg1')).toHaveLength(1); // Only one msg1
+        });
+
+        it('should handle all duplicates', () => {
+          const existing = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1')
+          ];
+          const incoming = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1')
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result).toHaveLength(2);
+          expect(result).toEqual(existing); // All incoming were duplicates
+        });
+
+        it('should handle partial duplicates', () => {
+          const existing = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1'),
+            createMessage('msg3', 'conv1')
+          ];
+          const incoming = [
+            createMessage('msg2', 'conv1'), // Duplicate
+            createMessage('msg4', 'conv1'), // New
+            createMessage('msg3', 'conv1'), // Duplicate
+            createMessage('msg5', 'conv1')  // New
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result).toHaveLength(5);
+          expect(result.map(m => m.id).sort()).toEqual(['msg1', 'msg2', 'msg3', 'msg4', 'msg5']);
+        });
+
+        it('should preserve order: existing first, then new incoming', () => {
+          const existing = [
+            createMessage('msg1', 'conv1'),
+            createMessage('msg2', 'conv1')
+          ];
+          const incoming = [
+            createMessage('msg3', 'conv1'),
+            createMessage('msg4', 'conv1')
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result[0].id).toBe('msg1');
+          expect(result[1].id).toBe('msg2');
+          expect(result[2].id).toBe('msg3');
+          expect(result[3].id).toBe('msg4');
+        });
+
+        it('should handle mixed NIP-04 and NIP-17 messages', () => {
+          const existing = [
+            createMessage('msg1', 'conv1', 'nip04'),
+            createMessage('msg2', 'conv1', 'nip17')
+          ];
+          const incoming = [
+            createMessage('msg1', 'conv1', 'nip04'), // Duplicate
+            createMessage('msg3', 'conv1', 'nip17')  // New
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result).toHaveLength(3);
+          expect(result.map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
+        });
+
+        it('should handle realistic warm start scenario', () => {
+          // Existing: messages from cache
+          const existing = [
+            createMessage('old1', 'conv1', 'nip04'),
+            createMessage('old2', 'conv2', 'nip17'),
+            createMessage('old3', 'conv1', 'nip04')
+          ];
+          
+          // Incoming: new messages + one duplicate (pagination overlap at boundary)
+          const incoming = [
+            createMessage('old3', 'conv1', 'nip04'), // Duplicate from pagination overlap
+            createMessage('new1', 'conv1', 'nip04'),
+            createMessage('new2', 'conv2', 'nip17'),
+            createMessage('new3', 'conv3', 'nip04')
+          ];
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(result).toHaveLength(6);
+          expect(result.map(m => m.id).sort()).toEqual(['new1', 'new2', 'new3', 'old1', 'old2', 'old3']);
+        });
+
+        it('should handle large arrays efficiently', () => {
+          const existing = Array.from({ length: 1000 }, (_, i) => createMessage(`msg${i}`, 'conv1'));
+          const incoming = Array.from({ length: 1000 }, (_, i) => createMessage(`msg${i + 500}`, 'conv1')); // 500 duplicates
+          
+          const result = DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          // Should have 1000 (existing) + 500 (new from incoming) = 1500 total
+          expect(result).toHaveLength(1500);
+          
+          // Verify no actual duplicates
+          const ids = result.map(m => m.id);
+          expect(new Set(ids).size).toBe(1500);
+        });
+
+        it('should not mutate input arrays', () => {
+          const existing = [createMessage('msg1', 'conv1')];
+          const incoming = [createMessage('msg2', 'conv1')];
+          
+          const originalExisting = [...existing];
+          const originalIncoming = [...incoming];
+          
+          DMLib.Pure.Message.dedupeMessages(existing, incoming);
+          
+          expect(existing).toEqual(originalExisting);
+          expect(incoming).toEqual(originalIncoming);
+        });
+      });
     });
 
     describe('Participant', () => {

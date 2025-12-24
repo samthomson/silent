@@ -58,8 +58,8 @@ export interface SyncState {
 
 export interface MessagingState {
   participants: Record<string, Participant>;
-  conversations: Record<string, Conversation>;
-  messages: Record<string, Message[]>;
+  conversationMetadata: Record<string, Conversation>;
+  conversationMessages: Record<string, Message[]>;
   syncState: SyncState;
   relayInfo: Record<string, RelayInfo>;
 }

@@ -410,14 +410,104 @@ const determineNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[], 
   // TODO: Revisit if mode-specific logic is needed, or if this function should be removed
   return getNewPubkeys(foundPubkeys, existingPubkeys);
 }
-// TODO: Implement buildCachedData
-const buildCachedData = (participants: Record<string, Participant>, messages: Message[], queriedRelays: string[], queryLimitReached: boolean): MessagingState => {
+/**
+ * Converts MessageWithMetadata to Message by adding conversationId and protocol
+ * 
+ * @param messagesWithMetadata - Decrypted messages with participant and subject info
+ * @returns Messages with conversationId and protocol populated
+ */
+const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetadata[]): Message[] => {
+  return messagesWithMetadata.map(msg => ({
+    id: msg.event.id,
+    event: msg.event,
+    conversationId: computeConversationId(msg.participants || [], msg.subject || ''),
+    protocol: msg.event.kind === 4 ? 'nip04' : 'nip17',
+    giftWrapId: msg.event.kind === 1059 ? msg.event.id : undefined,
+  }));
+};
+
+/**
+ * Builds the complete MessagingState for the app from raw query results
+ * Takes decrypted messages and constructs all derived structures needed for the messaging system
+ * 
+ * @param participants - Record of all participants with their relay info
+ * @param messagesFromInitialQuery - Messages from the initial query (step C)
+ * @param messagesFromGapFilling - Messages from gap-filling query (step I)
+ * @param queriedRelays - List of relays that have been queried
+ * @param queryLimitReached - Whether the query limit was reached
+ * @returns Complete MessagingState ready for use and caching
+ */
+const buildMessagingAppState = (
+  participants: Record<string, Participant>,
+  messagesFromInitialQuery: MessageWithMetadata[],
+  messagesFromGapFilling: MessageWithMetadata[],
+  queriedRelays: string[],
+  queryLimitReached: boolean
+): MessagingState => {
+  // 1. Convert MessageWithMetadata to Message (add conversationId + protocol)
+  const enrichedInitial = enrichMessagesWithConversationId(messagesFromInitialQuery);
+  const enrichedGapFill = enrichMessagesWithConversationId(messagesFromGapFilling);
+  
+  // 2. Dedupe messages (gap-filling may have overlaps with initial query)
+  const allMessages = dedupeMessages(enrichedInitial, enrichedGapFill);
+  
+  // 3. Group messages by conversationId
+  const conversationMessages = groupMessagesIntoConversations(allMessages, '');
+  
+  // 4. Build Conversation metadata objects from grouped messages
+  const conversationMetadata: Record<string, Conversation> = {};
+  
+  for (const [conversationId, messages] of Object.entries(conversationMessages)) {
+    // Parse conversationId: "group:alice,bob:subject"
+    const parts = conversationId.split(':');
+    const participantPubkeys = parts[1] ? parts[1].split(',') : [];
+    const subject = parts[2] || '';
+    
+    // Find last activity (most recent message timestamp)
+    const lastActivity = Math.max(...messages.map(m => m.event.created_at));
+    
+    // Check protocols used
+    const hasNIP04 = messages.some(m => m.protocol === 'nip04');
+    const hasNIP17 = messages.some(m => m.protocol === 'nip17');
+    
+    // Get last message for preview
+    const sortedMessages = [...messages].sort((a, b) => a.event.created_at - b.event.created_at);
+    const lastMsg = sortedMessages[sortedMessages.length - 1];
+    const lastMessage = lastMsg ? {
+      decryptedContent: lastMsg.event.content,
+    } : null;
+    
+    conversationMetadata[conversationId] = {
+      id: conversationId,
+      participantPubkeys,
+      subject,
+      lastActivity,
+      lastReadAt: 0, // Default to unread
+      hasNIP04,
+      hasNIP17,
+      isKnown: true, // All conversations are known after processing
+      isRequest: false, // All conversations are accepted after processing
+      lastMessage,
+    };
+  }
+  
+  // 5. Build sync state
+  const syncState: SyncState = {
+    lastCacheTime: Date.now(),
+    queriedRelays,
+    queryLimitReached,
+  };
+  
+  // 6. Build relayInfo (currently placeholder - will be populated when relay health tracking is implemented)
+  // TODO: Track relay query success/failure to show users which relays are working in conversation UI
+  const relayInfo: Record<string, RelayInfo> = {};
+  
   return {
-    participants: {},
-    conversations: {},
-    messages: {},
-    syncState: { lastCacheTime: null, queriedRelays: [], queryLimitReached: false },
-    relayInfo: {},
+    participants,
+    conversationMetadata,
+    conversationMessages,
+    syncState,
+    relayInfo, // Empty for now, will be populated with relay health tracking later
   };
 }
 /**
@@ -510,7 +600,7 @@ export const Pure = {
   },
   Sync: {
     computeSinceTimestamp,
-    buildCachedData,
+    buildMessagingAppState,
   },
 };
 
@@ -1000,15 +1090,39 @@ const queryNewRelays = async (
   
   return { allMessages, limitReached };
 }
-// TODO: Implement buildAndSaveCache
-const buildAndSaveCache = async (myPubkey: string, participants: Record<string, Participant>, allQueriedRelays: string[], limitReached: boolean): Promise<MessagingState> => {
-  return {
-    participants: {},
-    conversations: {},
-    messages: {},
-    syncState: { lastCacheTime: null, queriedRelays: [], queryLimitReached: false },
-    relayInfo: {},
-  };
+/**
+ * Builds the complete MessagingState and saves it to cache
+ * This is the final step in cold/warm start initialization
+ * 
+ * @param myPubkey - Current user's pubkey
+ * @param participants - All participants with relay info
+ * @param messagesFromInitialQuery - Messages from initial query (step C)
+ * @param messagesFromGapFilling - Messages from gap-filling (step I)
+ * @param allQueriedRelays - Complete list of relays queried
+ * @param limitReached - Whether query limit was reached
+ * @returns Complete MessagingState (also saved to cache)
+ */
+const buildAndSaveCache = async (
+  myPubkey: string,
+  participants: Record<string, Participant>,
+  messagesFromInitialQuery: MessageWithMetadata[],
+  messagesFromGapFilling: MessageWithMetadata[],
+  allQueriedRelays: string[],
+  limitReached: boolean
+): Promise<MessagingState> => {
+  // Build the complete app state
+  const state = buildMessagingAppState(
+    participants,
+    messagesFromInitialQuery,
+    messagesFromGapFilling,
+    allQueriedRelays,
+    limitReached
+  );
+  
+  // Save to cache
+  await saveToCache(myPubkey, state);
+  
+  return state;
 }
 
 export const Impure = {

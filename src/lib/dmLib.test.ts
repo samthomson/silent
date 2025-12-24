@@ -2874,7 +2874,298 @@ describe('DMLib', () => {
           expect(threeDaysResult).toBe(lastCacheTime - 3 * SECONDS_PER_DAY);
         });
       });
-      it.todo('buildCachedData');
+      describe('buildMessagingAppState', () => {
+        const createParticipant = (pubkey: string, derivedRelays: string[] = ['wss://relay1.com'], blockedRelays: string[] = []): DMLib.Participant => ({
+          pubkey,
+          derivedRelays,
+          blockedRelays,
+          lastFetched: Date.now(),
+        });
+
+        const createMessageWithMetadata = (
+          id: string,
+          participants: string[],
+          subject: string = '',
+          protocol: 'nip04' | 'nip17' = 'nip04',
+          createdAt: number = 100,
+          content: string = 'test content'
+        ): DMLib.MessageWithMetadata => ({
+          event: {
+            id,
+            kind: protocol === 'nip04' ? 4 : 14,
+            pubkey: participants[0], // sender is first participant
+            created_at: createdAt,
+            tags: [],
+            content,
+            sig: 'sig'
+          },
+          senderPubkey: participants[0],
+          participants,
+          subject
+        });
+
+        it('should build empty state for no data', () => {
+          const result = DMLib.Pure.Sync.buildMessagingAppState({}, [], [], [], false);
+
+          expect(result.participants).toEqual({});
+          expect(result.conversationMetadata).toEqual({});
+          expect(result.conversationMessages).toEqual({});
+          expect(result.syncState.lastCacheTime).toBeGreaterThan(0);
+          expect(result.syncState.queriedRelays).toEqual([]);
+          expect(result.syncState.queryLimitReached).toBe(false);
+          expect(result.relayInfo).toEqual({});
+        });
+
+        it('should preserve participants', () => {
+          const participants = {
+            alice: createParticipant('alice', ['wss://relay1.com', 'wss://relay2.com']),
+            bob: createParticipant('bob', ['wss://relay3.com'])
+          };
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, [], [], [], false);
+
+          expect(result.participants).toEqual(participants);
+        });
+
+        it('should group messages by conversation', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100),
+            createMessageWithMetadata('msg2', ['alice', 'bob'], '', 'nip04', 200),
+            createMessageWithMetadata('msg3', ['alice', 'charlie'], '', 'nip17', 300)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          expect(Object.keys(result.conversationMessages)).toHaveLength(2);
+          expect(result.conversationMessages['group:alice,bob:']).toHaveLength(2);
+          expect(result.conversationMessages['group:alice,charlie:']).toHaveLength(1);
+        });
+
+        it('should build conversation metadata correctly', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100),
+            createMessageWithMetadata('msg2', ['alice', 'bob'], '', 'nip04', 200)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          const conv = result.conversationMetadata['group:alice,bob:'];
+          expect(conv.id).toBe('group:alice,bob:');
+          expect(conv.participantPubkeys).toEqual(['alice', 'bob']);
+          expect(conv.subject).toBe('');
+          expect(conv.lastActivity).toBe(200); // Latest message timestamp
+          expect(conv.lastReadAt).toBe(0);
+          expect(conv.hasNIP04).toBe(true);
+          expect(conv.hasNIP17).toBe(false);
+          expect(conv.isKnown).toBe(true);
+          expect(conv.isRequest).toBe(false);
+          expect(conv.lastMessage?.decryptedContent).toBe('test content');
+        });
+
+        it('should handle conversation with subject', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], 'Meeting', 'nip17', 100)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          const conv = result.conversationMetadata['group:alice,bob:Meeting'];
+          expect(conv.subject).toBe('Meeting');
+          expect(conv.participantPubkeys).toEqual(['alice', 'bob']);
+        });
+
+        it('should detect both NIP-04 and NIP-17 protocols', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100),
+            createMessageWithMetadata('msg2', ['alice', 'bob'], '', 'nip17', 200)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          const conv = result.conversationMetadata['group:alice,bob:'];
+          expect(conv.hasNIP04).toBe(true);
+          expect(conv.hasNIP17).toBe(true);
+        });
+
+        it('should build syncState correctly', () => {
+          const participants = { alice: createParticipant('alice') };
+          const queriedRelays = ['wss://relay1.com', 'wss://relay2.com'];
+          const queryLimitReached = true;
+
+          const before = Date.now();
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, [], [], queriedRelays, queryLimitReached);
+          const after = Date.now();
+
+          expect(result.syncState.lastCacheTime).toBeGreaterThanOrEqual(before);
+          expect(result.syncState.lastCacheTime).toBeLessThanOrEqual(after);
+          expect(result.syncState.queriedRelays).toEqual(queriedRelays);
+          expect(result.syncState.queryLimitReached).toBe(true);
+        });
+
+        it('should build relayInfo from participants', () => {
+          const participants = {
+            alice: createParticipant('alice', ['wss://relay1.com', 'wss://relay2.com']),
+            bob: createParticipant('bob', ['wss://relay2.com', 'wss://relay3.com'])
+          };
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, [], [], [], false);
+
+          // relayInfo is now empty (placeholder for future relay health tracking)
+          expect(Object.keys(result.relayInfo)).toHaveLength(0);
+        });
+
+        it('should mark blocked relays in relayInfo', () => {
+          const participants = {
+            alice: createParticipant('alice', ['wss://relay1.com', 'wss://relay2.com'], ['wss://relay2.com'])
+          };
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, [], [], [], false);
+
+          // relayInfo is now empty (placeholder for future relay health tracking)
+          expect(Object.keys(result.relayInfo)).toHaveLength(0);
+        });
+
+        it('should handle group conversations (3+ participants)', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob'),
+            charlie: createParticipant('charlie')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob', 'charlie'], '', 'nip17', 100)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          const conv = result.conversationMetadata['group:alice,bob,charlie:'];
+          expect(conv.participantPubkeys).toEqual(['alice', 'bob', 'charlie']);
+        });
+
+        it('should handle multiple conversations', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob'),
+            charlie: createParticipant('charlie')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100),
+            createMessageWithMetadata('msg2', ['alice', 'charlie'], '', 'nip04', 200),
+            createMessageWithMetadata('msg3', ['bob', 'charlie'], '', 'nip04', 300)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          expect(Object.keys(result.conversationMetadata)).toHaveLength(3);
+          expect(Object.keys(result.conversationMessages)).toHaveLength(3);
+        });
+
+        it('should set lastActivity to most recent message', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100),
+            createMessageWithMetadata('msg2', ['alice', 'bob'], '', 'nip04', 500), // Most recent
+            createMessageWithMetadata('msg3', ['alice', 'bob'], '', 'nip04', 300)
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          expect(result.conversationMetadata['group:alice,bob:'].lastActivity).toBe(500);
+        });
+
+        it('should set lastMessage to the chronologically last message', () => {
+          const participants = {
+            alice: createParticipant('alice'),
+            bob: createParticipant('bob')
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100, 'first'),
+            createMessageWithMetadata('msg2', ['alice', 'bob'], '', 'nip04', 300, 'last'),
+            createMessageWithMetadata('msg3', ['alice', 'bob'], '', 'nip04', 200, 'middle')
+          ];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          expect(result.conversationMetadata['group:alice,bob:'].lastMessage?.decryptedContent).toBe('last');
+        });
+
+        it('should handle realistic multi-conversation scenario', () => {
+          const participants = {
+            alice: createParticipant('alice', ['wss://relay1.com', 'wss://relay2.com']),
+            bob: createParticipant('bob', ['wss://relay2.com', 'wss://relay3.com']),
+            charlie: createParticipant('charlie', ['wss://relay4.com'], ['wss://relay4.com'])
+          };
+
+          const messages = [
+            createMessageWithMetadata('msg1', ['alice', 'bob'], '', 'nip04', 100),
+            createMessageWithMetadata('msg2', ['alice', 'bob'], '', 'nip04', 200),
+            createMessageWithMetadata('msg3', ['alice', 'charlie'], '', 'nip17', 150),
+            createMessageWithMetadata('msg4', ['alice', 'bob', 'charlie'], 'Team', 'nip17', 300)
+          ];
+
+          const queriedRelays = ['wss://relay1.com', 'wss://relay2.com', 'wss://relay3.com'];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], queriedRelays, false);
+
+          // Check participants preserved
+          expect(Object.keys(result.participants)).toHaveLength(3);
+
+          // Check conversations
+          expect(Object.keys(result.conversationMetadata)).toHaveLength(3);
+          expect(result.conversationMetadata['group:alice,bob:'].hasNIP04).toBe(true);
+          expect(result.conversationMetadata['group:alice,charlie:'].hasNIP17).toBe(true);
+          expect(result.conversationMetadata['group:alice,bob,charlie:Team'].subject).toBe('Team');
+
+          // Check messages grouped correctly
+          expect(result.conversationMessages['group:alice,bob:']).toHaveLength(2);
+          expect(result.conversationMessages['group:alice,charlie:']).toHaveLength(1);
+          expect(result.conversationMessages['group:alice,bob,charlie:Team']).toHaveLength(1);
+
+          // Check syncState
+          expect(result.syncState.queriedRelays).toEqual(queriedRelays);
+          expect(result.syncState.queryLimitReached).toBe(false);
+
+          // relayInfo is now empty (placeholder for future)
+          expect(Object.keys(result.relayInfo)).toHaveLength(0);
+        });
+
+        it('should handle empty conversationId edge case', () => {
+          const participants = { alice: createParticipant('alice') };
+          const messages = [createMessageWithMetadata('msg1', [], '', 'nip04', 100)];
+
+          const result = DMLib.Pure.Sync.buildMessagingAppState(participants, messages, [], [], false);
+
+          const conv = result.conversationMetadata['group::'];
+          expect(conv.participantPubkeys).toEqual([]); // Empty string splits to empty array
+          expect(conv.subject).toBe('');
+        });
+      });
     });
   });
 

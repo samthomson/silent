@@ -101,11 +101,23 @@ const initialiseMessaging = async (nostr: NPool, signer: Signer, myPubkey: strin
   // H. Find new relays to query
   const alreadyQueried = mode === DMLib.StartupMode.WARM ? cached.syncState.queriedRelays : participants[myPubkey].derivedRelays;
   const newRelays = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+  console.log('[NewDM] H. New relays to query:', newRelays);
+  
   // I. Query new relays
-  const { allMessages, limitReached: isLimitReachedDuringGapQuery } = await DMLib.Impure.Message.queryNewRelays(nostr, signer, newRelays, myPubkey, settings.queryLimit);
+  const { allMessages: messagesFromGapFilling, limitReached: isLimitReachedDuringGapQuery } = await DMLib.Impure.Message.queryNewRelays(nostr, signer, newRelays, myPubkey, settings.queryLimit);
+  console.log('[NewDM] I. Gap-filling messages:', messagesFromGapFilling.length);
+  
   // J. Build and save
-  const allQueriedRelays = DMLib.Pure.Relay.computeAllQueriedRelays(mode, cached, participants[myPubkey].derivedRelays, newRelays); // cached = data from last session
-  return await DMLib.Impure.Cache.buildAndSaveCache(myPubkey, participants, allQueriedRelays, isLimitReachedDuringInitialQuery || isLimitReachedDuringGapQuery);
+  const allQueriedRelays = DMLib.Pure.Relay.computeAllQueriedRelays(mode, cached, participants[myPubkey].derivedRelays, newRelays);
+  console.log('[NewDM] J. Building and saving state...');
+  return await DMLib.Impure.Cache.buildAndSaveCache(
+    myPubkey,
+    participants,
+    messagesWithMetadata,
+    messagesFromGapFilling,
+    allQueriedRelays,
+    isLimitReachedDuringInitialQuery || isLimitReachedDuringGapQuery
+  );
 }
 
 // ============================================================================
@@ -155,7 +167,7 @@ export const NewDMProvider = ({ children }: { children: ReactNode }) => {
         };
         
         const result = await initialiseMessaging(nostr, user.signer, user.pubkey, settings);
-        console.log('[NewDM] Success! Conversations:', Object.keys(result.conversations).length);
+        console.log('[NewDM] Success! Conversations:', Object.keys(result.conversationMetadata).length);
         setMessagingState(result);
       } catch (error) {
         console.error('[NewDM] Initialization failed:', error);
@@ -164,8 +176,8 @@ export const NewDMProvider = ({ children }: { children: ReactNode }) => {
         // Set empty state so UI doesn't hang
         setMessagingState({
           participants: {},
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: null, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         });
@@ -200,7 +212,7 @@ export function useConversationMessages(conversationId: string) {
   const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE);
 
   const result = useMemo(() => {
-    const messages = messagingState?.messages[conversationId] || [];
+    const messages = messagingState?.conversationMessages[conversationId] || [];
     const totalCount = messages.length;
     const hasMore = totalCount > visibleCount;
     const visibleMessages = messages.slice(-visibleCount);
@@ -210,7 +222,7 @@ export function useConversationMessages(conversationId: string) {
       hasMoreMessages: hasMore,
       totalCount,
     };
-  }, [messagingState?.messages[conversationId], visibleCount]);
+  }, [messagingState?.conversationMessages, conversationId, visibleCount]);
 
   const loadEarlierMessages = useCallback(() => {
     setVisibleCount(prev => prev + MESSAGES_PER_PAGE);

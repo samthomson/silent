@@ -225,8 +225,28 @@ const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => 
   // Return existing + new messages
   return [...existing, ...newMessages];
 }
-// TODO: Implement computeConversationId
-const computeConversationId = (participantPubkeys: string[], subject: string): string => { return ''; }
+/**
+ * Computes a unique conversation ID from participants and subject
+ * Format: "group:pubkey1,pubkey2:subject" (always consistent)
+ * 
+ * - Deduplicates and sorts participants for consistent IDs
+ * - Same participants + different subjects = different conversations
+ * - Subject is always appended (empty string '' for conversations without a subject)
+ * - NIP-04 messages: subject is always empty string ''
+ * - NIP-17 messages: subject may be populated or empty string ''
+ * 
+ * @param participantPubkeys - Array of participant pubkeys (including current user)
+ * @param subject - Conversation subject (empty string '' for conversations without a subject)
+ * @returns Conversation ID in format "group:pubkey1,pubkey2:subject"
+ */
+const computeConversationId = (participantPubkeys: string[], subject: string): string => {
+  // Deduplicate and sort for consistent IDs regardless of order
+  const uniqueSorted = [...new Set(participantPubkeys)].sort();
+  
+  // Always use same format: group:pubkeys:subject
+  // This makes parsing simple and consistent everywhere
+  return `group:${uniqueSorted.join(',')}:${subject}`;
+}
 // TODO: Implement groupMessagesIntoConversations
 const groupMessagesIntoConversations = (messages: Message[], myPubkey: string): Record<string, Message[]> => { return {}; }
 /**

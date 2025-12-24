@@ -2421,7 +2421,149 @@ describe('DMLib', () => {
     });
 
     describe('Conversation', () => {
-      it.todo('computeConversationId');
+      describe('computeConversationId', () => {
+        it('should create conversation ID for 1-on-1 without subject', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob'],
+            ''
+          );
+          
+          expect(result).toBe('group:alice,bob:');
+        });
+
+        it('should sort participants for consistent IDs', () => {
+          const result1 = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob'], '');
+          const result2 = DMLib.Pure.Conversation.computeConversationId(['bob', 'alice'], '');
+          
+          expect(result1).toBe(result2);
+          expect(result1).toBe('group:alice,bob:');
+        });
+
+        it('should deduplicate participants', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob', 'alice', 'bob'],
+            ''
+          );
+          
+          expect(result).toBe('group:alice,bob:');
+        });
+
+        it('should create conversation ID with subject', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob'],
+            'Meeting notes'
+          );
+          
+          expect(result).toBe('group:alice,bob:Meeting notes');
+        });
+
+        it('should create different IDs for same participants with different subjects', () => {
+          const conv1 = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob'],
+            'Meeting notes'
+          );
+          const conv2 = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob'],
+            'Project planning'
+          );
+          
+          expect(conv1).not.toBe(conv2);
+          expect(conv1).toBe('group:alice,bob:Meeting notes');
+          expect(conv2).toBe('group:alice,bob:Project planning');
+        });
+
+        it('should create different IDs for same participants: no subject vs with subject', () => {
+          const withoutSubject = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob'], '');
+          const withSubject = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob'], 'Topic');
+          
+          expect(withoutSubject).not.toBe(withSubject);
+          expect(withoutSubject).toBe('group:alice,bob:');
+          expect(withSubject).toBe('group:alice,bob:Topic');
+        });
+
+        it('should handle group conversation (3+ participants)', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob', 'charlie'],
+            ''
+          );
+          
+          expect(result).toBe('group:alice,bob,charlie:');
+        });
+
+        it('should handle group conversation with subject', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob', 'charlie'],
+            'Team sync'
+          );
+          
+          expect(result).toBe('group:alice,bob,charlie:Team sync');
+        });
+
+        it('should sort group participants consistently', () => {
+          const result1 = DMLib.Pure.Conversation.computeConversationId(
+            ['charlie', 'alice', 'bob'],
+            'Team sync'
+          );
+          const result2 = DMLib.Pure.Conversation.computeConversationId(
+            ['bob', 'charlie', 'alice'],
+            'Team sync'
+          );
+          
+          expect(result1).toBe(result2);
+          expect(result1).toBe('group:alice,bob,charlie:Team sync');
+        });
+
+        it('should handle single participant (self-conversation)', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(['alice'], '');
+          
+          expect(result).toBe('group:alice:');
+        });
+
+        it('should handle special characters in subject', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob'],
+            'Re: Meeting @ 3pm (urgent!)'
+          );
+          
+          expect(result).toBe('group:alice,bob:Re: Meeting @ 3pm (urgent!)');
+        });
+
+        it('should handle empty participant array', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId([], '');
+          
+          expect(result).toBe('group::');
+        });
+
+        it('should handle long pubkeys (realistic Nostr pubkeys)', () => {
+          const alice = '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d';
+          const bob = '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2';
+          
+          const result = DMLib.Pure.Conversation.computeConversationId([alice, bob], '');
+          
+          expect(result).toBe(`group:${alice},${bob}:`);
+        });
+
+        it('should maintain deterministic ordering across multiple calls', () => {
+          const participants = ['zara', 'alice', 'mike', 'bob', 'charlie'];
+          
+          const result1 = DMLib.Pure.Conversation.computeConversationId([...participants], '');
+          const result2 = DMLib.Pure.Conversation.computeConversationId([...participants.reverse()], '');
+          const result3 = DMLib.Pure.Conversation.computeConversationId([...participants.sort(() => Math.random() - 0.5)], '');
+          
+          expect(result1).toBe(result2);
+          expect(result1).toBe(result3);
+          expect(result1).toBe('group:alice,bob,charlie,mike,zara:');
+        });
+
+        it('should handle unicode characters in subject', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(
+            ['alice', 'bob'],
+            '🎉 Party planning 日本語'
+          );
+          
+          expect(result).toBe('group:alice,bob:🎉 Party planning 日本語');
+        });
+      });
       it.todo('groupMessagesIntoConversations');
     });
 

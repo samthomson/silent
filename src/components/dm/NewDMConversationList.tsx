@@ -22,7 +22,8 @@ interface DMConversationListProps {
 }
 
 interface ConversationItemProps {
-  pubkey: string;
+  conversationId: string;
+  participantPubkeys: string[];
   isSelected: boolean;
   onClick: () => void;
   lastMessage: { decryptedContent?: string; error?: string } | null;
@@ -116,7 +117,8 @@ const GroupAvatar = ({ pubkeys, isSelected }: { pubkeys: string[]; isSelected: b
 };
 
 const ConversationItemComponent = ({
-  pubkey,
+  conversationId,
+  participantPubkeys,
   isSelected,
   onClick,
   lastMessage,
@@ -124,9 +126,8 @@ const ConversationItemComponent = ({
 }: ConversationItemProps) => {
   const { user } = useCurrentUser();
   
-  // Parse conversation participants and exclude current user from display
-  const allParticipants = parseConversationId(pubkey);
-  const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
+  // Exclude current user from display
+  const conversationParticipants = participantPubkeys.filter(pk => pk !== user?.pubkey);
 
   // Check if this is a self-messaging conversation
   const isSelfMessaging = conversationParticipants.length === 0;
@@ -250,10 +251,13 @@ export const NewDMConversationList = ({
   const [activeTab, setActiveTab] = useState<'known' | 'requests'>('known');
   const prevWasRequestRef = useRef<Set<string>>(new Set());
 
-  const conversations = useMemo(() => 
-    Object.values(messagingState?.conversations ?? {}),
-    [messagingState?.conversations]
-  );
+  const conversations = useMemo(() => {
+    if (!messagingState?.conversationMetadata) return [];
+    
+    // Convert to array and sort by lastActivity (most recent first)
+    return Object.values(messagingState.conversationMetadata)
+      .sort((a, b) => b.lastActivity - a.lastActivity);
+  }, [messagingState?.conversationMetadata]);
 
   // Filter conversations by type
   const { knownConversations, requestConversations } = useMemo(() => {
@@ -409,7 +413,8 @@ export const NewDMConversationList = ({
               {currentConversations.map((conversation) => (
                 <ConversationItem
                   key={conversation.id}
-                  pubkey={conversation.id}
+                  conversationId={conversation.id}
+                  participantPubkeys={conversation.participantPubkeys}
                   isSelected={selectedPubkey === conversation.id}
                   onClick={() => onSelectConversation(conversation.id)}
                   lastMessage={conversation.lastMessage}

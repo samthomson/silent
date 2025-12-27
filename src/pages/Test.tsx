@@ -47,7 +47,7 @@ export function Test() {
       {/* Debug Info */}
       <Card className="mb-4 bg-muted/50">
         <CardContent className="py-3 px-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">Status:</span>{' '}
               <span className="font-mono">{isLoading ? '⏳ Loading...' : '✅ Ready'}</span>
@@ -55,6 +55,10 @@ export function Test() {
             <div>
               <span className="text-muted-foreground">Conversations:</span>{' '}
               <span className="font-mono">{messagingState ? Object.keys(messagingState.conversationMetadata).length : 0}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Total Messages:</span>{' '}
+              <span className="font-mono">{messagingState ? Object.values(messagingState.conversationMessages).reduce((sum, msgs) => sum + msgs.length, 0) : 0}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Participants:</span>{' '}

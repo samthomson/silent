@@ -507,6 +507,12 @@ const buildMessagingAppState = (
       decryptedContent: lastMsg.event.content,
     } : null;
     
+    // Determine if conversation is known or a request
+    // Known = we've sent at least one message, Request = we've only received
+    const hasSentMessage = messages.some(m => m.event.pubkey === myPubkey);
+    const isKnown = hasSentMessage;
+    const isRequest = !hasSentMessage;
+    
     conversationMetadata[conversationId] = {
       id: conversationId,
       participantPubkeys,
@@ -515,8 +521,8 @@ const buildMessagingAppState = (
       lastReadAt: 0, // Default to unread
       hasNIP04,
       hasNIP17,
-      isKnown: true, // All conversations are known after processing
-      isRequest: false, // All conversations are accepted after processing
+      isKnown,
+      isRequest,
       lastMessage,
     };
   }

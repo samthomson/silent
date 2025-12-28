@@ -225,6 +225,7 @@ interface NewDMContextValue extends MessagingContext {
   }) => Promise<void>;
   protocolMode: ProtocolMode;
   getConversationRelays: (conversationId: string) => ConversationRelayInfo[];
+  clearCacheAndRefetch: () => Promise<void>;
 }
 
 const NewDMContext = createContext<NewDMContextValue | undefined>(undefined);
@@ -312,11 +313,68 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     return [];
   }, []);
   
+  // Clear cache and refetch from relays
+  const clearCacheAndRefetch = useCallback(async () => {
+    if (!user?.pubkey) return;
+    
+    try {
+      const { deleteMessagesFromDB } = await import('@/lib/dmMessageStore');
+      await deleteMessagesFromDB(user.pubkey);
+      
+      // Reset state and trigger reload
+      setContext({
+        messagingState: null,
+        isLoading: true,
+        timing: {},
+        phase: null
+      });
+      initialisedForPubkey.current = null; // Force re-initialization
+      
+      console.log('[NewDM] Cache cleared, reloading...');
+    } catch (error) {
+      console.error('[NewDM] Error clearing cache:', error);
+    }
+  }, [user?.pubkey]);
+  
+  // Detect hard refresh shortcut (Ctrl+Shift+R / Cmd+Shift+R) to clear cache
+  useEffect(() => {
+    if (!user?.pubkey) return;
+    
+    const handleHardRefresh = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
+        try {
+          sessionStorage.setItem('dm-clear-cache-on-load', 'true');
+        } catch (error) {
+          console.warn('[NewDM] SessionStorage unavailable, cache won\'t clear on hard refresh:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleHardRefresh);
+    return () => window.removeEventListener('keydown', handleHardRefresh);
+  }, [user?.pubkey]);
+  
+  // Clear cache after hard refresh
+  useEffect(() => {
+    if (!user?.pubkey) return;
+    
+    try {
+      const shouldClearCache = sessionStorage.getItem('dm-clear-cache-on-load');
+      if (shouldClearCache) {
+        sessionStorage.removeItem('dm-clear-cache-on-load');
+        clearCacheAndRefetch();
+      }
+    } catch (error) {
+      console.warn('[NewDM] Could not check sessionStorage for cache clear flag:', error);
+    }
+  }, [user?.pubkey, clearCacheAndRefetch]);
+  
   const value: NewDMContextValue = {
     ...context,
     sendMessage,
     protocolMode,
     getConversationRelays,
+    clearCacheAndRefetch,
   };
   
   return (

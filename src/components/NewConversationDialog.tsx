@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MessageSquarePlus, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { useDMContext } from '@/contexts/DMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useFollows } from '@/hooks/useFollows';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
@@ -37,12 +37,12 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { messagingState } = useNewDMContext();
+  const { conversations } = useDMContext();
   const { user } = useCurrentUser();
   
-  const conversations = useMemo(() => 
-    Object.values(messagingState?.conversations ?? {}),
-    [messagingState?.conversations]
+  const conversationsList = useMemo(() => 
+    Object.values(conversations ?? {}),
+    [conversations]
   );
   const { data: follows = [], isLoading: isLoadingFollows } = useFollows();
 
@@ -54,7 +54,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
 
   const allContacts = useMemo(() => {
     // Extract individual pubkeys from conversations (including group members)
-    const knownConversationPubkeys = conversations
+    const knownConversationPubkeys = conversationsList
       .filter(c => c.isKnown)
       .flatMap(c => parseConversationId(c.id));
     
@@ -66,7 +66,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     ].filter((pk): pk is string => !!pk);
     
     return Array.from(new Set(allPubkeys));
-  }, [follows, conversations, user?.pubkey]);
+  }, [follows, conversationsList, user?.pubkey]);
 
   // Include selected pubkeys in metadata fetch (for manually added pubkeys)
   const pubkeysToFetch = useMemo(() => {

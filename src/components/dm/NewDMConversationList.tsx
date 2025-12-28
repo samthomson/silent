@@ -4,14 +4,14 @@ import { useNewDMContext } from '@/contexts/NewDMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { getDisplayName } from '@/lib/genUserName';
-import { formatConversationTime, formatFullDateTime, parseConversationId, getPubkeyColor } from '@/lib/dmUtils';
+import { formatConversationTime, formatFullDateTime, getPubkeyColor } from '@/lib/dmUtils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { NewConversationDialog } from '@/components/NewConversationDialog';
+// import { NewConversationDialog } from '@/components/NewConversationDialog';
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
 
 interface DMConversationListProps {
@@ -117,7 +117,7 @@ const GroupAvatar = ({ pubkeys, isSelected }: { pubkeys: string[]; isSelected: b
 };
 
 const ConversationItemComponent = ({
-  conversationId,
+  conversationId: _conversationId,
   participantPubkeys,
   isSelected,
   onClick,
@@ -342,7 +342,7 @@ export const NewDMConversationList = ({
             )}
           </div>
           <div className="flex items-center gap-1">
-            <NewConversationDialog onStartConversation={onSelectConversation} />
+            {/* <NewConversationDialog onStartConversation={onSelectConversation} /> */}
             {onStatusClick && (
               <Button
                 variant="ghost"

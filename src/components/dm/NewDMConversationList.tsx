@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-// import { NewConversationDialog } from '@/components/NewConversationDialog';
+import { NewConversationDialog } from '@/components/NewConversationDialog';
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
 
 interface DMConversationListProps {
@@ -342,7 +342,7 @@ export const NewDMConversationList = ({
             )}
           </div>
           <div className="flex items-center gap-1">
-            {/* <NewConversationDialog onStartConversation={onSelectConversation} /> */}
+            <NewConversationDialog onStartConversation={onSelectConversation} />
             {onStatusClick && (
               <Button
                 variant="ghost"

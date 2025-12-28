@@ -5,8 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 import { useState, useMemo } from "react";
-import { DMProvider, type DMConfig } from "@/contexts/DMContext";
-import { PROTOCOL_MODE } from "@/lib/dmConstants";
 
 export function Test() {
   const { messagingState, isLoading, timing, phase } = useNewDMContext();
@@ -40,16 +38,9 @@ export function Test() {
     return { relayData: data, failedRelayCount: failed };
   }, [messagingState]);
 
-  const dmConfig: DMConfig = {
-    enabled: true,
-    protocolMode: PROTOCOL_MODE.NIP04_OR_NIP17,
-  };
-
   return (
     <div className="h-screen flex bg-background">
-      <DMProvider config={dmConfig}>
-        <AppSidebar />
-      </DMProvider>
+      <AppSidebar />
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Debug Info Panel */}
         <Card className="m-4 mb-0 bg-muted/50 shrink-0">
@@ -58,8 +49,8 @@ export function Test() {
             <div>
               <span className="text-muted-foreground">Status:</span>{' '}
               <span className="font-mono">
-                {isLoading 
-                  ? `⏳ ${phase === 'cache' ? 'Cache' : phase === 'initial_query' ? 'Querying...' : phase === 'gap_filling' ? 'Gap-filling...' : 'Loading...'}` 
+                {isLoading
+                  ? `⏳ ${phase === 'cache' ? 'Cache' : phase === 'initial_query' ? 'Querying...' : phase === 'gap_filling' ? 'Gap-filling...' : 'Loading...'}`
                   : '✅ Ready'}
               </span>
             </div>
@@ -187,7 +178,6 @@ export function Test() {
           )}
         </CardContent>
       </Card>
-      
       {/* Messaging Interface */}
       <div className="flex-1 overflow-hidden m-4 mt-4">
         <NewDMMessagingInterface />

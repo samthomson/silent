@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MessageSquarePlus, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { useDMContext } from '@/contexts/DMContext';
+import { useNewDMContext } from '@/contexts/NewDMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useFollows } from '@/hooks/useFollows';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/genUserName';
-import { createConversationId, parseConversationId } from '@/lib/dmUtils';
+import { createConversationId } from '@/lib/dmUtils';
 
 interface NewConversationDialogProps {
   onStartConversation: (pubkey: string) => void;
@@ -37,13 +37,13 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { conversations } = useDMContext();
+  const { messagingState } = useNewDMContext();
   const { user } = useCurrentUser();
   
-  const conversationsList = useMemo(() => 
-    Object.values(conversations ?? {}),
-    [conversations]
-  );
+  const conversationsList = useMemo(() => {
+    if (!messagingState?.conversationMetadata) return [];
+    return Object.values(messagingState.conversationMetadata);
+  }, [messagingState?.conversationMetadata]);
   const { data: follows = [], isLoading: isLoadingFollows } = useFollows();
 
   // Debounce search input
@@ -56,7 +56,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     // Extract individual pubkeys from conversations (including group members)
     const knownConversationPubkeys = conversationsList
       .filter(c => c.isKnown)
-      .flatMap(c => parseConversationId(c.id));
+      .flatMap(c => c.participantPubkeys);
     
     // Include current user explicitly (for self-messaging support)
     const allPubkeys = [

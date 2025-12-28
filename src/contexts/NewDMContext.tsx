@@ -69,9 +69,13 @@ const initialiseMessaging = async (
   // A. Fetch my relay lists
   console.log('[NewDM] A. Fetching my relay lists...');
   const stepA = Date.now();
-  const { myLists, myBlockedRelays } = await DMLib.Impure.Relay.fetchMyRelayInfo(nostr, settings.discoveryRelays, myPubkey);
+  const { myLists, myBlockedRelays, relayInfo: discoveryRelayInfo } = await DMLib.Impure.Relay.fetchMyRelayInfo(nostr, settings.discoveryRelays, myPubkey);
   timings.fetchMyRelays = Date.now() - stepA;
   console.log('[NewDM] A. My relay lists:', { has10002: !!myLists.kind10002, has10050: !!myLists.kind10050, has10006: !!myLists.kind10006 });
+  
+  // Log discovery relay health
+  const discoverySucceeded = Array.from(discoveryRelayInfo.values()).filter(r => r.lastQuerySucceeded).length;
+  console.log('[NewDM] A. Discovery relays:', `${discoverySucceeded}/${settings.discoveryRelays.length} succeeded`);
   
   // B. Derive my relay set and blocked relays
   console.log('[NewDM] B. Deriving my relay set...');
@@ -174,8 +178,15 @@ const initialiseMessaging = async (
   timings.queryNewRelays = Date.now() - stepI;
   console.log('[NewDM] I. Gap-filling messages:', messagesFromGapFilling.length);
   
-  // J. Merge relay info from both query phases
-  const combinedRelayInfo = DMLib.Pure.Relay.mergeRelayInfo(relayInfoFromInitial, relayInfoFromGapFilling);
+  // J. Merge relay info from all phases (discovery + initial query + gap-filling)
+  let combinedRelayInfo = DMLib.Pure.Relay.mergeRelayInfo(relayInfoFromInitial, relayInfoFromGapFilling);
+  
+  // Add discovery relay info
+  for (const [relay, info] of discoveryRelayInfo.entries()) {
+    if (!combinedRelayInfo.has(relay)) {
+      combinedRelayInfo.set(relay, info);
+    }
+  }
   
   // UPDATE 3: Process gap-filling messages and save final state
   const allQueriedRelays = DMLib.Pure.Relay.computeAllQueriedRelays(mode, cached, participants[myPubkey].derivedRelays, newRelays);

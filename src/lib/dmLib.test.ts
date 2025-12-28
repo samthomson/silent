@@ -3172,14 +3172,16 @@ describe('DMLib', () => {
   describe('Impure', () => {
     describe('Relay', () => {
       describe('fetchRelayLists', () => {
-        it('should return empty map when pubkeys array is empty', async () => {
+        it('should return empty maps when pubkeys array is empty', async () => {
           const mockNostr = {
-            group: () => ({ query: vi.fn() })
+            relay: () => ({ query: vi.fn() })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://relay.com'], []);
-          expect(result).toBeInstanceOf(Map);
-          expect(result.size).toBe(0);
+          const { results, relayInfo } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://relay.com'], []);
+          expect(results).toBeInstanceOf(Map);
+          expect(results.size).toBe(0);
+          expect(relayInfo).toBeInstanceOf(Map);
+          expect(relayInfo.size).toBe(0);
         });
 
         it('should fetch relay lists for single pubkey', async () => {
@@ -3190,19 +3192,21 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          const { results, relayInfo } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
           
-          expect(result.size).toBe(1);
-          expect(result.get('pk1')).toEqual({
+          expect(results.size).toBe(1);
+          expect(results.get('pk1')).toEqual({
             kind10002: mockEvents[0],
             kind10050: mockEvents[1],
             kind10006: mockEvents[2]
           });
+          expect(relayInfo.size).toBe(1);
+          expect(relayInfo.get('wss://discovery.com')?.lastQuerySucceeded).toBe(true);
         });
 
         it('should fetch relay lists for multiple pubkeys', async () => {
@@ -3214,31 +3218,31 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2', 'pk3']);
+          const { results } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2', 'pk3']);
           
-          expect(result.size).toBe(3);
-          expect(result.get('pk1')?.kind10002).toEqual(mockEvents[0]);
-          expect(result.get('pk1')?.kind10050).toEqual(mockEvents[1]);
-          expect(result.get('pk2')?.kind10002).toEqual(mockEvents[2]);
-          expect(result.get('pk3')?.kind10006).toEqual(mockEvents[3]);
+          expect(results.size).toBe(3);
+          expect(results.get('pk1')?.kind10002).toEqual(mockEvents[0]);
+          expect(results.get('pk1')?.kind10050).toEqual(mockEvents[1]);
+          expect(results.get('pk2')?.kind10002).toEqual(mockEvents[2]);
+          expect(results.get('pk3')?.kind10006).toEqual(mockEvents[3]);
         });
 
         it('should handle pubkeys with no relay list events', async () => {
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue([])
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          const { results } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
           
-          expect(result.size).toBe(1);
-          expect(result.get('pk1')).toEqual({
+          expect(results.size).toBe(1);
+          expect(results.get('pk1')).toEqual({
             kind10002: null,
             kind10050: null,
             kind10006: null
@@ -3252,15 +3256,15 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          const { results } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
           
-          expect(result.get('pk1')?.kind10002?.id).toBe('new');
-          expect(result.get('pk1')?.kind10002?.created_at).toBe(200);
+          expect(results.get('pk1')?.kind10002?.id).toBe('new');
+          expect(results.get('pk1')?.kind10002?.created_at).toBe(200);
         });
 
         it('should handle partial relay lists (only some kinds present)', async () => {
@@ -3270,14 +3274,14 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          const { results } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
           
-          expect(result.get('pk1')).toEqual({
+          expect(results.get('pk1')).toEqual({
             kind10002: null,
             kind10050: mockEvents[0],
             kind10006: null
@@ -3335,7 +3339,7 @@ describe('DMLib', () => {
         it('should query with timeout', async () => {
           const queryMock = vi.fn().mockResolvedValue([]);
           const mockNostr = {
-            group: () => ({ query: queryMock })
+            relay: () => ({ query: queryMock })
           };
           
           await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
@@ -3355,7 +3359,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -3368,6 +3372,8 @@ describe('DMLib', () => {
             kind10006: mockEvents[2]
           });
           expect(result.myBlockedRelays).toEqual(['wss://blocked.com', 'wss://spam.com']);
+          expect(result.relayInfo).toBeInstanceOf(Map);
+          expect(result.relayInfo.size).toBe(1);
         });
 
         it('should return empty blocked relays when no kind 10006 event exists', async () => {
@@ -3376,7 +3382,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };

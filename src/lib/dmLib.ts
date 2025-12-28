@@ -18,7 +18,7 @@ export const CACHE_KEY_PREFIX = 'dm-cache:';
 
 const DM_QUERY_CONSTANTS = {
   BATCH_SIZE: 1000,
-  QUERY_TIMEOUT_MS: 30000, // 30 seconds
+  QUERY_TIMEOUT_MS: 5000, // 5 seconds per-relay
 } as const;
 
 /**
@@ -700,48 +700,66 @@ export const Pure = {
  * @param pubkeys - Array of pubkeys to fetch relay lists for
  * @returns Map of pubkey to RelayListsResult with raw events
  */
-const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys: string[]): Promise<Map<string, RelayListsResult>> => {
+const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys: string[]): Promise<{ results: Map<string, RelayListsResult>; relayInfo: Map<string, RelayInfo> }> => {
   if (pubkeys.length === 0) {
-    return new Map();
+    return { results: new Map(), relayInfo: new Map() };
   }
 
-  const relayGroup = nostr.group(discoveryRelays);
   const results = new Map<string, RelayListsResult>();
+  const relayInfo = new Map<string, RelayInfo>();
 
-  try {
-    // Single query for all pubkeys, fetch kinds 10002, 10050, and 10006
-    // Replaceable events: each relay stores only the latest per pubkey+kind
-    const events = await relayGroup.query(
-      [{ kinds: [10002, 10050, 10006], authors: pubkeys }],
-      { signal: AbortSignal.timeout(15000) }
-    );
+  // Query each discovery relay individually to track failures
+  const relayResults = await Promise.allSettled(
+    discoveryRelays.map(relay =>
+      nostr.relay(relay).query(
+        [{ kinds: [10002, 10050, 10006], authors: pubkeys }],
+        { signal: AbortSignal.timeout(8000) }
+      )
+        .then(events => ({ relay, success: true, events, error: null }))
+        .catch(error => ({ relay, success: false, events: [], error: String(error) }))
+    )
+  );
 
-    // Group events by pubkey and kind, keep only latest per pubkey+kind
-    // This handles cases where different relays return different "latest" events
-    const eventsByPubkeyAndKind = new Map<string, NostrEvent>();
-    for (const event of events) {
-      const key = `${event.pubkey}:${event.kind}`;
-      const existing = eventsByPubkeyAndKind.get(key);
-      if (!existing || event.created_at > existing.created_at) {
-        eventsByPubkeyAndKind.set(key, event);
-      }
+  // Track relay health for discovery relays
+  for (const result of relayResults) {
+    if (result.status === 'fulfilled') {
+      const { relay, success, error } = result.value;
+      relayInfo.set(relay, {
+        lastQuerySucceeded: success,
+        lastQueryError: error,
+        isBlocked: false
+      });
     }
-
-    // Build RelayListsResult for each pubkey
-    for (const pubkey of pubkeys) {
-      const result: RelayListsResult = {
-        kind10002: eventsByPubkeyAndKind.get(`${pubkey}:10002`) || null,
-        kind10050: eventsByPubkeyAndKind.get(`${pubkey}:10050`) || null,
-        kind10006: eventsByPubkeyAndKind.get(`${pubkey}:10006`) || null,
-      };
-      
-      results.set(pubkey, result);
-    }
-  } catch (error) {
-    console.error('[DM] Failed to fetch relay lists:', error);
   }
 
-  return results;
+  // Combine all events from successful relays
+  const allEvents = relayResults
+    .filter((r): r is PromiseFulfilledResult<{ relay: string; success: boolean; events: NostrEvent[]; error: string | null }> => r.status === 'fulfilled' && r.value.success)
+    .flatMap(r => r.value.events);
+
+  // Group events by pubkey and kind, keep only latest per pubkey+kind
+  // This handles cases where different relays return different "latest" events
+  const eventsByPubkeyAndKind = new Map<string, NostrEvent>();
+  for (const event of allEvents) {
+    const key = `${event.pubkey}:${event.kind}`;
+    const existing = eventsByPubkeyAndKind.get(key);
+    if (!existing || event.created_at > existing.created_at) {
+      eventsByPubkeyAndKind.set(key, event);
+    }
+  }
+
+  // Build RelayListsResult for each pubkey
+  for (const pubkey of pubkeys) {
+    const result: RelayListsResult = {
+      kind10002: eventsByPubkeyAndKind.get(`${pubkey}:10002`) || null,
+      kind10050: eventsByPubkeyAndKind.get(`${pubkey}:10050`) || null,
+      kind10006: eventsByPubkeyAndKind.get(`${pubkey}:10006`) || null,
+    };
+    
+    results.set(pubkey, result);
+  }
+
+  return { results, relayInfo };
 }
 interface FilterState {
   kind: number;
@@ -1097,11 +1115,11 @@ const refreshStaleParticipants = async (
  * @param nostr - Nostr pool instance
  * @param discoveryRelays - Relays to query for relay lists
  * @param myPubkey - The current user's pubkey
- * @returns Object with raw relay list events and extracted blocked relay URLs
+ * @returns Object with raw relay list events, extracted blocked relay URLs, and discovery relay health
  */
-const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubkey: string): Promise<{ myLists: RelayListsResult; myBlockedRelays: string[] }> => {
+const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubkey: string): Promise<{ myLists: RelayListsResult; myBlockedRelays: string[]; relayInfo: Map<string, RelayInfo> }> => {
   // Fetch relay lists for the current user
-  const relayListsMap = await fetchRelayLists(nostr, discoveryRelays, [myPubkey]);
+  const { results: relayListsMap, relayInfo } = await fetchRelayLists(nostr, discoveryRelays, [myPubkey]);
   const myLists = relayListsMap.get(myPubkey) || { kind10002: null, kind10050: null, kind10006: null };
   
   // Extract blocked relays from kind 10006
@@ -1110,6 +1128,7 @@ const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubke
   return {
     myLists,
     myBlockedRelays,
+    relayInfo,
   };
 }
 /**

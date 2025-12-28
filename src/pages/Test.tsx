@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { useState, useMemo } from "react";
 
 export function Test() {
-  const { messagingState, isLoading } = useNewDMContext();
+  const { messagingState, isLoading, timing, phase } = useNewDMContext();
   const [relayDetailsOpen, setRelayDetailsOpen] = useState(false);
 
   // Build relay-to-users mapping and calculate failed count
@@ -50,7 +50,11 @@ export function Test() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">Status:</span>{' '}
-              <span className="font-mono">{isLoading ? '⏳ Loading...' : '✅ Ready'}</span>
+              <span className="font-mono">
+                {isLoading 
+                  ? `⏳ ${phase === 'cache' ? 'Cache' : phase === 'initial_query' ? 'Querying...' : phase === 'gap_filling' ? 'Gap-filling...' : 'Loading...'}` 
+                  : '✅ Ready'}
+              </span>
             </div>
             <div>
               <span className="text-muted-foreground">Conversations:</span>{' '}
@@ -73,6 +77,53 @@ export function Test() {
               <span className="font-mono text-red-500">{failedRelayCount}</span>
             </div>
           </div>
+
+          {/* Timing Info */}
+          {timing && (
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="text-xs font-medium text-muted-foreground mb-2">Load Times:</div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Total:</span>{' '}
+                  <span className="font-mono font-bold">{(timing.total / 1000).toFixed(2)}s</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Cache:</span>{' '}
+                  <span className="font-mono">{timing.loadCache}ms</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Fetch Relays:</span>{' '}
+                  <span className="font-mono">{timing.fetchMyRelays ? `${timing.fetchMyRelays}ms` : '-'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Refresh Parts:</span>{' '}
+                  <span className="font-mono">{timing.refreshParticipants ? `${timing.refreshParticipants}ms` : '-'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Query Msgs:</span>{' '}
+                  <span className="font-mono">{(timing.queryMessages / 1000).toFixed(2)}s</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Fetch Parts:</span>{' '}
+                  <span className="font-mono">{timing.fetchAndMergeParticipants ? `${(timing.fetchAndMergeParticipants / 1000).toFixed(2)}s` : '-'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Query New:</span>{' '}
+                  <span className="font-mono">{timing.queryNewRelays ? `${(timing.queryNewRelays / 1000).toFixed(2)}s` : '-'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Build State:</span>{' '}
+                  <span className="font-mono">{timing.buildAndSave}ms</span>
+                </div>
+                {messagingState?.syncState.lastCacheTime && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Cache Age:</span>{' '}
+                    <span className="font-mono">{Math.round((Date.now() - messagingState.syncState.lastCacheTime) / 1000)}s ago</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Expandable Relay Details */}
           {messagingState && relayData.length > 0 && (

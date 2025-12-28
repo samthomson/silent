@@ -988,7 +988,7 @@ const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> =
     if (!data) return null;
     
     // Basic structure validation
-    if (!data.participants || !data.conversations || !data.messages || !data.syncState || !data.relayInfo) {
+    if (!data.participants || !data.conversationMetadata || !data.conversationMessages || !data.syncState || !data.relayInfo) {
       console.error('[DM Cache] Invalid cache structure, missing required keys');
       return null;
     }

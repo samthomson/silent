@@ -911,8 +911,8 @@ describe('DMLib', () => {
         it('should use cached queriedRelays in warm start', () => {
           const cached: DMLib.MessagingState = {
             participants: {},
-            conversations: {},
-            messages: {},
+            conversationMetadata: {},
+            conversationMessages: {},
             syncState: { 
               lastCacheTime: 1000, 
               queriedRelays: ['wss://cached1.com', 'wss://cached2.com'], 
@@ -945,8 +945,8 @@ describe('DMLib', () => {
         it('should deduplicate overlapping relays in warm start', () => {
           const cached: DMLib.MessagingState = {
             participants: {},
-            conversations: {},
-            messages: {},
+            conversationMetadata: {},
+            conversationMessages: {},
             syncState: { 
               lastCacheTime: 1000, 
               queriedRelays: ['wss://relay1.com', 'wss://relay2.com'], 
@@ -974,8 +974,8 @@ describe('DMLib', () => {
         it('should handle empty newRelays in warm start', () => {
           const cached: DMLib.MessagingState = {
             participants: {},
-            conversations: {},
-            messages: {},
+            conversationMetadata: {},
+            conversationMessages: {},
             syncState: { 
               lastCacheTime: 1000, 
               queriedRelays: ['wss://cached1.com'], 
@@ -1002,8 +1002,8 @@ describe('DMLib', () => {
         it('should handle empty cached queriedRelays in warm start', () => {
           const cached: DMLib.MessagingState = {
             participants: {},
-            conversations: {},
-            messages: {},
+            conversationMetadata: {},
+            conversationMessages: {},
             syncState: { 
               lastCacheTime: 1000, 
               queriedRelays: [], 
@@ -1037,8 +1037,8 @@ describe('DMLib', () => {
           // Warm start: We queried 3 relays from cache, discovered 2 new ones
           const cached: DMLib.MessagingState = {
             participants: {},
-            conversations: {},
-            messages: {},
+            conversationMetadata: {},
+            conversationMessages: {},
             syncState: { 
               lastCacheTime: 1000, 
               queriedRelays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://inbox.alice.com'], 
@@ -4432,8 +4432,8 @@ describe('DMLib', () => {
       it('should return valid MessagingState when data exists', async () => {
         const validData: MessagingState = {
           participants: { 'pubkey1': { pubkey: 'pubkey1', derivedRelays: [], blockedRelays: [], lastFetched: 0 } },
-          conversations: { 'conv1': { id: 'conv1', participantPubkeys: ['pubkey1'], subject: '', lastActivity: 0, lastReadAt: 0, hasNIP04: false, hasNIP17: true, isKnown: true, isRequest: false, lastMessage: null, hasNIP4Messages: false } },
-          messages: { 'conv1': [] },
+          conversationMetadata: { 'conv1': { id: 'conv1', participantPubkeys: ['pubkey1'], subject: '', lastActivity: 0, lastReadAt: 0, hasNIP04: false, hasNIP17: true, isKnown: true, isRequest: false, lastMessage: null, hasNIP4Messages: false } },
+          conversationMessages: { 'conv1': [] },
           syncState: { lastCacheTime: 123456, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };
@@ -4448,8 +4448,8 @@ describe('DMLib', () => {
 
       it('should return null when data is missing participants key', async () => {
         const invalidData = {
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 123456, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };
@@ -4465,7 +4465,7 @@ describe('DMLib', () => {
       it('should return null when data is missing conversations key', async () => {
         const invalidData = {
           participants: {},
-          messages: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 123456, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };
@@ -4481,7 +4481,7 @@ describe('DMLib', () => {
       it('should return null when data is missing messages key', async () => {
         const invalidData = {
           participants: {},
-          conversations: {},
+          conversationMetadata: {},
           syncState: { lastCacheTime: 123456, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };
@@ -4497,8 +4497,8 @@ describe('DMLib', () => {
       it('should return null when data is missing syncState key', async () => {
         const invalidData = {
           participants: {},
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           relayInfo: {}
         };
 
@@ -4513,8 +4513,8 @@ describe('DMLib', () => {
       it('should return null when data is missing relayInfo key', async () => {
         const invalidData = {
           participants: {},
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 123456, queriedRelays: [], queryLimitReached: false }
         };
 
@@ -4529,8 +4529,8 @@ describe('DMLib', () => {
       it('should save MessagingState to IndexedDB', async () => {
         const testData: MessagingState = {
           participants: { 'pk1': { pubkey: 'pk1', derivedRelays: ['wss://relay1.com'], blockedRelays: [], lastFetched: 123 } },
-          conversations: { 'conv1': { id: 'conv1', participantPubkeys: ['pk1'], subject: '', lastActivity: 456, lastReadAt: 0, hasNIP04: true, hasNIP17: false, isKnown: true, isRequest: false, lastMessage: null, hasNIP4Messages: true } },
-          messages: { 'conv1': [{ id: 'msg1', event: { id: 'msg1', pubkey: 'pk1', created_at: 789, kind: 4, tags: [], content: 'encrypted', sig: 'sig1' }, conversationId: 'conv1', protocol: 'nip04' }] },
+          conversationMetadata: { 'conv1': { id: 'conv1', participantPubkeys: ['pk1'], subject: '', lastActivity: 456, lastReadAt: 0, hasNIP04: true, hasNIP17: false, isKnown: true, isRequest: false, lastMessage: null, hasNIP4Messages: true } },
+          conversationMessages: { 'conv1': [{ id: 'msg1', event: { id: 'msg1', pubkey: 'pk1', created_at: 789, kind: 4, tags: [], content: 'encrypted', sig: 'sig1' }, conversationId: 'conv1', protocol: 'nip04' }] },
           syncState: { lastCacheTime: 999, queriedRelays: ['wss://relay1.com'], queryLimitReached: false },
           relayInfo: { 'wss://relay1.com': { lastQuerySucceeded: true, lastQueryError: null, isBlocked: false } }
         };
@@ -4547,8 +4547,8 @@ describe('DMLib', () => {
       it('should allow data to be saved and loaded (round-trip)', async () => {
         const testData: MessagingState = {
           participants: { 'pk2': { pubkey: 'pk2', derivedRelays: [], blockedRelays: [], lastFetched: 0 } },
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 111, queriedRelays: [], queryLimitReached: true },
           relayInfo: {}
         };
@@ -4562,16 +4562,16 @@ describe('DMLib', () => {
       it('should overwrite existing data for same pubkey', async () => {
         const firstData: MessagingState = {
           participants: {},
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 111, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };
 
         const secondData: MessagingState = {
           participants: { 'new': { pubkey: 'new', derivedRelays: [], blockedRelays: [], lastFetched: 0 } },
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 222, queriedRelays: [], queryLimitReached: true },
           relayInfo: {}
         };
@@ -4587,16 +4587,16 @@ describe('DMLib', () => {
       it('should store data for multiple pubkeys independently', async () => {
         const pubkey1Data: MessagingState = {
           participants: { 'pk1': { pubkey: 'pk1', derivedRelays: [], blockedRelays: [], lastFetched: 0 } },
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 111, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };
 
         const pubkey2Data: MessagingState = {
           participants: { 'pk2': { pubkey: 'pk2', derivedRelays: [], blockedRelays: [], lastFetched: 0 } },
-          conversations: {},
-          messages: {},
+          conversationMetadata: {},
+          conversationMessages: {},
           syncState: { lastCacheTime: 222, queriedRelays: [], queryLimitReached: false },
           relayInfo: {}
         };

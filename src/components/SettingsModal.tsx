@@ -1,10 +1,11 @@
 import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
-import { useDMContext } from '@/contexts/DMContext';
+import { useNewDMContext } from '@/contexts/NewDMContext';
 import { useAppContext } from '@/hooks/useAppContext';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
@@ -70,7 +71,7 @@ function AppearanceContent() {
 }
 
 function StorageContent() {
-  const { clearCacheAndRefetch } = useDMContext();
+  const { clearCacheAndRefetch } = useNewDMContext();
 
   return (
     <div className="space-y-4">
@@ -147,7 +148,15 @@ function AdvancedContent() {
 
 export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
-  const { relayError } = useDMContext();
+  const { messagingState } = useNewDMContext();
+  const { user } = useCurrentUser();
+  const failedRelayCount = useMemo(() => {
+    if (!user || !messagingState) return 0;
+    const userRelays = new Set(messagingState.participants[user.pubkey]?.derivedRelays || []);
+    return Object.entries(messagingState.relayInfo || {})
+      .filter(([relay, info]) => userRelays.has(relay) && !info.lastQuerySucceeded)
+      .length;
+  }, [messagingState, user]);
 
   return (
     <Dialog 
@@ -239,23 +248,23 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
               </Button>
 
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Relays')}
-              >
-                <div className="flex items-center gap-3">
-                  <Radio className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Relays</span>
-                      {relayError && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between h-auto py-4 px-4"
+                  onClick={() => setMobileCategory('Relays')}
+                >
+                  <div className="flex items-center gap-3">
+                    <Radio className="h-5 w-5" />
+                    <div className="flex flex-col items-start">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Relays</span>
+                        {failedRelayCount > 0 && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                      </div>
+                      <span className="text-xs text-muted-foreground">Manage your relay list</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">Manage your relay list</span>
                   </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </Button>
 
               <Button
                 variant="ghost"
@@ -345,7 +354,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
               >
                 <Radio className="h-4 w-4" />
                 Relays
-                {relayError && <AlertTriangle className="h-3 w-3 ml-1 text-destructive" />}
+                {failedRelayCount > 0 && <AlertTriangle className="h-3 w-3 ml-1 text-destructive" />}
               </TabsTrigger>
               <TabsTrigger 
                 value="storage" 

@@ -295,6 +295,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   const nip4SubscriptionRef = useRef<{ close: () => void } | null>(null);
   const nip17SubscriptionRef = useRef<{ close: () => void } | null>(null);
   
+  // Stable callback - doesn't depend on context
   const updateContext = useCallback((updates: Partial<MessagingContext>) => {
     setContext(prev => ({ ...prev, ...updates }));
   }, []);
@@ -515,7 +516,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         });
       }
     })();
-  }, [user?.pubkey, nostr, appConfig.discoveryRelays, updateContext, startSubscriptions]);
+  }, [user?.pubkey, nostr, appConfig.discoveryRelays]);
   
   // TODO: Not yet implemented - stub implementations
   const sendMessage = useCallback(async (_params: {
@@ -561,7 +562,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     return () => {
       cleanupSubscriptions();
     };
-  }, [user?.pubkey, cleanupSubscriptions]);
+  }, [user?.pubkey]);
   
   // Detect hard refresh shortcut (Ctrl+Shift+R / Cmd+Shift+R) to clear cache
   useEffect(() => {
@@ -594,7 +595,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     } catch (error) {
       console.warn('[NewDM] Could not check sessionStorage for cache clear flag:', error);
     }
-  }, [user?.pubkey, clearCacheAndRefetch]);
+  }, [user?.pubkey]);
   
   const isDoingInitialLoad = context.isLoading && (context.phase === NEW_DM_PHASES.CACHE || context.phase === NEW_DM_PHASES.INITIAL_QUERY);
 

@@ -97,26 +97,6 @@ export function formatFullDateTime(timestamp: number): string {
   });
 }
 
-// TODO: This old parser will be replaced by the new dmLib.parseConversationId format
-// The new system (NewDMContext) uses "group:pubkeys:subject" format consistently
-// This old parser is only used by the legacy DMContext.tsx
-/**
- * Parse a conversation ID to get all participant pubkeys.
- * 
- * Handles both formats for backwards compatibility:
- * - New: "group:alice,bob" 
- * - Old: "bob" (bare pubkey from before this refactor)
- * 
- * @param conversationId - Either "group:pubkey1,pubkey2" or bare pubkey (legacy)
- * @returns Array of participant pubkeys
- */
-export function parseConversationId(conversationId: string): string[] {
-  if (conversationId.startsWith('group:')) {
-    return conversationId.substring(6).split(',');
-  }
-  // Legacy format: bare pubkey (treat as 1-on-1)
-  return [conversationId];
-}
 
 /**
  * Generate a consistent color for a pubkey (used for avatars and names).
@@ -156,20 +136,3 @@ export function getPubkeyColor(pubkey: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-/**
- * Check if a conversation represents a multi-person group (3+ participants).
- * 
- * Note: With the new format, all conversations use "group:..." format,
- * but this function specifically checks for 3+ people (actual group chats).
- * 
- * - Self-messaging: "group:alice" → false (1 person)
- * - 1-on-1: "group:alice,bob" → false (2 people)
- * - Group: "group:alice,bob,charlie" → true (3+ people)
- * 
- * @param conversationId - Conversation ID to check
- * @returns true if 3+ participants (actual group chat)
- */
-export function isGroupConversation(conversationId: string): boolean {
-  const participants = parseConversationId(conversationId);
-  return participants.length >= 3;
-}

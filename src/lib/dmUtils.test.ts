@@ -6,9 +6,7 @@ import {
   getConversationPartner,
   formatConversationTime,
   formatFullDateTime,
-  parseConversationId,
   getPubkeyColor,
-  isGroupConversation,
 } from './dmUtils';
 import { Pure as DMLib } from './dmLib';
 
@@ -275,28 +273,6 @@ describe('dmUtils', () => {
     });
   });
 
-  describe('parseConversationId', () => {
-    it('parses new format conversation ID', () => {
-      const participants = parseConversationId('group:alice,bob,charlie');
-      expect(participants).toEqual(['alice', 'bob', 'charlie']);
-    });
-
-    it('parses self-messaging ID', () => {
-      const participants = parseConversationId('group:alice');
-      expect(participants).toEqual(['alice']);
-    });
-
-    it('handles legacy format (bare pubkey)', () => {
-      const participants = parseConversationId('bob-pubkey');
-      expect(participants).toEqual(['bob-pubkey']);
-    });
-
-    it('parses 1-on-1 conversation ID', () => {
-      const participants = parseConversationId('group:alice,bob');
-      expect(participants).toEqual(['alice', 'bob']);
-    });
-  });
-
   describe('getPubkeyColor', () => {
     it('returns consistent color for same pubkey', () => {
       const pubkey = 'test-pubkey-123';
@@ -330,26 +306,6 @@ describe('dmUtils', () => {
     });
   });
 
-  describe('isGroupConversation', () => {
-    it('returns false for self-messaging', () => {
-      expect(isGroupConversation('group:alice')).toBe(false);
-    });
-
-    it('returns false for 1-on-1 conversation', () => {
-      expect(isGroupConversation('group:alice,bob')).toBe(false);
-    });
-
-    it('returns true for 3+ participants', () => {
-      expect(isGroupConversation('group:alice,bob,charlie')).toBe(true);
-    });
-
-    it('returns true for large groups', () => {
-      expect(isGroupConversation('group:alice,bob,charlie,david,eve')).toBe(true);
-    });
-
-    it('handles legacy format (bare pubkey) as 1-on-1', () => {
-      expect(isGroupConversation('bob-pubkey')).toBe(false);
-    });
-  });
 });
+
 

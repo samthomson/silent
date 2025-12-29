@@ -489,6 +489,77 @@ const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetad
 };
 
 /**
+ * Adds a single message to existing MessagingState incrementally (for real-time subscriptions).
+ * Much more efficient than rebuilding the entire state.
+ * 
+ * @param currentState - Existing messaging state
+ * @param messageWithMetadata - Single new message to add
+ * @param myPubkey - Current user's pubkey
+ * @returns Updated MessagingState with new message added
+ */
+const addMessageToState = (
+  currentState: MessagingState,
+  messageWithMetadata: MessageWithMetadata,
+  myPubkey: string
+): MessagingState => {
+  // Convert to Message with conversationId
+  const [enrichedMessage] = enrichMessagesWithConversationId([messageWithMetadata]);
+  
+  // Check if this message already exists (dedupe by ID or giftWrapId)
+  const conversationMessages = currentState.conversationMessages[enrichedMessage.conversationId] || [];
+  const exists = conversationMessages.some(msg => 
+    msg.id === enrichedMessage.id || 
+    (msg.giftWrapId && enrichedMessage.giftWrapId && msg.giftWrapId === enrichedMessage.giftWrapId)
+  );
+  
+  if (exists) {
+    return currentState; // Already have this message
+  }
+  
+  // Add message to conversation
+  const updatedMessages = [...conversationMessages, enrichedMessage].sort((a, b) => 
+    a.event.created_at - b.event.created_at
+  );
+  
+  // Update conversation metadata
+  const lastMessage = updatedMessages[updatedMessages.length - 1];
+  const hasUserSentMessage = updatedMessages.some(msg => msg.event.pubkey === myPubkey);
+  
+  const participants = messageWithMetadata.participants || [];
+  const subject = messageWithMetadata.subject || '';
+  
+  // Efficiently update protocol flags - use existing values or check new message
+  const existingMetadata = currentState.conversationMetadata[enrichedMessage.conversationId];
+  const hasNIP17Messages = (existingMetadata?.hasNIP17Messages) || enrichedMessage.protocol === 'nip17';
+  const hasNIP4Messages = (existingMetadata?.hasNIP4Messages) || enrichedMessage.protocol === 'nip04';
+  
+  const updatedMetadata: Conversation = {
+    id: enrichedMessage.conversationId,
+    participants,
+    subject,
+    lastMessage,
+    lastActivity: lastMessage.event.created_at,
+    messageCount: updatedMessages.length,
+    isKnown: hasUserSentMessage,
+    isRequest: !hasUserSentMessage,
+    hasNIP17Messages,
+    hasNIP4Messages,
+  };
+  
+  return {
+    ...currentState,
+    conversationMessages: {
+      ...currentState.conversationMessages,
+      [enrichedMessage.conversationId]: updatedMessages,
+    },
+    conversationMetadata: {
+      ...currentState.conversationMetadata,
+      [enrichedMessage.conversationId]: updatedMetadata,
+    },
+  };
+};
+
+/**
  * Builds the complete MessagingState for the app from raw query results
  * Takes decrypted messages and constructs all derived structures needed for the messaging system
  * 
@@ -683,6 +754,7 @@ export const Pure = {
   Sync: {
     computeSinceTimestamp,
     buildMessagingAppState,
+    addMessageToState,
   },
 };
 

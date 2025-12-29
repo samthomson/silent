@@ -280,11 +280,10 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     phase: null
   });
   
-  // TODO: Implement real-time subscriptions for live message updates
-  const subscriptions: SubscriptionStatus = {
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
     isNIP4Connected: false,
     isNIP17Connected: false,
-  };
+  });
 
   // TODO: Implement batch progress tracking for large message scans
   const scanProgress: ScanProgressState = {
@@ -293,10 +292,184 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   };
   
   const initialisedForPubkey = useRef<string | null>(null);
+  const nip4SubscriptionRef = useRef<{ close: () => void } | null>(null);
+  const nip17SubscriptionRef = useRef<{ close: () => void } | null>(null);
   
   const updateContext = useCallback((updates: Partial<MessagingContext>) => {
     setContext(prev => ({ ...prev, ...updates }));
   }, []);
+  
+  // Process incoming message and add to state incrementally
+  const processIncomingMessage = useCallback(async (event: DMLib.NostrEvent) => {
+    if (!user?.pubkey || !context.messagingState) return;
+    
+    try {
+      // Decrypt message using shared library function (reuses same logic as initial load)
+      const messagesWithMetadata = await DMLib.Impure.Message.decryptAllMessages(
+        [event],
+        user.signer,
+        user.pubkey
+      );
+      
+      if (messagesWithMetadata.length === 0) {
+        return; // Failed to process or decrypt
+      }
+      
+      // Add message incrementally (much more efficient than rebuilding entire state)
+      const updatedState = DMLib.Pure.Sync.addMessageToState(
+        context.messagingState,
+        messagesWithMetadata[0],
+        user.pubkey
+      );
+      
+      updateContext({ messagingState: updatedState });
+    } catch (error) {
+      console.error('[NewDM] Failed to process incoming message:', error);
+    }
+  }, [user, context.messagingState, updateContext]);
+  
+  // Centralized cleanup for subscriptions
+  const cleanupSubscriptions = useCallback(() => {
+    if (nip4SubscriptionRef.current) {
+      nip4SubscriptionRef.current.close();
+      nip4SubscriptionRef.current = null;
+    }
+    if (nip17SubscriptionRef.current) {
+      nip17SubscriptionRef.current.close();
+      nip17SubscriptionRef.current = null;
+    }
+    setSubscriptionStatus({ isNIP4Connected: false, isNIP17Connected: false });
+  }, []);
+  
+  // Start NIP-4 subscription
+  const startNIP4Subscription = useCallback(async () => {
+    if (!user?.pubkey || !nostr || !context.messagingState) return;
+    
+    if (nip4SubscriptionRef.current) {
+      nip4SubscriptionRef.current.close();
+      nip4SubscriptionRef.current = null;
+    }
+    
+    try {
+      const myRelays = context.messagingState.participants[user.pubkey]?.derivedRelays || [];
+      if (myRelays.length === 0) {
+        console.warn('[NewDM] No relays available for NIP-4 subscription');
+        return;
+      }
+      
+      // Subscribe from last cache time with 10s overlap for race conditions
+      const since = context.messagingState.syncState.lastCacheTime 
+        ? Math.floor(context.messagingState.syncState.lastCacheTime / 1000) - 10
+        : Math.floor(Date.now() / 1000);
+      
+      const filters = [
+        { kinds: [4], '#p': [user.pubkey], since },
+        { kinds: [4], authors: [user.pubkey], since }
+      ];
+      
+      const relayGroup = nostr.group(myRelays);
+      const subscription = relayGroup.req(filters);
+      let isActive = true;
+      
+      (async () => {
+        try {
+          for await (const msg of subscription) {
+            if (!isActive) break;
+            if (msg[0] === 'EVENT') {
+              await processIncomingMessage(msg[2]);
+            }
+          }
+        } catch (error) {
+          if (isActive) {
+            console.error('[NewDM] NIP-4 subscription error:', error);
+          }
+        }
+      })();
+      
+      nip4SubscriptionRef.current = {
+        close: () => {
+          isActive = false;
+        }
+      };
+      
+      setSubscriptionStatus(prev => ({ ...prev, isNIP4Connected: true }));
+      console.log('[NewDM] NIP-4 subscription started on', myRelays.length, 'relays');
+    } catch (error) {
+      console.error('[NewDM] Failed to start NIP-4 subscription:', error);
+      setSubscriptionStatus(prev => ({ ...prev, isNIP4Connected: false }));
+    }
+  }, [user, nostr, context.messagingState, processIncomingMessage]);
+  
+  // Start NIP-17 subscription
+  const startNIP17Subscription = useCallback(async () => {
+    if (!user?.pubkey || !nostr || !context.messagingState) return;
+    
+    if (nip17SubscriptionRef.current) {
+      nip17SubscriptionRef.current.close();
+      nip17SubscriptionRef.current = null;
+    }
+    
+    try {
+      const myRelays = context.messagingState.participants[user.pubkey]?.derivedRelays || [];
+      if (myRelays.length === 0) {
+        console.warn('[NewDM] No relays available for NIP-17 subscription');
+        return;
+      }
+      
+      // Subscribe from last cache time with 10s overlap, adjusted for NIP-17 timestamp fuzzing (±2 days)
+      const TWO_DAYS_IN_SECONDS = 2 * 24 * 60 * 60;
+      const since = context.messagingState.syncState.lastCacheTime 
+        ? Math.floor(context.messagingState.syncState.lastCacheTime / 1000) - 10 - TWO_DAYS_IN_SECONDS
+        : Math.floor(Date.now() / 1000) - TWO_DAYS_IN_SECONDS;
+      
+      const filters = [{
+        kinds: [1059],
+        '#p': [user.pubkey],
+        since,
+      }];
+      
+      const relayGroup = nostr.group(myRelays);
+      const subscription = relayGroup.req(filters);
+      let isActive = true;
+      
+      (async () => {
+        try {
+          for await (const msg of subscription) {
+            if (!isActive) break;
+            if (msg[0] === 'EVENT') {
+              await processIncomingMessage(msg[2]);
+            }
+          }
+        } catch (error) {
+          if (isActive) {
+            console.error('[NewDM] NIP-17 subscription error:', error);
+          }
+        }
+      })();
+      
+      nip17SubscriptionRef.current = {
+        close: () => {
+          isActive = false;
+        }
+      };
+      
+      setSubscriptionStatus(prev => ({ ...prev, isNIP17Connected: true }));
+      console.log('[NewDM] NIP-17 subscription started on', myRelays.length, 'relays');
+    } catch (error) {
+      console.error('[NewDM] Failed to start NIP-17 subscription:', error);
+      setSubscriptionStatus(prev => ({ ...prev, isNIP17Connected: false }));
+    }
+  }, [user, nostr, context.messagingState, processIncomingMessage]);
+  
+  // Start all subscriptions
+  const startSubscriptions = useCallback(async () => {
+    console.log('[NewDM] Starting subscriptions...');
+    await Promise.all([
+      startNIP4Subscription(),
+      startNIP17Subscription()
+    ]);
+    console.log('[NewDM] Subscriptions started');
+  }, [startNIP4Subscription, startNIP17Subscription]);
   
   // do our intiial load (cold or warm) of messaging state
   useEffect(() => {
@@ -323,6 +496,9 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         
         await initialiseMessaging(nostr, user.signer, user.pubkey, settings, updateContext);
         console.log('[NewDM] ✅ Initialization complete');
+        
+        // Start real-time subscriptions after initialization completes
+        await startSubscriptions();
       } catch (error) {
         console.error('[NewDM] Initialization failed:', error);
         setContext({
@@ -339,7 +515,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         });
       }
     })();
-  }, [user?.pubkey, nostr, appConfig.discoveryRelays]);
+  }, [user?.pubkey, nostr, appConfig.discoveryRelays, updateContext, startSubscriptions]);
   
   // TODO: Not yet implemented - stub implementations
   const sendMessage = useCallback(async (_params: {
@@ -360,6 +536,8 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     if (!user?.pubkey) return;
     
     try {
+      cleanupSubscriptions();
+      
       const { deleteMessagesFromDB } = await import('@/lib/dmMessageStore');
       await deleteMessagesFromDB(user.pubkey);
       
@@ -376,7 +554,14 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     } catch (error) {
       console.error('[NewDM] Error clearing cache:', error);
     }
-  }, [user?.pubkey]);
+  }, [user?.pubkey, cleanupSubscriptions]);
+  
+  // Cleanup subscriptions on unmount or user change
+  useEffect(() => {
+    return () => {
+      cleanupSubscriptions();
+    };
+  }, [user?.pubkey, cleanupSubscriptions]);
   
   // Detect hard refresh shortcut (Ctrl+Shift+R / Cmd+Shift+R) to clear cache
   useEffect(() => {
@@ -419,7 +604,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     protocolMode,
     getConversationRelays,
     clearCacheAndRefetch,
-    subscriptions, // TODO: Implement real-time subscriptions
+    subscriptions: subscriptionStatus,
     scanProgress, // TODO: Implement batch progress tracking
     isDoingInitialLoad,
   };

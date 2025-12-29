@@ -490,10 +490,26 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     }
     
     console.log('[NewDM] User logged in:', user.pubkey.substring(0, 8));
+    const previousUser = initialisedForPubkey.current;
+    const isChangingAccount = previousUser !== null && previousUser !== user.pubkey;
+    
     initialisedForPubkey.current = user.pubkey;
     setContext({ messagingState: null, isLoading: true, timing: {}, phase: null });
     
     (async () => {
+      // FIRST: Clear old user's cache if switching accounts (BLOCKING)
+      if (isChangingAccount) {
+        console.log('[NewDM] User switched from', previousUser.substring(0, 8), 'to', user.pubkey.substring(0, 8), '- clearing old cache');
+        try {
+          const { deleteMessagesFromDB } = await import('@/lib/dmMessageStore');
+          await deleteMessagesFromDB(previousUser!);
+          console.log('[NewDM] Old cache cleared successfully');
+        } catch (error) {
+          console.warn('[NewDM] Failed to clear old user cache:', error);
+        }
+      }
+      
+      // THEN: Start initialization with clean slate
       try {
         console.log('[NewDM] Starting initialization for', user.pubkey.substring(0, 8));
         const settings: DMSettings = {

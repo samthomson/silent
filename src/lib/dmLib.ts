@@ -1027,7 +1027,9 @@ const processNIP04Message = async (msg: NostrEvent, signer: Signer, myPubkey: st
     try {
       decryptedContent = await signer.nip04.decrypt(otherPubkey, msg.content);
     } catch (error) {
-      console.warn('[DM] Failed to decrypt NIP-04 message:', msg.id, error);
+      // Silent failure - decryption errors are expected for messages not intended for this account
+      // (e.g., when switching accounts or receiving malformed messages)
+      return null;
     }
   }
   
@@ -1110,6 +1112,7 @@ const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<Mes
 
 const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubkey: string): Promise<MessageWithMetadata[]> => {
   const results: MessageWithMetadata[] = [];
+  let nip04FailCount = 0;
   let nip17FailCount = 0;
   
   for (const msg of messages) {
@@ -1117,6 +1120,8 @@ const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubk
       const result = await processNIP04Message(msg, signer, myPubkey);
       if (result) {
         results.push(result);
+      } else {
+        nip04FailCount++;
       }
     } else if (msg.kind === 1059) {
       const result = await processNIP17Message(msg, signer);
@@ -1129,8 +1134,11 @@ const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubk
   }
   
   // Log summary if there were failures
-  if (nip17FailCount > 0) {
-    console.log(`[DM] Successfully processed ${results.length} messages, skipped ${nip17FailCount} undecryptable NIP-17 gift wraps`);
+  if (nip04FailCount > 0 || nip17FailCount > 0) {
+    const parts: string[] = [];
+    if (nip04FailCount > 0) parts.push(`${nip04FailCount} NIP-04`);
+    if (nip17FailCount > 0) parts.push(`${nip17FailCount} NIP-17`);
+    console.log(`[DM] Successfully processed ${results.length} messages, skipped ${parts.join(', ')} undecryptable messages`);
   }
   
   return results;
@@ -1290,7 +1298,7 @@ const fetchAndMergeParticipants = async (
   }
   
   // Fetch relay lists for new pubkeys
-  const relayListsMap = await fetchRelayLists(nostr, discoveryRelays, newPubkeys);
+  const { results: relayListsMap } = await fetchRelayLists(nostr, discoveryRelays, newPubkeys);
   
   // Build participants for new pubkeys
   const newParticipants = buildParticipantsMap(newPubkeys, relayListsMap, relayMode, discoveryRelays);

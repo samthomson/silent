@@ -8,7 +8,7 @@ import { useAppContext } from '@/hooks/useAppContext';
 import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@/lib/dmConstants';
 import { getDisplayName } from '@/lib/genUserName';
 import { formatConversationTime, formatFullDateTime, getPubkeyColor } from '@/lib/dmUtils';
-import { parseConversationId } from '@/lib/dmLib';
+import { Pure as DMLib } from '@/lib/dmLib';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -416,7 +416,7 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
   const [copiedPubkey, setCopiedPubkey] = useState<string | null>(null);
   
   // Parse all participants
-  const allParticipants = useMemo(() => parseConversationId(conversationId).participantPubkeys, [conversationId]);
+  const allParticipants = useMemo(() => DMLib.Conversation.parseConversationId(conversationId).participantPubkeys, [conversationId]);
   
   // Fetch all participant profiles
   const authorsData = useAuthorsBatch(allParticipants);
@@ -541,7 +541,7 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
 
   // Get all participant pubkeys and fetch their metadata
   const otherParticipants = useMemo(() => {
-    const { participantPubkeys } = parseConversationId(conversationId);
+    const { participantPubkeys } = DMLib.Conversation.parseConversationId(conversationId);
     return participantPubkeys.filter(pk => pk !== user?.pubkey);
   }, [conversationId, user?.pubkey]);
   
@@ -590,7 +590,7 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   
   // Parse conversation participants and exclude current user from display
-  const { participantPubkeys: allParticipants } = parseConversationId(conversationId);
+  const { participantPubkeys: allParticipants } = DMLib.Conversation.parseConversationId(conversationId);
   const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
 
   // Check if this is a self-messaging conversation
@@ -718,7 +718,7 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
   const devMode = config.devMode ?? false;
 
   // Check if this is a group chat (3+ participants including current user)
-  const { participantPubkeys: allParticipants } = conversationId ? parseConversationId(conversationId) : { participantPubkeys: [] };
+  const { participantPubkeys: allParticipants } = conversationId ? DMLib.Conversation.parseConversationId(conversationId) : { participantPubkeys: [] };
   const isGroupChat = allParticipants.length >= 3;
 
   const [messageText, setMessageText] = useState('');

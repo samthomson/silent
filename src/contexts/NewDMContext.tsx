@@ -273,6 +273,9 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   const { user } = useCurrentUser();
   const { config: appConfig } = useAppContext();
   
+  // Stabilize discovery relays reference to avoid triggering effects
+  const discoveryRelays = useMemo(() => appConfig.discoveryRelays, [appConfig.discoveryRelays.join(',')]);
+  
   const [context, setContext] = useState<MessagingContext>({
     messagingState: null,
     isLoading: true,
@@ -475,21 +478,26 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   // do our intiial load (cold or warm) of messaging state
   useEffect(() => {
     if (!user) {
+      console.log('[NewDM] No user logged in, resetting state');
       initialisedForPubkey.current = null;
-      setContext({ messagingState: null, isLoading: true, timing: {}, phase: null });
+      setContext({ messagingState: null, isLoading: false, timing: {}, phase: null });
       return;
     }
     
-    if (initialisedForPubkey.current === user.pubkey) return;
+    if (initialisedForPubkey.current === user.pubkey) {
+      console.log('[NewDM] Already initialized for', user.pubkey.substring(0, 8));
+      return;
+    }
     
+    console.log('[NewDM] User logged in:', user.pubkey.substring(0, 8));
     initialisedForPubkey.current = user.pubkey;
     setContext({ messagingState: null, isLoading: true, timing: {}, phase: null });
     
     (async () => {
       try {
-        console.log('[NewDM] Starting initialization...');
+        console.log('[NewDM] Starting initialization for', user.pubkey.substring(0, 8));
         const settings: DMSettings = {
-          discoveryRelays: appConfig.discoveryRelays,
+          discoveryRelays,
           relayMode: RELAY_MODE.HYBRID,
           relayTTL: 7 * 24 * 60 * 60 * 1000,
           queryLimit: 20000,
@@ -500,8 +508,9 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         
         // Start real-time subscriptions after initialization completes
         await startSubscriptions();
+        console.log('[NewDM] ✅ Subscriptions active');
       } catch (error) {
-        console.error('[NewDM] Initialization failed:', error);
+        console.error('[NewDM] ❌ Initialization failed:', error);
         setContext({
           messagingState: {
             participants: {},
@@ -516,7 +525,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         });
       }
     })();
-  }, [user?.pubkey, nostr, appConfig.discoveryRelays]);
+  }, [user?.pubkey, nostr, discoveryRelays]);
   
   // TODO: Not yet implemented - stub implementations
   const sendMessage = useCallback(async (_params: {

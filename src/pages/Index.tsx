@@ -1,6 +1,6 @@
 import { useSeoMeta } from '@unhead/react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { DMMessagingInterface } from '@/components/dm/DMMessagingInterface';
+import { NewDMMessagingInterface } from '@/components/dm/NewDMMessagingInterface';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ const Index = () => {
   const { theme, setTheme } = useTheme();
 
   useSeoMeta({
-    title: 'Silent - Private Messaging on Nostr',
+    title: 'Doduo - Private Messaging on Nostr',
     description: 'End-to-end encrypted messaging powered by Nostr. Signal-like privacy with decentralized infrastructure.',
   });
 
@@ -22,7 +22,7 @@ const Index = () => {
       <div className="h-screen flex bg-background">
         <AppSidebar />
         <div className="flex-1 overflow-hidden">
-          <DMMessagingInterface />
+          <NewDMMessagingInterface />
         </div>
       </div>
     );

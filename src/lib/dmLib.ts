@@ -287,7 +287,7 @@ const computeConversationId = (participantPubkeys: string[], subject: string): s
  * @param conversationId - The conversation ID in format "group:pubkey1,pubkey2:subject"
  * @returns Object with participantPubkeys array and subject string
  */
-export const parseConversationId = (conversationId: string): { participantPubkeys: string[]; subject: string } => {
+const parseConversationId = (conversationId: string): { participantPubkeys: string[]; subject: string } => {
   if (!conversationId.startsWith('group:')) {
     throw new Error(`Invalid conversation ID format: ${conversationId}`);
   }
@@ -749,6 +749,7 @@ export const Pure = {
   },
   Conversation: {
     computeConversationId,
+    parseConversationId,
     groupMessagesIntoConversations,
   },
   Sync: {

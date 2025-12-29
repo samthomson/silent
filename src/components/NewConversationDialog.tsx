@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/genUserName';
-import { createConversationId } from '@/lib/dmUtils';
+import { Pure as DMLib } from '@/lib/dmLib';
 
 interface NewConversationDialogProps {
   onStartConversation: (pubkey: string) => void;
@@ -214,7 +214,8 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
     }
 
     // Create conversation ID from all participants (including current user)
-    const conversationId = createConversationId([user.pubkey, ...selectedPubkeys]);
+    // Empty string for subject (no subject for direct 1-on-1 or group chats)
+    const conversationId = DMLib.Conversation.computeConversationId([user.pubkey, ...selectedPubkeys], '');
     onStartConversation(conversationId);
     
     if (selectedPubkeys.length > 1) {
@@ -463,6 +464,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
                             onClick={() => {
                               handleToggleContact(pubkey);
                               setSearchInput('');
+                              setPopoverOpen(false);
                               // Keep the index position
                               setHighlightedIndex(index);
                             }}

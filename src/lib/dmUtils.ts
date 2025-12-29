@@ -97,27 +97,7 @@ export function formatFullDateTime(timestamp: number): string {
   });
 }
 
-/**
- * Create a conversation ID from all participants.
- * 
- * Always returns "group:sorted,pubkey,list" format for consistency.
- * This makes 1-on-1 and group chats use the same format, enables self-messaging,
- * and ensures both parties see the exact same conversation ID.
- * 
- * Examples:
- * - Self: "group:alice"
- * - 1-on-1: "group:alice,bob" (both Alice and Bob see this same ID)
- * - Group: "group:alice,bob,charlie"
- * 
- * @param allParticipants - All participant pubkeys including current user
- * @returns Conversation ID in "group:..." format
- */
-export function createConversationId(allParticipants: string[]): string {
-  const uniqueSorted = [...new Set(allParticipants)].sort();
-  return `group:${uniqueSorted.join(',')}`;
-}
-
-// TODO: This old parser will be replaced by the new dmLib.computeConversationId format
+// TODO: This old parser will be replaced by the new dmLib.parseConversationId format
 // The new system (NewDMContext) uses "group:pubkeys:subject" format consistently
 // This old parser is only used by the legacy DMContext.tsx
 /**

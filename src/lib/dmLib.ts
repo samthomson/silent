@@ -536,19 +536,26 @@ const determineNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[], 
  * @returns Messages with conversationId and protocol populated
  */
 const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetadata[]): Message[] => {
-  return messagesWithMetadata.map(msg => ({
-    // For NIP-17, inner messages don't have IDs (they're never signed), so use giftWrapId as the ID
-    // For NIP-04, use the event ID
-    id: msg.event.id || msg.giftWrapId || `missing-id-${msg.event.created_at}-${msg.event.pubkey.substring(0, 8)}`,
-    event: msg.event, // The inner message with DECRYPTED content
-    conversationId: computeConversationId(msg.participants || [], msg.subject || ''),
-    protocol: msg.event.kind === 4 ? 'nip04' : 'nip17',
-    error: msg.error, // Pass through decryption error flag
-    // NIP-17 debugging - copy over encrypted layers
-    giftWrapId: msg.giftWrapId,
-    sealEvent: msg.sealEvent,
-    giftWrapEvent: msg.giftWrapEvent,
-  }));
+  return messagesWithMetadata.map(msg => {
+    // NIP-04: event is signed, so it has an ID
+    // NIP-17: inner event is never signed, so use giftWrapId (which is always set)
+    const messageId = msg.event.kind === 4 ? msg.event.id : msg.giftWrapId;
+    if (!messageId) {
+      throw new Error(`Message missing ID: kind=${msg.event.kind}, hasGiftWrapId=${!!msg.giftWrapId}`);
+    }
+    
+    return {
+      id: messageId,
+      event: msg.event, // The inner message with DECRYPTED content
+      conversationId: computeConversationId(msg.participants || [], msg.subject || ''),
+      protocol: msg.event.kind === 4 ? 'nip04' : 'nip17',
+      error: msg.error, // Pass through decryption error flag
+      // NIP-17 debugging - copy over encrypted layers
+      giftWrapId: msg.giftWrapId,
+      sealEvent: msg.sealEvent,
+      giftWrapEvent: msg.giftWrapEvent,
+    };
+  });
 };
 
 /**

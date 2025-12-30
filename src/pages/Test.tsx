@@ -30,10 +30,11 @@ export function Test() {
       .map(([relay, users]) => ({ relay, users, count: users.length }))
       .sort((a, b) => b.count - a.count);
 
-    // Count failed relays
-    const failed = Object.values(messagingState.relayInfo).filter(
-      info => !info.lastQuerySucceeded
-    ).length;
+    // Count failed relays: relays that have health info AND failed
+    const failed = data.filter(({ relay }) => {
+      const health = messagingState.relayInfo[relay];
+      return health && !health.lastQuerySucceeded;
+    }).length;
 
     return { relayData: data, failedRelayCount: failed };
   }, [messagingState]);
@@ -133,11 +134,10 @@ export function Test() {
               <CollapsibleContent className="mt-3">
                 <div className="max-h-96 overflow-y-auto space-y-2">
                   {relayData.map(({ relay, users, count }) => {
-                    const wasQueried = messagingState.syncState.queriedRelays.includes(relay);
                     const health = messagingState.relayInfo[relay];
-                    const succeeded = health?.lastQuerySucceeded ?? false;
+                    // If relay has health info, we queried it
+                    const icon = !health ? '⚪' : health.lastQuerySucceeded ? '✅' : '❌';
                     const failed = health && !health.lastQuerySucceeded;
-                    const icon = !wasQueried ? '⚪' : succeeded ? '✅' : '❌';
                     
                     return (
                       <div key={relay} className="border rounded p-3 bg-background text-xs">
@@ -160,8 +160,8 @@ export function Test() {
                           </summary>
                           <div className="mt-2 pl-4 space-y-1">
                             {users.map(pubkey => (
-                              <div key={pubkey} className="font-mono text-xs">
-                                {pubkey.substring(0, 16)}...{pubkey.substring(pubkey.length - 4)}
+                              <div key={pubkey} className="font-mono text-xs break-all">
+                                {pubkey}
                               </div>
                             ))}
                           </div>

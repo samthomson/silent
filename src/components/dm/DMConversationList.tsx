@@ -4,7 +4,8 @@ import { useDMContext } from '@/contexts/DMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { getDisplayName } from '@/lib/genUserName';
-import { formatConversationTime, formatFullDateTime, parseConversationId, getPubkeyColor } from '@/lib/dmUtils';
+import { formatConversationTime, formatFullDateTime, getPubkeyColor } from '@/lib/dmUtils';
+import { Pure as DMLib } from '@/lib/dmLib';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -126,7 +127,7 @@ const ConversationItemComponent = ({
   const { user } = useCurrentUser();
   
   // Parse conversation participants and exclude current user from display
-  const allParticipants = parseConversationId(pubkey);
+  const { participantPubkeys: allParticipants } = DMLib.Conversation.parseConversationId(pubkey);
   const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
 
   // Check if this is a self-messaging conversation

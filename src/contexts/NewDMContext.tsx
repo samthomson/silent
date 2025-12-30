@@ -146,7 +146,7 @@ const initialiseMessaging = async (
     relayInfoFromInitial
   );
   
-  currentState = DMLib.Pure.Sync.mergeMessagingState(currentState, newState);
+  currentState = currentState ? DMLib.Pure.Sync.mergeMessagingState(currentState, newState) : newState;
   updateContext({ messagingState: currentState, phase: NEW_DM_PHASES.INITIAL_QUERY, isLoading: true, timing: timings });
   
   // D. Extract unique users
@@ -199,7 +199,7 @@ const initialiseMessaging = async (
   currentState = DMLib.Pure.Sync.mergeMessagingState(currentState, gapFillingState);
   
   // Save to cache
-  await DMLib.Impure.Cache.saveToCache(myPubkey, currentState!);
+  await DMLib.Impure.Cache.saveToCache(myPubkey, currentState);
   
   timings.buildAndSave = Date.now() - stepK;
   timings.total = Date.now() - startTime;

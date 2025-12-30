@@ -10,6 +10,7 @@ import type {
   RelayMode,
   RelayListsResult,
   RelayInfo,
+  Conversation,
 } from '@/lib/dmTypes';
 
 export const CACHE_DB_NAME = 'nostr-dm-cache-v2';
@@ -630,13 +631,11 @@ const addMessageToState = (
  * Merges two MessagingState objects, properly combining conversation message arrays.
  * When conversations exist in both states, messages are combined, deduped, and sorted.
  * 
- * @param base - Base messaging state (can be null)
+ * @param base - Base messaging state
  * @param updates - New messaging state to merge in
  * @returns Merged MessagingState with properly combined conversation messages
  */
-const mergeMessagingState = (base: MessagingState | null, updates: MessagingState): MessagingState => {
-  if (!base) return updates;
-  
+const mergeMessagingState = (base: MessagingState, updates: MessagingState): MessagingState => {
   // Merge conversation messages properly - combine and sort arrays for overlapping conversations
   const mergedConversationMessages: Record<string, Message[]> = { ...base.conversationMessages };
   
@@ -657,11 +656,34 @@ const mergeMessagingState = (base: MessagingState | null, updates: MessagingStat
     }
   }
   
+  // Merge conversation metadata - preserve lastReadAt from base if higher
+  const mergedMetadata: Record<string, Conversation> = {};
+  for (const [convId, updatedMeta] of Object.entries(updates.conversationMetadata)) {
+    const baseMeta = base.conversationMetadata[convId];
+    mergedMetadata[convId] = {
+      ...updatedMeta,
+      // Preserve higher lastReadAt (user read state should not regress)
+      lastReadAt: baseMeta ? Math.max(baseMeta.lastReadAt, updatedMeta.lastReadAt) : updatedMeta.lastReadAt
+    };
+  }
+  // Add any conversations only in base (shouldn't happen in normal flow, but be safe)
+  for (const [convId, baseMeta] of Object.entries(base.conversationMetadata)) {
+    if (!mergedMetadata[convId]) {
+      mergedMetadata[convId] = baseMeta;
+    }
+  }
+  
+  // Merge relay info - combine relay health data from both states
+  const mergedRelayInfo = new Map<string, RelayInfo>(base.relayInfo);
+  for (const [relay, info] of updates.relayInfo.entries()) {
+    mergedRelayInfo.set(relay, info); // Updates take precedence (fresher data)
+  }
+  
   return {
     ...updates,
-    conversationMetadata: { ...base.conversationMetadata, ...updates.conversationMetadata },
+    conversationMetadata: mergedMetadata,
     conversationMessages: mergedConversationMessages,
-    relayInfo: { ...base.relayInfo, ...updates.relayInfo }
+    relayInfo: mergedRelayInfo
   };
 };
 

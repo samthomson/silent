@@ -18,7 +18,7 @@ export function RelayResolver({ children, inboxRelaysRef, outboxRelaysRef }: Rel
 
   useEffect(() => {
     if (!user?.pubkey) {
-      hasResolved.current = true;
+      hasResolved.current = false;
       return;
     }
 
@@ -34,10 +34,8 @@ export function RelayResolver({ children, inboxRelaysRef, outboxRelaysRef }: Rel
     outboxRelaysRef.current = outboxRelays;
     console.log('[RelayResolver] ✅ Outbox relays updated:', outboxRelays);
 
-    if (!hasResolved.current) {
-      hasResolved.current = true;
-    }
-  }, [user?.pubkey, relayLists, isLoading, inboxRelaysRef, outboxRelaysRef, config.discoveryRelays]);
+    hasResolved.current = true;
+  }, [user?.pubkey, relayLists, isLoading, config.discoveryRelays]);
 
   if (user?.pubkey && isLoading) {
     return (

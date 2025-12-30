@@ -673,11 +673,11 @@ const mergeMessagingState = (base: MessagingState, updates: MessagingState): Mes
     }
   }
   
-  // Merge relay info - combine relay health data from both states
-  const mergedRelayInfo = new Map<string, RelayInfo>(base.relayInfo);
-  for (const [relay, info] of updates.relayInfo.entries()) {
-    mergedRelayInfo.set(relay, info); // Updates take precedence (fresher data)
-  }
+  // Merge relay info - updates take precedence (fresher data)
+  const mergedRelayInfo: Record<string, RelayInfo> = {
+    ...base.relayInfo,
+    ...updates.relayInfo
+  };
   
   return {
     ...updates,

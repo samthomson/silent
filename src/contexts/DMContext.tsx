@@ -6,7 +6,7 @@ import { useAppContext } from '@/hooks/useAppContext';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
 import { useRelayLists, type RelayListResult } from '@/hooks/useRelayList';
-import { validateDMEvent, parseConversationId } from '@/lib/dmUtils';
+import { validateDMEvent } from '@/lib/dmUtils';
 import { Pure as DMLib } from '@/lib/dmLib';
 import { LOADING_PHASES, type LoadingPhase, PROTOCOL_MODE, type ProtocolMode } from '@/lib/dmConstants';
 import { fetchRelayListsBulk, extractInboxRelays } from '@/lib/relayUtils';
@@ -1780,8 +1780,8 @@ export function DMProvider({ children, config }: DMProviderProps) {
       // Extract unique participant pubkeys from all conversations
       const pubkeys: string[] = [];
       conversations.forEach(conv => {
-        const participants = parseConversationId(conv.id);
-        pubkeys.push(...participants);
+        const { participantPubkeys } = DMLib.Conversation.parseConversationId(conv.id);
+        pubkeys.push(...participantPubkeys);
       });
       const uniquePubkeys = Array.from(new Set(pubkeys)).filter(p => p !== userPubkey);
 
@@ -1896,7 +1896,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
 
     if (typeof recipientPubkey === 'string' && recipientPubkey.startsWith('group:')) {
       // Extract pubkeys from group ID (which includes sender)
-      const allParticipants = parseConversationId(recipientPubkey);
+      const { participantPubkeys: allParticipants } = DMLib.Conversation.parseConversationId(recipientPubkey);
       // Recipients are everyone except the sender
       recipients = allParticipants.filter(p => p !== userPubkey);
       
@@ -1954,7 +1954,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
   // Get all relay info for a conversation, grouped by relay
   // This is reactive - when cache updates, result updates
   const getConversationRelays = useCallback((conversationId: string): ConversationRelayInfo[] => {
-    const participants = parseConversationId(conversationId);
+    const { participantPubkeys: participants } = DMLib.Conversation.parseConversationId(conversationId);
     const relayMap = new Map<string, Array<{ pubkey: string; isCurrentUser: boolean; source: string }>>();
 
     // Normalize relay URL by removing trailing slash

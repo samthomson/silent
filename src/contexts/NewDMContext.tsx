@@ -91,13 +91,12 @@ const initialiseMessaging = async (
   const baseParticipants = { ...refreshedParticipants, [myPubkey]: myParticipant };
   console.log('[NewDM] B.2 Base participants:', Object.keys(baseParticipants));
   
-  // C. Query messages (use current user's relays from participants)
+  // C. Query messages
   console.log('[NewDM] C. Querying messages...');
   const stepC = Date.now();
-  // Convert lastCacheTime from milliseconds to seconds before passing to computeSinceTimestamp
   const lastCacheTimeInSeconds = cached?.syncState.lastCacheTime ? Math.floor(cached.syncState.lastCacheTime / 1000) : null;
   const since = mode === DMLib.StartupMode.WARM ? DMLib.Pure.Sync.computeSinceTimestamp(lastCacheTimeInSeconds, 2) : null;
-  const queryRelays = baseParticipants[myPubkey].derivedRelays;
+  const queryRelays = mode === DMLib.StartupMode.WARM ? (cached?.syncState?.queriedRelays ?? baseParticipants[myPubkey].derivedRelays) : baseParticipants[myPubkey].derivedRelays;
   console.log('[NewDM] C. Query config:', { 
     relays: queryRelays, 
     since: since ? new Date(since * 1000).toISOString() : 'beginning of time',
@@ -169,8 +168,7 @@ const initialiseMessaging = async (
   console.log('[NewDM] E+F. Final participants:', Object.keys(participants), 'includes me?', myPubkey in participants);
   
   // H. Find new relays to query
-  const alreadyQueried = mode === DMLib.StartupMode.WARM ? cached.syncState.queriedRelays : participants[myPubkey].derivedRelays;
-  const newRelays = DMLib.Pure.Relay.findNewRelaysToQuery(participants, alreadyQueried);
+  const newRelays = DMLib.Pure.Relay.findNewRelaysToQuery(participants, queryRelays);
   console.log('[NewDM] H. New relays to query:', newRelays);
   
   // I. Query new relays

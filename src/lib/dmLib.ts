@@ -627,6 +627,45 @@ const addMessageToState = (
 };
 
 /**
+ * Merges two MessagingState objects, properly combining conversation message arrays.
+ * When conversations exist in both states, messages are combined, deduped, and sorted.
+ * 
+ * @param base - Base messaging state (can be null)
+ * @param updates - New messaging state to merge in
+ * @returns Merged MessagingState with properly combined conversation messages
+ */
+const mergeMessagingState = (base: MessagingState | null, updates: MessagingState): MessagingState => {
+  if (!base) return updates;
+  
+  // Merge conversation messages properly - combine and sort arrays for overlapping conversations
+  const mergedConversationMessages: Record<string, Message[]> = { ...base.conversationMessages };
+  
+  for (const [convId, updatedMessages] of Object.entries(updates.conversationMessages)) {
+    if (mergedConversationMessages[convId]) {
+      // Merge arrays, dedupe by ID, and sort
+      const combined = [...mergedConversationMessages[convId], ...updatedMessages];
+      const seen = new Set<string>();
+      const deduped = combined.filter(msg => {
+        const key = msg.giftWrapId || msg.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      mergedConversationMessages[convId] = deduped.sort((a, b) => a.event.created_at - b.event.created_at);
+    } else {
+      mergedConversationMessages[convId] = updatedMessages;
+    }
+  }
+  
+  return {
+    ...updates,
+    conversationMetadata: { ...base.conversationMetadata, ...updates.conversationMetadata },
+    conversationMessages: mergedConversationMessages,
+    relayInfo: { ...base.relayInfo, ...updates.relayInfo }
+  };
+};
+
+/**
  * Builds the complete MessagingState for the app from raw query results
  * Takes decrypted messages and constructs all derived structures needed for the messaging system
  * 
@@ -653,10 +692,13 @@ const buildMessagingAppState = (
   // 2. Dedupe messages (gap-filling may have overlaps with initial query)
   const allMessages = dedupeMessages(enrichedInitial, enrichedGapFill);
   
-  // 3. Group messages by conversationId
-  const conversationMessages = groupMessagesIntoConversations(allMessages, '');
+  // 3. Sort all messages
+  const sortedMessages = allMessages.sort((a, b) => a.event.created_at - b.event.created_at);
   
-  // 4. Build Conversation metadata objects from grouped messages
+  // 3. Group messages by conversationId
+  const conversationMessages = groupMessagesIntoConversations(sortedMessages, '');
+  
+  // 5. Build Conversation metadata objects from grouped messages
   const conversationMetadata: Record<string, Conversation> = {};
   
   for (const [conversationId, messages] of Object.entries(conversationMessages)) {
@@ -665,24 +707,18 @@ const buildMessagingAppState = (
     const participantPubkeys = parts[1] ? parts[1].split(',') : [];
     const subject = parts[2] || '';
     
-    // Sort messages by timestamp (oldest to newest)
-    const sortedMessages = [...messages].sort((a, b) => a.event.created_at - b.event.created_at);
-    
-    // Update conversationMessages with sorted array
-    conversationMessages[conversationId] = sortedMessages;
-    
     // Find last activity (most recent message timestamp)
-    const lastActivity = Math.max(...sortedMessages.map(m => m.event.created_at));
+    const lastActivity = Math.max(...messages.map(m => m.event.created_at));
     
     // Check protocols used
-    const hasNIP04 = sortedMessages.some(m => m.protocol === 'nip04');
-    const hasNIP17 = sortedMessages.some(m => m.protocol === 'nip17');
+    const hasNIP04 = messages.some(m => m.protocol === 'nip04');
+    const hasNIP17 = messages.some(m => m.protocol === 'nip17');
     
     // Check if any messages have decryption errors
-    const hasDecryptionErrors = sortedMessages.some(m => m.error !== undefined);
+    const hasDecryptionErrors = messages.some(m => m.error !== undefined);
     
     // Get last message for preview
-    const lastMsg = sortedMessages[sortedMessages.length - 1];
+    const lastMsg = messages[messages.length - 1];
     const lastMessage = lastMsg ? {
       decryptedContent: lastMsg.event.content,
       error: lastMsg.error,
@@ -690,7 +726,7 @@ const buildMessagingAppState = (
     
     // Determine if conversation is known or a request
     // Known = we've sent at least one message, Request = we've only received
-    const hasSentMessage = sortedMessages.some(m => m.event.pubkey === myPubkey);
+    const hasSentMessage = messages.some(m => m.event.pubkey === myPubkey);
     const isKnown = hasSentMessage;
     const isRequest = !hasSentMessage;
     
@@ -835,6 +871,7 @@ export const Pure = {
     computeSinceTimestamp,
     buildMessagingAppState,
     addMessageToState,
+    mergeMessagingState,
   },
 };
 

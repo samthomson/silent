@@ -19,21 +19,6 @@ import type { ConversationRelayInfo } from '@/contexts/DMContext';
 const MESSAGES_PER_PAGE = 25;
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-const mergeMessagingState = (base: MessagingState | null, updates: MessagingState): MessagingState => {
-  if (!base) return updates;
-  
-  return {
-    ...updates,
-    conversationMetadata: { ...base.conversationMetadata, ...updates.conversationMetadata },
-    conversationMessages: { ...base.conversationMessages, ...updates.conversationMessages },
-    relayInfo: { ...base.relayInfo, ...updates.relayInfo }
-  };
-};
-
-// ============================================================================
 // Orchestrators
 // ============================================================================
 
@@ -161,7 +146,7 @@ const initialiseMessaging = async (
     relayInfoFromInitial
   );
   
-  currentState = mergeMessagingState(currentState, newState);
+  currentState = DMLib.Pure.Sync.mergeMessagingState(currentState, newState);
   updateContext({ messagingState: currentState, phase: NEW_DM_PHASES.INITIAL_QUERY, isLoading: true, timing: timings });
   
   // D. Extract unique users
@@ -211,7 +196,7 @@ const initialiseMessaging = async (
     combinedRelayInfo
   );
   
-  currentState = mergeMessagingState(currentState, gapFillingState);
+  currentState = DMLib.Pure.Sync.mergeMessagingState(currentState, gapFillingState);
   
   // Save to cache
   await DMLib.Impure.Cache.saveToCache(myPubkey, currentState!);

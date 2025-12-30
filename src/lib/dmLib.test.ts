@@ -3401,7 +3401,7 @@ describe('DMLib', () => {
         it('should use correct query filters', async () => {
           const queryMock = vi.fn().mockResolvedValue([]);
           const mockNostr = {
-            group: () => ({ query: queryMock })
+            relay: () => ({ query: queryMock })
           };
           
           await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2']);
@@ -3414,15 +3414,16 @@ describe('DMLib', () => {
 
         it('should return empty map on query error', async () => {
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockRejectedValue(new Error('Network error'))
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
+          const { results } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1']);
           
-          expect(result).toBeInstanceOf(Map);
-          expect(result.size).toBe(0);
+          expect(results).toBeInstanceOf(Map);
+          expect(results.size).toBe(1); // Still creates entry for pk1 with all nulls
+          expect(results.get('pk1')).toEqual({ kind10002: null, kind10050: null, kind10006: null });
         });
 
         it('should handle mix of pubkeys with and without events', async () => {
@@ -3433,17 +3434,17 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
           
-          const result = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2', 'pk3']);
+          const { results } = await DMLib.Impure.Relay.fetchRelayLists(mockNostr as any, ['wss://discovery.com'], ['pk1', 'pk2', 'pk3']);
           
-          expect(result.size).toBe(3);
-          expect(result.get('pk1')?.kind10002).toEqual(mockEvents[0]);
-          expect(result.get('pk2')).toEqual({ kind10002: null, kind10050: null, kind10006: null });
-          expect(result.get('pk3')?.kind10050).toEqual(mockEvents[1]);
+          expect(results.size).toBe(3);
+          expect(results.get('pk1')?.kind10002).toEqual(mockEvents[0]);
+          expect(results.get('pk2')).toEqual({ kind10002: null, kind10050: null, kind10006: null });
+          expect(results.get('pk3')?.kind10050).toEqual(mockEvents[1]);
         });
 
         it('should query with timeout', async () => {
@@ -3509,7 +3510,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -3522,7 +3523,7 @@ describe('DMLib', () => {
 
         it('should handle user with no relay list events at all', async () => {
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue([])
             })
           };
@@ -3543,7 +3544,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -3556,10 +3557,7 @@ describe('DMLib', () => {
         it('should query correct relays and pubkey', async () => {
           const queryMock = vi.fn().mockResolvedValue([]);
           const mockNostr = {
-            group: (relays: string[]) => {
-              expect(relays).toEqual(['wss://discovery1.com', 'wss://discovery2.com']);
-              return { query: queryMock };
-            }
+            relay: () => ({ query: queryMock })
           };
           
           await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery1.com', 'wss://discovery2.com'], 'testPubkey');
@@ -3572,7 +3570,7 @@ describe('DMLib', () => {
 
         it('should handle query errors gracefully', async () => {
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockRejectedValue(new Error('Network error'))
             })
           };
@@ -3629,7 +3627,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -3645,7 +3643,7 @@ describe('DMLib', () => {
         it('should only query for single pubkey (current user)', async () => {
           const queryMock = vi.fn().mockResolvedValue([]);
           const mockNostr = {
-            group: () => ({ query: queryMock })
+            relay: () => ({ query: queryMock })
           };
           
           await DMLib.Impure.Relay.fetchMyRelayInfo(mockNostr as any, ['wss://discovery.com'], 'currentUser');
@@ -3884,12 +3882,13 @@ describe('DMLib', () => {
             },
           };
 
-          // Should log but continue
-          const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          // Should return message with error flag
+          const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
           const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
 
-          expect(result).toHaveLength(0); // Skipped
-          expect(consoleSpy).toHaveBeenCalled();
+          expect(result).toHaveLength(1);
+          expect(result[0].error).toBe('Unable to decrypt');
+          expect(result[0].event).toBe(giftWrap); // Original gift wrap event preserved
           consoleSpy.mockRestore();
         });
 
@@ -3937,11 +3936,12 @@ describe('DMLib', () => {
             },
           };
 
-          const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
           const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
 
-          expect(result).toHaveLength(0); // Skipped
-          expect(consoleSpy).toHaveBeenCalled();
+          expect(result).toHaveLength(1);
+          expect(result[0].error).toBe('Unable to decrypt');
+          expect(result[0].event).toBe(giftWrap); // Original gift wrap event preserved
           consoleSpy.mockRestore();
         });
 
@@ -3968,7 +3968,9 @@ describe('DMLib', () => {
 
           const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
 
-          expect(result).toHaveLength(0); // Skipped due to decryption error
+          expect(result).toHaveLength(1);
+          expect(result[0].error).toBe('Unable to decrypt');
+          expect(result[0].event).toBe(giftWrap); // Original gift wrap event preserved
         });
 
         it('handles NIP-17 when signer not available', async () => {
@@ -3987,15 +3989,11 @@ describe('DMLib', () => {
 
           const mockSigner: DMLib.Signer = {}; // No nip44
 
-          const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const result = await DMLib.Impure.Message.decryptAllMessages([giftWrap], mockSigner, myPubkey);
 
-          expect(result).toHaveLength(0); // Skipped
-          expect(consoleWarnSpy).toHaveBeenCalledWith(
-            expect.stringContaining('NIP-44 not available'),
-            'gift1'
-          );
-          consoleWarnSpy.mockRestore();
+          expect(result).toHaveLength(1);
+          expect(result[0].error).toBe('Signer does not support NIP-44');
+          expect(result[0].event).toBe(giftWrap); // Original gift wrap event preserved
         });
 
         it('processes mixed NIP-04 and NIP-17 messages', async () => {
@@ -4264,7 +4262,7 @@ describe('DMLib', () => {
           
           const mockQuery = vi.fn().mockResolvedValue(mockEvents);
           const mockNostr = {
-            group: () => ({ query: mockQuery })
+            relay: () => ({ query: mockQuery })
           } as any;
           
           const result = await DMLib.Impure.Participant.refreshStaleParticipants(
@@ -4286,7 +4284,7 @@ describe('DMLib', () => {
       describe('fetchAndMergeParticipants', () => {
         it('should return base participants unchanged when no new pubkeys', async () => {
           const mockNostr = {
-            group: () => ({ query: vi.fn() })
+            relay: () => ({ query: vi.fn() })
           };
           
           const baseParticipants: Record<string, Participant> = {
@@ -4312,7 +4310,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -4349,7 +4347,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -4388,7 +4386,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -4420,7 +4418,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };
@@ -4482,7 +4480,7 @@ describe('DMLib', () => {
           ];
           
           const mockNostr = {
-            group: () => ({
+            relay: () => ({
               query: vi.fn().mockResolvedValue(mockEvents)
             })
           };

@@ -1314,7 +1314,7 @@ const refreshStaleParticipants = async (
   }
   
   // 3. Fetch fresh relay lists for stale participants
-  const relayListsMap = await fetchRelayLists(nostr, discoveryRelays, stalePubkeys);
+  const { results: relayListsMap } = await fetchRelayLists(nostr, discoveryRelays, stalePubkeys);
   
   // 4. Build updated participants
   const updatedParticipants = buildParticipantsMap(stalePubkeys, relayListsMap, relayMode, discoveryRelays);

@@ -305,7 +305,65 @@ const parseConversationId = (conversationId: string): { participantPubkeys: stri
   const participantPubkeys = participantsString.split(',');
   
   return { participantPubkeys, subject };
-}
+};
+
+/**
+ * Normalizes a relay URL by removing trailing slash for consistent comparison.
+ * 
+ * @param relay - Relay URL to normalize
+ * @returns Normalized relay URL without trailing slash
+ */
+const normalizeRelayUrl = (relay: string): string => {
+  return relay.endsWith('/') ? relay.slice(0, -1) : relay;
+};
+
+/**
+ * Builds relay information for a conversation, showing which participants use which relays.
+ * Groups relays by URL and tracks all users on each relay, sorted by most shared relays first.
+ * 
+ * @param conversationId - The conversation ID to analyze
+ * @param participants - Record of all participants with their relay info
+ * @param myPubkey - Current user's pubkey (to mark which relays are "yours")
+ * @returns Array of relay info objects with relay URL and user list
+ */
+const getConversationRelays = (
+  conversationId: string,
+  participants: Record<string, Participant>,
+  myPubkey: string
+): Array<{ relay: string; users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }> }> => {
+  const { participantPubkeys } = parseConversationId(conversationId);
+  const relayMap = new Map<string, Array<{ pubkey: string; isCurrentUser: boolean; source: string }>>();
+
+  // Add all participants' relays
+  participantPubkeys.forEach(pubkey => {
+    const participant = participants[pubkey];
+    if (!participant) return;
+
+    const isCurrentUser = pubkey === myPubkey;
+    const relays = participant.derivedRelays || [];
+    
+    // Determine source based on what relay lists exist
+    // (In new architecture, derivedRelays are already computed from available lists)
+    const source = isCurrentUser ? 'Your inbox relays' : 'Inbox relays';
+
+    relays.forEach(relay => {
+      const normalizedRelay = normalizeRelayUrl(relay);
+      if (!relayMap.has(normalizedRelay)) {
+        relayMap.set(normalizedRelay, []);
+      }
+      relayMap.get(normalizedRelay)!.push({
+        pubkey,
+        isCurrentUser,
+        source,
+      });
+    });
+  });
+
+  // Convert map to array and sort by number of users (most shared relays first)
+  return Array.from(relayMap.entries())
+    .map(([relay, users]) => ({ relay, users }))
+    .sort((a, b) => b.users.length - a.users.length);
+};
 
 /**
  * Groups messages into conversations by their conversationId
@@ -769,6 +827,8 @@ export const Pure = {
   Conversation: {
     computeConversationId,
     parseConversationId,
+    normalizeRelayUrl,
+    getConversationRelays,
     groupMessagesIntoConversations,
   },
   Sync: {

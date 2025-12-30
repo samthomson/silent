@@ -584,10 +584,17 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     console.log('[NewDM] sendMessage not yet implemented');
   }, []);
   
-  const getConversationRelays = useCallback((_conversationId: string): ConversationRelayInfo[] => {
-    // TODO: Implement relay lookup from participants
-    return [];
-  }, []);
+  const getConversationRelays = useCallback((conversationId: string): ConversationRelayInfo[] => {
+    if (!user?.pubkey || !context.messagingState) {
+      return [];
+    }
+
+    return DMLib.Pure.Conversation.getConversationRelays(
+      conversationId,
+      context.messagingState.participants,
+      user.pubkey
+    );
+  }, [user, context.messagingState]);
   
   // Clear cache and refetch from relays
   const clearCacheAndRefetch = useCallback(async () => {

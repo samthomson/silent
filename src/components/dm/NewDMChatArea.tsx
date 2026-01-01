@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Loader2, AlertTriangle, FileJson, FileLock, Server, ExternalLink, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import type { NostrEvent } from '@nostrify/nostrify';
@@ -366,19 +366,37 @@ const ParticipantNames = ({ pubkeys }: { pubkeys: string[] }) => {
 };
 
 // Component to display user labels for a relay
-const RelayUserLabels = ({ users, authorsMap }: { 
+const RelayUserLabels = ({ users, authorsMap, relay, discoveryRelays }: { 
   users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }>; 
   authorsMap: Map<string, { event?: NostrEvent; metadata?: import('@nostrify/nostrify').NostrMetadata }>;
+  relay?: string;
+  discoveryRelays?: Set<string>;
 }) => {
   const userLabels = users.map(user => {
     if (user.isCurrentUser) {
-      return { label: 'You', source: user.source, isCurrentUser: true };
+      // Check if this relay is ONLY in discovery relays (not in user's actual relay lists)
+      const isOnlyDiscovery = relay && discoveryRelays && discoveryRelays.has(relay);
+      return { 
+        label: isOnlyDiscovery ? 'Discovery' : 'Yours', 
+        source: user.source, 
+        isCurrentUser: !isOnlyDiscovery,
+        isDiscovery: isOnlyDiscovery,
+        type: isOnlyDiscovery ? 'discovery' : 'yours'
+      };
     }
     
     const authorData = authorsMap.get(user.pubkey);
     const metadata = authorData?.metadata;
     const displayName = getDisplayName(user.pubkey, metadata);
-    return { label: displayName, source: user.source, isCurrentUser: false };
+    // Add possessive 's to show it's their relay
+    const possessiveLabel = displayName.endsWith('s') ? `${displayName}'` : `${displayName}'s`;
+    return { 
+      label: possessiveLabel, 
+      source: user.source, 
+      isCurrentUser: false, 
+      isDiscovery: false,
+      type: 'other'
+    };
   });
 
   return (
@@ -388,10 +406,10 @@ const RelayUserLabels = ({ users, authorsMap }: {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className={cn(
-                "text-xs px-2 py-0.5 rounded cursor-help font-semibold",
-                user.isCurrentUser 
-                  ? "bg-primary text-primary-foreground" 
-                  : "bg-primary-foreground text-primary border border-primary"
+                "text-xs px-2 py-0.5 rounded cursor-help font-semibold transition-all",
+                user.type === 'yours' && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-sm",
+                user.type === 'discovery' && "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shadow-sm",
+                user.type === 'other' && "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-sm"
               )}>
                 {user.label}
               </span>
@@ -534,7 +552,8 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
 // Modal to display relay information for a conversation
 const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean; onOpenChange: (open: boolean) => void; conversationId: string }) => {
   const { user } = useCurrentUser();
-  const { getConversationRelays } = useNewDMContext();
+  const { config } = useAppContext();
+  const { getConversationRelays, messagingState } = useNewDMContext();
   
   // This is reactive - updates when cache updates
   const relayInfo = useMemo(() => getConversationRelays(conversationId), [getConversationRelays, conversationId]);
@@ -546,6 +565,17 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
   }, [conversationId, user?.pubkey]);
   
   const authorsData = useAuthorsBatch(otherParticipants);
+  
+  // Get discovery relays for comparison
+  const discoveryRelays = useMemo(() => new Set(config.discoveryRelays), [config.discoveryRelays]);
+
+  // Count failed relays
+  const failedCount = useMemo(() => {
+    return relayInfo.filter(({ relay }) => {
+      const info = messagingState?.relayInfo[relay];
+      return info && !info.lastQuerySucceeded;
+    }).length;
+  }, [relayInfo, messagingState]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -560,20 +590,53 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
               {relayInfo.length === 0 && ' Loading relay information...'}
             </p>
           </div>
+
+          {failedCount > 0 && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-red-500">{failedCount} relay{failedCount > 1 ? 's' : ''} failed to connect.</span> Messages may be missing or delayed. Try:
+              </p>
+              <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1 ml-2">
+                <li>Check your internet connection</li>
+                <li>Wait a few minutes and refresh</li>
+                <li>Ask participants to update their relay lists</li>
+                <li>Remove unreliable relays from your settings</li>
+              </ul>
+            </div>
+          )}
+
           {relayInfo.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-semibold text-sm">Relays Used in This Conversation</h3>
               <div className="space-y-2">
-                {relayInfo.map(({ relay, users }) => (
-                  <div key={relay} className="flex items-center gap-3 bg-muted px-3 py-2 rounded">
-                    <div className="text-xs font-mono flex-1 min-w-0 truncate">
-                      {relay}
+                {relayInfo.map(({ relay, users }) => {
+                  const info = messagingState?.relayInfo[relay];
+                  const isFailed = info && !info.lastQuerySucceeded;
+                  
+                  return (
+                    <div key={relay} className={cn(
+                      "flex flex-col gap-2 px-3 py-2 rounded",
+                      isFailed ? "bg-red-500/5 border border-red-500/20" : "bg-muted"
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs font-mono flex-1 min-w-0 truncate">
+                          {relay}
+                        </div>
+                      <div className="flex-shrink-0">
+                        <RelayUserLabels users={users} authorsMap={authorsData.data} relay={relay} discoveryRelays={discoveryRelays} />
+                      </div>
+                      </div>
+                      {isFailed && info?.lastQueryError && (
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                          <p className="text-xs text-red-500/80">
+                            Error: {info.lastQueryError}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-shrink-0">
-                      <RelayUserLabels users={users} authorsMap={authorsData.data} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -586,6 +649,7 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
 const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack?: () => void }) => {
   const { user } = useCurrentUser();
   const { config } = useAppContext();
+  const { getConversationRelays, messagingState } = useNewDMContext();
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   
@@ -616,6 +680,15 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
       : metadata?.nip05;
 
   const devMode = config.devMode ?? false;
+
+  // Check if conversation has failed relays
+  const hasFailedRelays = useMemo(() => {
+    const relayInfo = getConversationRelays(conversationId);
+    return relayInfo.some(({ relay }) => {
+      const info = messagingState?.relayInfo[relay];
+      return info && !info.lastQuerySucceeded;
+    });
+  }, [conversationId, getConversationRelays, messagingState]);
 
   return (
     <div className="px-4 py-4 border-b flex items-center gap-3">
@@ -656,12 +729,15 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
                 variant="ghost"
                 size="icon"
                 onClick={() => setShowRelayModal(true)}
+                className={cn(hasFailedRelays && "text-red-500 hover:text-red-500")}
               >
                 <Server className="h-5 w-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="text-xs">View relay information</p>
+              <p className="text-xs">
+                {hasFailedRelays ? 'Some relays failed - click for details' : 'View relay information'}
+              </p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

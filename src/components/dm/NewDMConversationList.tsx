@@ -1,5 +1,5 @@
 import { useMemo, useState, memo, useEffect, useRef } from 'react';
-import { Info, Loader2, AlertCircle } from 'lucide-react';
+import { Info, Loader2, AlertCircle, Radio } from 'lucide-react';
 import { useNewDMContext } from '@/contexts/NewDMContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
@@ -29,6 +29,7 @@ interface ConversationItemProps {
   lastMessage: { decryptedContent?: string; error?: string } | null;
   lastActivity: number;
   hasDecryptionErrors?: boolean;
+  hasFailedRelays?: boolean;
 }
 
 const GroupAvatar = ({ pubkeys, isSelected }: { pubkeys: string[]; isSelected: boolean }) => {
@@ -124,6 +125,7 @@ const ConversationItemComponent = ({
   lastMessage,
   lastActivity,
   hasDecryptionErrors,
+  hasFailedRelays,
 }: ConversationItemProps) => {
   const { user } = useCurrentUser();
   
@@ -213,6 +215,18 @@ const ConversationItemComponent = ({
             <p className="text-sm text-muted-foreground truncate flex-1">
               {lastMessagePreview}
             </p>
+            {hasFailedRelays && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Radio className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    <p className="text-xs">Some relays failed to connect</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             {hasDecryptionErrors && (
               <TooltipProvider>
                 <Tooltip>
@@ -260,7 +274,8 @@ export const NewDMConversationList = ({
   className,
   onStatusClick
 }: DMConversationListProps) => {
-  const { messagingState, isLoading, phase } = useNewDMContext();
+  const { messagingState, isLoading, phase, getConversationRelays } = useNewDMContext();
+  const { user } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<'known' | 'requests'>('known');
   const prevWasRequestRef = useRef<Set<string>>(new Set());
 
@@ -272,19 +287,34 @@ export const NewDMConversationList = ({
       .sort((a, b) => b.lastActivity - a.lastActivity);
   }, [messagingState?.conversationMetadata]);
 
+  // Compute failed relays for each conversation
+  const conversationsWithRelayStatus = useMemo(() => {
+    if (!user?.pubkey || !messagingState) return conversations;
+
+    return conversations.map(conv => {
+      const relayInfo = getConversationRelays(conv.id);
+      const hasFailedRelays = relayInfo.some(({ relay }) => {
+        const info = messagingState.relayInfo[relay];
+        return info && !info.lastQuerySucceeded;
+      });
+
+      return { ...conv, hasFailedRelays };
+    });
+  }, [conversations, user?.pubkey, messagingState, getConversationRelays]);
+
   // Filter conversations by type
   const { knownConversations, requestConversations } = useMemo(() => {
     return {
-      knownConversations: conversations.filter(c => c.isKnown),
-      requestConversations: conversations.filter(c => c.isRequest),
+      knownConversations: conversationsWithRelayStatus.filter(c => c.isKnown),
+      requestConversations: conversationsWithRelayStatus.filter(c => c.isRequest),
     };
-  }, [conversations]);
+  }, [conversationsWithRelayStatus]);
 
   // Auto-switch to "known" tab when a request conversation becomes known
   useEffect(() => {
     if (!selectedPubkey) return;
     
-    const selectedConversation = conversations.find(c => c.id === selectedPubkey);
+    const selectedConversation = conversationsWithRelayStatus.find(c => c.id === selectedPubkey);
     if (!selectedConversation) return;
     
     // If this was a request but is now known, switch to known tab
@@ -294,13 +324,13 @@ export const NewDMConversationList = ({
     } else if (selectedConversation.isRequest) {
       prevWasRequestRef.current.add(selectedPubkey);
     }
-  }, [selectedPubkey, conversations]);
+  }, [selectedPubkey, conversationsWithRelayStatus]);
 
   // Get the current list based on active tab
   const currentConversations = activeTab === 'known' ? knownConversations : requestConversations;
 
   // Show skeleton only during initial load when we have no data yet (not during sync)
-  const isInitialLoad = isLoading && conversations.length === 0 && !phase;
+  const isInitialLoad = isLoading && conversationsWithRelayStatus.length === 0 && !phase;
 
   return (
     <div className={cn("h-full flex flex-col overflow-hidden border-r border-border bg-card", className)}>
@@ -401,7 +431,7 @@ export const NewDMConversationList = ({
       <div className="flex-1 min-h-0 mt-2 overflow-hidden">
         {isInitialLoad ? (
           <ConversationListSkeleton />
-        ) : conversations.length === 0 ? (
+        ) : conversationsWithRelayStatus.length === 0 ? (
           <div className="flex items-center justify-center h-full text-center text-muted-foreground px-4">
             <div>
               <p className="text-sm">No conversations yet</p>
@@ -425,6 +455,7 @@ export const NewDMConversationList = ({
                   lastMessage={conversation.lastMessage}
                   lastActivity={conversation.lastActivity}
                   hasDecryptionErrors={conversation.hasDecryptionErrors}
+                  hasFailedRelays={conversation.hasFailedRelays}
                 />
               ))}
             </div>

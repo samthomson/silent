@@ -442,12 +442,6 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     setSubscriptionStatus({ isNIP4Connected: false, isNIP17Connected: false });
   }, []);
   
-  // Function to reload messages after settings change (called by SettingsModal)
-  const reloadAfterSettingsChange = useCallback(async () => {
-    console.log('[NewDM] Reloading after settings change');
-    await clearCacheAndRefetch();
-  }, [clearCacheAndRefetch]);
-  
   // Start NIP-4 subscription
   const startNIP4Subscription = useCallback(async (messagingState: MessagingState) => {
     if (!user?.pubkey || !nostr) {
@@ -893,6 +887,12 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       throw error;
     }
   }, [user?.pubkey, cleanupSubscriptions]);
+  
+  // Function to reload messages after settings change (called by SettingsModal)
+  const reloadAfterSettingsChange = useCallback(async () => {
+    console.log('[NewDM] Reloading after settings change');
+    await clearCacheAndRefetch();
+  }, [clearCacheAndRefetch]);
   
   // Cleanup subscriptions and debounced writes on unmount or user change
   useEffect(() => {

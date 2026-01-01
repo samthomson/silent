@@ -19,7 +19,7 @@ export const CACHE_KEY_PREFIX = 'dm-cache:';
 
 const DM_QUERY_CONSTANTS = {
   BATCH_SIZE: 1000,
-  QUERY_TIMEOUT_MS: 5000, // 5 seconds per-relay
+  QUERY_TIMEOUT_MS: 8000, // 8 seconds per-relay
 } as const;
 
 /**

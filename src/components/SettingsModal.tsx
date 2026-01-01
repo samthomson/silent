@@ -1,5 +1,5 @@
 import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
@@ -8,6 +8,9 @@ import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/useToast';
+import * as DMLib from '@/lib/dmLib';
+import { RELAY_MODE, type RelayMode } from '@/lib/dmTypes';
 import {
   Dialog,
   DialogContent,
@@ -148,8 +151,26 @@ function AdvancedContent() {
 
 export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
-  const { messagingState } = useNewDMContext();
+  const { messagingState, reloadAfterSettingsChange } = useNewDMContext();
+  const { config, updateConfig } = useAppContext();
   const { user } = useCurrentUser();
+  const { toast } = useToast();
+  
+  // Track initial settings when modal opens
+  const [initialSettings, setInitialSettings] = useState<{ discoveryRelays: string[]; relayMode: RelayMode } | null>(null);
+  const [showReloadConfirm, setShowReloadConfirm] = useState(false);
+  
+  // Capture initial settings when modal opens
+  useEffect(() => {
+    if (open) {
+      setInitialSettings({ 
+        discoveryRelays: [...config.discoveryRelays],
+        relayMode: RELAY_MODE.HYBRID, // TODO: Get from config when user-configurable
+      });
+      setShowReloadConfirm(false);
+    }
+  }, [open, config.discoveryRelays]);
+  
   const failedRelayCount = useMemo(() => {
     if (!user || !messagingState) return 0;
     const userRelays = new Set(messagingState.participants[user.pubkey]?.derivedRelays || []);
@@ -157,15 +178,83 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
       .filter(([relay, info]) => userRelays.has(relay) && !info.lastQuerySucceeded)
       .length;
   }, [messagingState, user]);
+  
+  // Check if settings changed
+  const settingsChanged = useCallback(() => {
+    if (!initialSettings) return false;
+    const initialFingerprint = DMLib.Pure.Settings.computeFingerprint(initialSettings);
+    const currentFingerprint = DMLib.Pure.Settings.computeFingerprint({ 
+      discoveryRelays: config.discoveryRelays,
+      relayMode: RELAY_MODE.HYBRID, // TODO: Get from config when user-configurable
+    });
+    return initialFingerprint !== currentFingerprint;
+  }, [initialSettings, config.discoveryRelays]);
+  
+  // Handle close - check if settings changed
+  const handleClose = useCallback(() => {
+    if (settingsChanged()) {
+      setShowReloadConfirm(true);
+    } else {
+      onOpenChange(false);
+    }
+  }, [settingsChanged, onOpenChange]);
+  
+  // Handle confirm reload
+  const handleConfirmReload = useCallback(async () => {
+    setShowReloadConfirm(false);
+    onOpenChange(false);
+    
+    toast({
+      title: 'Reloading messages',
+      description: 'Updating relay configuration...',
+    });
+    
+    try {
+      await reloadAfterSettingsChange();
+      toast({
+        title: 'Messages reloaded',
+        description: 'Messages updated successfully.',
+      });
+    } catch (error) {
+      console.error('[Settings] Reload failed:', error);
+      toast({
+        title: 'Reload failed',
+        description: 'Failed to reload messages.',
+        variant: 'destructive',
+      });
+    }
+  }, [reloadAfterSettingsChange, onOpenChange, toast]);
+  
+  // Handle cancel reload - revert settings
+  const handleCancelReload = useCallback(() => {
+    setShowReloadConfirm(false);
+    
+    if (!initialSettings) return;
+    
+    updateConfig((prev) => ({
+      ...prev,
+      discoveryRelays: [...initialSettings.discoveryRelays],
+    }));
+    
+    toast({
+      title: 'Settings reverted',
+      description: 'Discovery relay changes were not applied.',
+    });
+  }, [initialSettings, updateConfig, toast]);
 
   return (
-    <Dialog 
-      open={open} 
-      onOpenChange={(isOpen) => {
-        onOpenChange(isOpen);
-        if (!isOpen) setMobileCategory(null);
-      }}
-    >
+    <>
+      <Dialog 
+        open={open} 
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            handleClose();
+          } else {
+            onOpenChange(isOpen);
+          }
+          if (!isOpen) setMobileCategory(null);
+        }}
+      >
       <DialogContent className="max-w-[95vw] w-full sm:max-w-2xl md:max-w-[700px] h-[90vh] md:h-[85vh] md:min-h-[600px] p-0 flex flex-col [&>button]:hidden md:[&>button]:block" aria-describedby={undefined}>
         {/* Mobile: Single-line header with arrow, title, and close */}
         <DialogHeader className="md:hidden flex flex-row items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
@@ -403,6 +492,32 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
         </Tabs>
       </DialogContent>
     </Dialog>
+    
+    {/* Reload Confirmation Dialog */}
+    <Dialog open={showReloadConfirm} onOpenChange={setShowReloadConfirm}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reload Messages?</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Your relay configuration has changed. Messages must be reloaded from the new relays.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            This may take a few seconds depending on your message history.
+          </p>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={handleCancelReload}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmReload}>
+              Reload Messages
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  </>
   );
 }
 

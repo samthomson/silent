@@ -853,6 +853,20 @@ const computeAllQueriedRelays = (mode: StartupMode, lastSessionCache: MessagingS
   return Array.from(new Set(allRelays));
 }
 
+/**
+ * Compute a fingerprint of settings that affect messaging state.
+ * Used to detect when cache is invalid due to settings changes.
+ */
+const computeSettingsFingerprint = (settings: {
+  discoveryRelays: string[];
+  relayMode: RelayMode;
+}): string => {
+  return JSON.stringify({
+    discoveryRelays: [...settings.discoveryRelays].sort(),
+    relayMode: settings.relayMode,
+  });
+};
+
 export const Pure = {
   Relay: {
     extractBlockedRelays,
@@ -887,6 +901,9 @@ export const Pure = {
     buildMessagingAppState,
     addMessageToState,
     mergeMessagingState,
+  },
+  Settings: {
+    computeFingerprint: computeSettingsFingerprint,
   },
 };
 

@@ -42,8 +42,31 @@ const initialiseMessaging = async (
   const cached = await DMLib.Impure.Cache.loadFromCache(myPubkey);
   timings.loadCache = Date.now() - startTime;
   
-  // todo: have a const define a ttl and compare it here
-  const mode = cached && cached.syncState.lastCacheTime ? DMLib.StartupMode.WARM : DMLib.StartupMode.COLD;
+  // Check if cache is invalid due to settings change (safety net for edge cases)
+  const isRestartingAfterSettingsFingerprintChange = (() => {
+    if (!cached?.settingsFingerprint) return false;
+    
+    const currentFingerprint = DMLib.Pure.Settings.computeFingerprint({
+      discoveryRelays: settings.discoveryRelays,
+      relayMode: settings.relayMode,
+    });
+    
+    if (cached.settingsFingerprint !== currentFingerprint) {
+      console.log('[NewDM] Settings mismatch - forcing cold start', {
+        cached: cached.settingsFingerprint,
+        current: currentFingerprint,
+      });
+      return true;
+    }
+    
+    return false;
+  })();
+  
+  // Determine startup mode
+  const mode = (cached && cached.syncState.lastCacheTime && !isRestartingAfterSettingsFingerprintChange)
+    ? DMLib.StartupMode.WARM
+    : DMLib.StartupMode.COLD;
+  
   console.log('[NewDM] Mode:', mode, cached ? `(cache age: ${Math.round((Date.now() - (cached.syncState.lastCacheTime || 0)) / 1000)}s)` : '');
   
   // UPDATE 1: Show cached data immediately
@@ -203,6 +226,15 @@ const initialiseMessaging = async (
   
   currentState = DMLib.Pure.Sync.mergeMessagingState(currentState, gapFillingState);
   
+  // Add settings fingerprint before saving (for cache validation on next load)
+  currentState = {
+    ...currentState,
+    settingsFingerprint: DMLib.Pure.Settings.computeFingerprint({
+      discoveryRelays: settings.discoveryRelays,
+      relayMode: settings.relayMode,
+    }),
+  };
+  
   // Save to cache
   await DMLib.Impure.Cache.saveToCache(myPubkey, currentState);
   
@@ -257,6 +289,7 @@ interface NewDMContextValue extends MessagingContext {
   subscriptions: SubscriptionStatus;
   scanProgress: ScanProgressState; // TODO: Implement batch progress tracking
   isDoingInitialLoad: boolean; // Derived from isLoading + phase
+  reloadAfterSettingsChange: () => Promise<void>; // Reload messages after settings change
 }
 
 const NewDMContext = createContext<NewDMContextValue | undefined>(undefined);
@@ -272,7 +305,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   const { protocolMode = PROTOCOL_MODE.NIP04_OR_NIP17 } = config || {};
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
-  const { config: appConfig } = useAppContext();
+  const { config: appConfig, updateConfig } = useAppContext();
   
   // Stabilize discovery relays reference to avoid triggering effects
   const discoveryRelays = useMemo(() => appConfig.discoveryRelays, [appConfig.discoveryRelays.join(',')]);
@@ -301,6 +334,9 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   const debouncedWriteRef = useRef<NodeJS.Timeout | null>(null);
   
   const DEBOUNCED_WRITE_DELAY = 5000;
+  
+  const { toast } = useToast();
+  const { mutateAsync: createEvent } = useNostrPublish();
   
   // Stable callback - doesn't depend on context
   const updateContext = useCallback((updates: Partial<MessagingContext>) => {
@@ -405,6 +441,12 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     }
     setSubscriptionStatus({ isNIP4Connected: false, isNIP17Connected: false });
   }, []);
+  
+  // Function to reload messages after settings change (called by SettingsModal)
+  const reloadAfterSettingsChange = useCallback(async () => {
+    console.log('[NewDM] Reloading after settings change');
+    await clearCacheAndRefetch();
+  }, [clearCacheAndRefetch]);
   
   // Start NIP-4 subscription
   const startNIP4Subscription = useCallback(async (messagingState: MessagingState) => {
@@ -610,9 +652,6 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       }
     })();
   }, [user?.pubkey, nostr, discoveryRelays]);
-  
-  const { mutateAsync: createEvent } = useNostrPublish();
-  const { toast } = useToast();
   
   // Use ref to access current messaging state in mutations
   const messagingStateRef = useRef<MessagingState | null>(null);
@@ -851,6 +890,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       console.log('[NewDM] Cache cleared, reloading...');
     } catch (error) {
       console.error('[NewDM] Error clearing cache:', error);
+      throw error;
     }
   }, [user?.pubkey, cleanupSubscriptions]);
   
@@ -909,6 +949,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     subscriptions: subscriptionStatus,
     scanProgress, // TODO: Implement batch progress tracking
     isDoingInitialLoad,
+    reloadAfterSettingsChange,
   };
   
   return (

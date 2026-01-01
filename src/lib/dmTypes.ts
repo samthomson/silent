@@ -70,6 +70,7 @@ export interface MessagingState {
   conversationMessages: Record<string, Message[]>;
   syncState: SyncState;
   relayInfo: Record<string, RelayInfo>;
+  settingsFingerprint?: string; // Hash of settings that affect derived state
 }
 
 export interface RelayListsResult {

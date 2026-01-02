@@ -618,13 +618,13 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
                       "flex flex-col gap-2 px-3 py-2 rounded",
                       isFailed ? "bg-red-500/5 border border-red-500/20" : "bg-muted"
                     )}>
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs font-mono flex-1 min-w-0 truncate">
+                      <div className="flex items-start gap-3">
+                        <div className="text-xs font-mono flex-1 min-w-0 break-all">
                           {relay}
                         </div>
-                      <div className="flex-shrink-0">
-                        <RelayUserLabels users={users} authorsMap={authorsData.data} relay={relay} discoveryRelays={discoveryRelays} />
-                      </div>
+                        <div className="flex-shrink-0">
+                          <RelayUserLabels users={users} authorsMap={authorsData.data} relay={relay} discoveryRelays={discoveryRelays} />
+                        </div>
                       </div>
                       {isFailed && info?.lastQueryError && (
                         <div className="flex items-center gap-2">

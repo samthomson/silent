@@ -1,5 +1,7 @@
+import { Navigate } from "react-router-dom";
 import { NewDMMessagingInterface } from "@/components/dm/NewDMMessagingInterface";
 import { useNewDMContext } from "@/contexts/NewDMContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -7,7 +9,12 @@ import { ChevronDown } from "lucide-react";
 import { useState, useMemo } from "react";
 
 export function Test() {
+  const { user } = useCurrentUser();
   const { messagingState, isLoading, timing, phase } = useNewDMContext();
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
   const [relayDetailsOpen, setRelayDetailsOpen] = useState(false);
 
   // Build relay-to-users mapping and calculate failed count

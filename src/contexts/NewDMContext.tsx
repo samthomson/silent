@@ -799,12 +799,41 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     };
   }, [user?.pubkey, context.messagingState, context.isLoading, context.phase, nostr, appConfig.relayMode, discoveryRelays]);
 
-  // Helper: Get inbox relays for a pubkey from participants state
+  // Helper: Get inbox relays for a pubkey from participants state (fetches on-demand if missing)
   const getInboxRelaysForPubkey = useCallback(async (pubkey: string): Promise<string[]> => {
-    const relays = messagingStateRef.current?.participants[pubkey]?.derivedRelays;
-    if (!relays?.length) throw new Error(`Participant ${pubkey.substring(0, 8)}... not found in messaging state`);
-    return relays;
-  }, []);
+    // Check cache first
+    const cachedRelays = messagingStateRef.current?.participants[pubkey]?.derivedRelays;
+    if (cachedRelays?.length) return cachedRelays;
+    
+    // Fetch on-demand for new participants
+    console.log(`[NewDM] Fetching relay info for new participant ${pubkey.substring(0, 8)}...`);
+    const newParticipants = await DMLib.Impure.Participant.fetchAndMergeParticipants(
+      nostr,
+      messagingStateRef.current?.participants || {},
+      [pubkey],
+      appConfig.relayMode,
+      discoveryRelays
+    );
+    
+    const fetchedRelays = newParticipants[pubkey]?.derivedRelays;
+    if (!fetchedRelays?.length) {
+      throw new Error(`Could not find relay info for ${pubkey.substring(0, 8)}...`);
+    }
+    
+    // Update state with new participant
+    setContext(prev => {
+      if (!prev.messagingState) return prev;
+      return {
+        ...prev,
+        messagingState: {
+          ...prev.messagingState,
+          participants: { ...prev.messagingState.participants, ...newParticipants },
+        },
+      };
+    });
+    
+    return fetchedRelays;
+  }, [nostr, appConfig.relayMode, discoveryRelays]);
 
   // Send NIP-04 Message (internal)
   const sendNIP4Message = useCallback(async (

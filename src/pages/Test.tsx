@@ -11,10 +11,6 @@ import { useState, useMemo } from "react";
 export function Test() {
   const { user } = useCurrentUser();
   const { messagingState, isLoading, timing, phase } = useNewDMContext();
-
-  if (!user) {
-    return <Navigate to="/" replace />;
-  }
   const [relayDetailsOpen, setRelayDetailsOpen] = useState(false);
 
   // Build relay-to-users mapping and calculate failed count
@@ -45,6 +41,10 @@ export function Test() {
 
     return { relayData: data, failedRelayCount: failed };
   }, [messagingState]);
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="h-screen flex bg-background">

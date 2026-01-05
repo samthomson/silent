@@ -260,52 +260,45 @@ const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => 
   return [...existing, ...newMessages];
 }
 /**
- * Computes a unique conversation ID from participants and subject
- * Format: "group:pubkey1,pubkey2:subject" (always consistent)
+ * Computes a unique conversation ID from participants only (NIP-17 compliant)
+ * Format: "group:pubkey1,pubkey2" (always consistent)
  * 
  * - Deduplicates and sorts participants for consistent IDs
- * - Same participants + different subjects = different conversations
- * - Subject is always appended (empty string '' for conversations without a subject)
- * - NIP-04 messages: subject is always empty string ''
- * - NIP-17 messages: subject may be populated or empty string ''
+ * - Same participants = same conversation (subject is mutable metadata, not part of ID)
+ * - Per NIP-17: "The set of pubkey + p tags defines a chat room"
  * 
  * @param participantPubkeys - Array of participant pubkeys (including current user)
- * @param subject - Conversation subject (empty string '' for conversations without a subject)
- * @returns Conversation ID in format "group:pubkey1,pubkey2:subject"
+ * @returns Conversation ID in format "group:pubkey1,pubkey2"
  */
-const computeConversationId = (participantPubkeys: string[], subject: string): string => {
+const computeConversationId = (participantPubkeys: string[]): string => {
   // Deduplicate and sort for consistent IDs regardless of order
   const uniqueSorted = [...new Set(participantPubkeys)].sort();
   
-  // Always use same format: group:pubkeys:subject
-  // This makes parsing simple and consistent everywhere
-  return `group:${uniqueSorted.join(',')}:${subject}`;
+  // NIP-17: Room is defined by participants only, not subject
+  return `group:${uniqueSorted.join(',')}`;
 }
 
 /**
- * Parses a conversation ID to extract participant pubkeys and subject
- * Format: "group:pubkey1,pubkey2:subject"
+ * Parses a conversation ID to extract participant pubkeys
+ * Format: "group:pubkey1,pubkey2"
  * 
- * @param conversationId - The conversation ID in format "group:pubkey1,pubkey2:subject"
- * @returns Object with participantPubkeys array and subject string
+ * @param conversationId - The conversation ID in format "group:pubkey1,pubkey2"
+ * @returns Array of participant pubkeys
  */
-const parseConversationId = (conversationId: string): { participantPubkeys: string[]; subject: string } => {
+const parseConversationId = (conversationId: string): string[] => {
   if (!conversationId.startsWith('group:')) {
     throw new Error(`Invalid conversation ID format: ${conversationId}`);
   }
   
   const withoutPrefix = conversationId.substring(6); // Remove "group:"
-  const lastColonIndex = withoutPrefix.lastIndexOf(':');
+  const participantPubkeys = withoutPrefix.split(',');
   
-  if (lastColonIndex === -1) {
-    throw new Error(`Invalid conversation ID format (missing subject separator): ${conversationId}`);
-  }
-  
-  const participantsString = withoutPrefix.substring(0, lastColonIndex);
-  const subject = withoutPrefix.substring(lastColonIndex + 1);
-  const participantPubkeys = participantsString.split(',');
-  
-  return { participantPubkeys, subject };
+  // Handle legacy format: "group:pubkey1,pubkey2:subject"
+  // The last element might have ":subject" appended, so we need to strip it
+  return participantPubkeys.map(pk => {
+    const colonIndex = pk.indexOf(':');
+    return colonIndex !== -1 ? pk.substring(0, colonIndex) : pk;
+  });
 };
 
 /**
@@ -332,7 +325,7 @@ const getConversationRelays = (
   participants: Record<string, Participant>,
   myPubkey: string
 ): Array<{ relay: string; users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }> }> => {
-  const { participantPubkeys } = parseConversationId(conversationId);
+  const participantPubkeys = parseConversationId(conversationId);
   const relayMap = new Map<string, Array<{ pubkey: string; isCurrentUser: boolean; source: string }>>();
 
   // Add all participants' relays
@@ -532,9 +525,10 @@ const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetad
     return {
       id: messageId,
       event: msg.event, // The inner message with DECRYPTED content
-      conversationId: computeConversationId(msg.participants || [], msg.subject || ''),
+      conversationId: computeConversationId(msg.participants || []),
       protocol: msg.event.kind === 4 ? 'nip04' : 'nip17',
       error: msg.error, // Pass through decryption error flag
+      subject: msg.subject, // Store subject for updating conversation metadata
       // NIP-17 debugging - copy over encrypted layers
       giftWrapId: msg.giftWrapId,
       sealEvent: msg.sealEvent,
@@ -581,7 +575,16 @@ const addMessageToState = (
   const hasUserSentMessage = updatedMessages.some(msg => msg.event.pubkey === myPubkey);
   
   const participantPubkeys = messageWithMetadata.participants || [];
-  const subject = messageWithMetadata.subject || '';
+  
+  // Per NIP-17: "The newest subject in the chat room is the subject of the conversation"
+  // Find the most recent message with a subject (iterate backwards from newest)
+  let subject = '';
+  for (let i = updatedMessages.length - 1; i >= 0; i--) {
+    if (updatedMessages[i].subject) {
+      subject = updatedMessages[i].subject;
+      break;
+    }
+  }
   
   // Efficiently update protocol flags - use existing values or check new message
   const existingMetadata = currentState.conversationMetadata[enrichedMessage.conversationId];
@@ -718,10 +721,13 @@ const buildMessagingAppState = (
   const conversationMetadata: Record<string, Conversation> = {};
   
   for (const [conversationId, messages] of Object.entries(conversationMessages)) {
-    // Parse conversationId: "group:alice,bob:subject"
-    const parts = conversationId.split(':');
-    const participantPubkeys = parts[1] ? parts[1].split(',') : [];
-    const subject = parts[2] || '';
+    // Parse conversationId: "group:alice,bob" (no subject in ID per NIP-17)
+    const participantPubkeys = parseConversationId(conversationId);
+    
+    // Find the newest subject from messages (per NIP-17: newest subject wins)
+    // Sort by created_at descending and find first message with a subject
+    const sortedByNewest = [...messages].sort((a, b) => b.event.created_at - a.event.created_at);
+    const subject = sortedByNewest.find(m => m.subject)?.subject || '';
     
     // Find last activity (most recent message timestamp)
     const lastActivity = Math.max(...messages.map(m => m.event.created_at));
@@ -1621,7 +1627,8 @@ const sendNIP17Message = async (
   recipients: string[],
   content: string,
   attachments: FileAttachment[],
-  getInboxRelays: (pubkey: string) => Promise<string[]>
+  getInboxRelays: (pubkey: string) => Promise<string[]>,
+  subject?: string
 ): Promise<NostrEvent> => {
   if (!signer.nip44) throw new Error('NIP-44 encryption not available');
 
@@ -1634,7 +1641,8 @@ const sendNIP17Message = async (
   const messageContent = prepareMessageContent(content, attachments);
   const tags: string[][] = [
     ...recipients.map(pubkey => ['p', pubkey]),
-    ...createImetaTags(attachments)
+    ...createImetaTags(attachments),
+    ...(subject ? [['subject', subject]] : [])
   ];
   const messageKind = attachments.length > 0 ? 15 : 14;
 

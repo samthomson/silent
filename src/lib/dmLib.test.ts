@@ -2416,146 +2416,81 @@ describe('DMLib', () => {
 
     describe('Conversation', () => {
       describe('computeConversationId', () => {
-        it('should create conversation ID for 1-on-1 without subject', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob'],
-            ''
-          );
-          
-          expect(result).toBe('group:alice,bob:');
+        it('should create conversation ID for 1-on-1 (NIP-17 compliant)', () => {
+          const result = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob']);
+          expect(result).toBe('group:alice,bob');
         });
 
         it('should sort participants for consistent IDs', () => {
-          const result1 = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob'], '');
-          const result2 = DMLib.Pure.Conversation.computeConversationId(['bob', 'alice'], '');
+          const result1 = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob']);
+          const result2 = DMLib.Pure.Conversation.computeConversationId(['bob', 'alice']);
           
           expect(result1).toBe(result2);
-          expect(result1).toBe('group:alice,bob:');
+          expect(result1).toBe('group:alice,bob');
         });
 
         it('should deduplicate participants', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob', 'alice', 'bob'],
-            ''
-          );
-          
-          expect(result).toBe('group:alice,bob:');
+          const result = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob', 'alice', 'bob']);
+          expect(result).toBe('group:alice,bob');
         });
 
-        it('should create conversation ID with subject', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob'],
-            'Meeting notes'
-          );
-          
-          expect(result).toBe('group:alice,bob:Meeting notes');
+        it('should NOT include subject in ID (per NIP-17)', () => {
+          // Per NIP-17: subject is mutable metadata, not part of conversation identity
+          const result = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob']);
+          expect(result).toBe('group:alice,bob');
         });
 
-        it('should create different IDs for same participants with different subjects', () => {
-          const conv1 = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob'],
-            'Meeting notes'
-          );
-          const conv2 = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob'],
-            'Project planning'
-          );
+        it('should create SAME ID for same participants regardless of subject (NIP-17)', () => {
+          // Per NIP-17: "The set of pubkey + p tags defines a chat room"
+          // Subject is just a mutable label, not part of room identity
+          const id1 = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob']);
+          const id2 = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob']);
           
-          expect(conv1).not.toBe(conv2);
-          expect(conv1).toBe('group:alice,bob:Meeting notes');
-          expect(conv2).toBe('group:alice,bob:Project planning');
-        });
-
-        it('should create different IDs for same participants: no subject vs with subject', () => {
-          const withoutSubject = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob'], '');
-          const withSubject = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob'], 'Topic');
-          
-          expect(withoutSubject).not.toBe(withSubject);
-          expect(withoutSubject).toBe('group:alice,bob:');
-          expect(withSubject).toBe('group:alice,bob:Topic');
+          expect(id1).toBe(id2);
+          expect(id1).toBe('group:alice,bob');
         });
 
         it('should handle group conversation (3+ participants)', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob', 'charlie'],
-            ''
-          );
-          
-          expect(result).toBe('group:alice,bob,charlie:');
-        });
-
-        it('should handle group conversation with subject', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob', 'charlie'],
-            'Team sync'
-          );
-          
-          expect(result).toBe('group:alice,bob,charlie:Team sync');
+          const result = DMLib.Pure.Conversation.computeConversationId(['alice', 'bob', 'charlie']);
+          expect(result).toBe('group:alice,bob,charlie');
         });
 
         it('should sort group participants consistently', () => {
-          const result1 = DMLib.Pure.Conversation.computeConversationId(
-            ['charlie', 'alice', 'bob'],
-            'Team sync'
-          );
-          const result2 = DMLib.Pure.Conversation.computeConversationId(
-            ['bob', 'charlie', 'alice'],
-            'Team sync'
-          );
+          const result1 = DMLib.Pure.Conversation.computeConversationId(['charlie', 'alice', 'bob']);
+          const result2 = DMLib.Pure.Conversation.computeConversationId(['bob', 'charlie', 'alice']);
           
           expect(result1).toBe(result2);
-          expect(result1).toBe('group:alice,bob,charlie:Team sync');
+          expect(result1).toBe('group:alice,bob,charlie');
         });
 
         it('should handle single participant (self-conversation)', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(['alice'], '');
-          
-          expect(result).toBe('group:alice:');
-        });
-
-        it('should handle special characters in subject', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob'],
-            'Re: Meeting @ 3pm (urgent!)'
-          );
-          
-          expect(result).toBe('group:alice,bob:Re: Meeting @ 3pm (urgent!)');
+          const result = DMLib.Pure.Conversation.computeConversationId(['alice']);
+          expect(result).toBe('group:alice');
         });
 
         it('should handle empty participant array', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId([], '');
-          
-          expect(result).toBe('group::');
+          const result = DMLib.Pure.Conversation.computeConversationId([]);
+          expect(result).toBe('group:');
         });
 
         it('should handle long pubkeys (realistic Nostr pubkeys)', () => {
           const alice = '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d';
           const bob = '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2';
           
-          const result = DMLib.Pure.Conversation.computeConversationId([alice, bob], '');
-          
-          expect(result).toBe(`group:${alice},${bob}:`);
+          const result = DMLib.Pure.Conversation.computeConversationId([alice, bob]);
+          expect(result).toBe(`group:${alice},${bob}`);
         });
 
         it('should maintain deterministic ordering across multiple calls', () => {
           const participants = ['zara', 'alice', 'mike', 'bob', 'charlie'];
           
-          const result1 = DMLib.Pure.Conversation.computeConversationId([...participants], '');
-          const result2 = DMLib.Pure.Conversation.computeConversationId([...participants.reverse()], '');
-          const result3 = DMLib.Pure.Conversation.computeConversationId([...participants.sort(() => Math.random() - 0.5)], '');
+          const result1 = DMLib.Pure.Conversation.computeConversationId([...participants]);
+          const result2 = DMLib.Pure.Conversation.computeConversationId([...participants.reverse()]);
+          const result3 = DMLib.Pure.Conversation.computeConversationId([...participants.sort(() => Math.random() - 0.5)]);
           
           expect(result1).toBe(result2);
           expect(result1).toBe(result3);
-          expect(result1).toBe('group:alice,bob,charlie,mike,zara:');
-        });
-
-        it('should handle unicode characters in subject', () => {
-          const result = DMLib.Pure.Conversation.computeConversationId(
-            ['alice', 'bob'],
-            '🎉 Party planning 日本語'
-          );
-          
-          expect(result).toBe('group:alice,bob:🎉 Party planning 日本語');
+          expect(result1).toBe('group:alice,bob,charlie,mike,zara');
         });
       });
       describe('groupMessagesIntoConversations', () => {
@@ -2585,72 +2520,72 @@ describe('DMLib', () => {
         });
 
         it('should group single message', () => {
-          const messages = [createMessage('msg1', 'group:alice,bob:')];
+          const messages = [createMessage('msg1', 'group:alice,bob')];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(1);
-          expect(result['group:alice,bob:']).toHaveLength(1);
-          expect(result['group:alice,bob:'][0].id).toBe('msg1');
+          expect(result['group:alice,bob']).toHaveLength(1);
+          expect(result['group:alice,bob'][0].id).toBe('msg1');
         });
 
         it('should group multiple messages in same conversation', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
-            createMessage('msg2', 'group:alice,bob:', 'nip04', 200),
-            createMessage('msg3', 'group:alice,bob:', 'nip04', 300)
+            createMessage('msg1', 'group:alice,bob', 'nip04', 100),
+            createMessage('msg2', 'group:alice,bob', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob', 'nip04', 300)
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(1);
-          expect(result['group:alice,bob:']).toHaveLength(3);
-          expect(result['group:alice,bob:'].map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
+          expect(result['group:alice,bob']).toHaveLength(3);
+          expect(result['group:alice,bob'].map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
         });
 
         it('should separate messages into different conversations', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob:'),
-            createMessage('msg2', 'group:alice,charlie:'),
-            createMessage('msg3', 'group:bob,charlie:')
+            createMessage('msg1', 'group:alice,bob'),
+            createMessage('msg2', 'group:alice,charlie'),
+            createMessage('msg3', 'group:bob,charlie')
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(3);
-          expect(result['group:alice,bob:']).toHaveLength(1);
-          expect(result['group:alice,charlie:']).toHaveLength(1);
-          expect(result['group:bob,charlie:']).toHaveLength(1);
+          expect(result['group:alice,bob']).toHaveLength(1);
+          expect(result['group:alice,charlie']).toHaveLength(1);
+          expect(result['group:bob,charlie']).toHaveLength(1);
         });
 
         it('should handle mixed conversations', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
-            createMessage('msg2', 'group:alice,charlie:', 'nip04', 200),
-            createMessage('msg3', 'group:alice,bob:', 'nip04', 300),
-            createMessage('msg4', 'group:alice,charlie:', 'nip17', 400),
-            createMessage('msg5', 'group:alice,bob:', 'nip17', 500)
+            createMessage('msg1', 'group:alice,bob', 'nip04', 100),
+            createMessage('msg2', 'group:alice,charlie', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob', 'nip04', 300),
+            createMessage('msg4', 'group:alice,charlie', 'nip17', 400),
+            createMessage('msg5', 'group:alice,bob', 'nip17', 500)
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(2);
-          expect(result['group:alice,bob:']).toHaveLength(3);
-          expect(result['group:alice,bob:'].map(m => m.id)).toEqual(['msg1', 'msg3', 'msg5']);
-          expect(result['group:alice,charlie:']).toHaveLength(2);
-          expect(result['group:alice,charlie:'].map(m => m.id)).toEqual(['msg2', 'msg4']);
+          expect(result['group:alice,bob']).toHaveLength(3);
+          expect(result['group:alice,bob'].map(m => m.id)).toEqual(['msg1', 'msg3', 'msg5']);
+          expect(result['group:alice,charlie']).toHaveLength(2);
+          expect(result['group:alice,charlie'].map(m => m.id)).toEqual(['msg2', 'msg4']);
         });
 
         it('should preserve message order within conversations', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
-            createMessage('msg2', 'group:alice,bob:', 'nip04', 200),
-            createMessage('msg3', 'group:alice,bob:', 'nip04', 300)
+            createMessage('msg1', 'group:alice,bob', 'nip04', 100),
+            createMessage('msg2', 'group:alice,bob', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob', 'nip04', 300)
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
-          expect(result['group:alice,bob:'].map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
+          expect(result['group:alice,bob'].map(m => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
         });
 
         it('should handle conversations with subjects', () => {
@@ -2669,41 +2604,41 @@ describe('DMLib', () => {
 
         it('should handle group conversations (3+ participants)', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob,charlie:'),
-            createMessage('msg2', 'group:alice,bob,charlie:'),
-            createMessage('msg3', 'group:alice,bob:')
+            createMessage('msg1', 'group:alice,bob,charlie'),
+            createMessage('msg2', 'group:alice,bob,charlie'),
+            createMessage('msg3', 'group:alice,bob')
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(2);
-          expect(result['group:alice,bob,charlie:']).toHaveLength(2);
-          expect(result['group:alice,bob:']).toHaveLength(1);
+          expect(result['group:alice,bob,charlie']).toHaveLength(2);
+          expect(result['group:alice,bob']).toHaveLength(1);
         });
 
         it('should handle mixed NIP-04 and NIP-17 messages', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob:', 'nip04'),
-            createMessage('msg2', 'group:alice,bob:', 'nip17')
+            createMessage('msg1', 'group:alice,bob', 'nip04'),
+            createMessage('msg2', 'group:alice,bob', 'nip17')
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
-          expect(result['group:alice,bob:']).toHaveLength(2);
-          expect(result['group:alice,bob:'][0].protocol).toBe('nip04');
-          expect(result['group:alice,bob:'][1].protocol).toBe('nip17');
+          expect(result['group:alice,bob']).toHaveLength(2);
+          expect(result['group:alice,bob'][0].protocol).toBe('nip04');
+          expect(result['group:alice,bob'][1].protocol).toBe('nip17');
         });
 
         it('should handle self-conversations', () => {
           const messages = [
-            createMessage('msg1', 'group:alice:'),
-            createMessage('msg2', 'group:alice:')
+            createMessage('msg1', 'group:alice'),
+            createMessage('msg2', 'group:alice')
           ];
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(1);
-          expect(result['group:alice:']).toHaveLength(2);
+          expect(result['group:alice']).toHaveLength(2);
         });
 
         it('should handle large number of conversations', () => {
@@ -2723,29 +2658,29 @@ describe('DMLib', () => {
         it('should handle large number of messages in single conversation', () => {
           const messages: DMLib.Message[] = [];
           for (let i = 0; i < 1000; i++) {
-            messages.push(createMessage(`msg${i}`, 'group:alice,bob:'));
+            messages.push(createMessage(`msg${i}`, 'group:alice,bob'));
           }
           
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(1);
-          expect(result['group:alice,bob:']).toHaveLength(1000);
+          expect(result['group:alice,bob']).toHaveLength(1000);
         });
 
         it('should handle realistic scenario with multiple conversations and messages', () => {
           const messages = [
             // Conversation with Bob (3 messages)
-            createMessage('msg1', 'group:alice,bob:', 'nip04', 100),
-            createMessage('msg2', 'group:alice,bob:', 'nip04', 200),
-            createMessage('msg3', 'group:alice,bob:', 'nip17', 300),
+            createMessage('msg1', 'group:alice,bob', 'nip04', 100),
+            createMessage('msg2', 'group:alice,bob', 'nip04', 200),
+            createMessage('msg3', 'group:alice,bob', 'nip17', 300),
             
             // Conversation with Charlie (2 messages)
-            createMessage('msg4', 'group:alice,charlie:', 'nip04', 150),
-            createMessage('msg5', 'group:alice,charlie:', 'nip17', 250),
+            createMessage('msg4', 'group:alice,charlie', 'nip04', 150),
+            createMessage('msg5', 'group:alice,charlie', 'nip17', 250),
             
             // Group conversation (2 messages)
-            createMessage('msg6', 'group:alice,bob,charlie:', 'nip17', 400),
-            createMessage('msg7', 'group:alice,bob,charlie:', 'nip17', 500),
+            createMessage('msg6', 'group:alice,bob,charlie', 'nip17', 400),
+            createMessage('msg7', 'group:alice,bob,charlie', 'nip17', 500),
             
             // Another conversation with Bob but different subject (1 message)
             createMessage('msg8', 'group:alice,bob:Project', 'nip17', 600)
@@ -2754,16 +2689,16 @@ describe('DMLib', () => {
           const result = DMLib.Pure.Conversation.groupMessagesIntoConversations(messages, 'alice');
           
           expect(Object.keys(result)).toHaveLength(4);
-          expect(result['group:alice,bob:']).toHaveLength(3);
-          expect(result['group:alice,charlie:']).toHaveLength(2);
-          expect(result['group:alice,bob,charlie:']).toHaveLength(2);
+          expect(result['group:alice,bob']).toHaveLength(3);
+          expect(result['group:alice,charlie']).toHaveLength(2);
+          expect(result['group:alice,bob,charlie']).toHaveLength(2);
           expect(result['group:alice,bob:Project']).toHaveLength(1);
         });
 
         it('should not mutate input array', () => {
           const messages = [
-            createMessage('msg1', 'group:alice,bob:'),
-            createMessage('msg2', 'group:alice,charlie:')
+            createMessage('msg1', 'group:alice,bob'),
+            createMessage('msg2', 'group:alice,charlie')
           ];
           const originalLength = messages.length;
           const originalIds = messages.map(m => m.id);
@@ -2804,7 +2739,7 @@ describe('DMLib', () => {
             bob: { pubkey: 'bob', derivedRelays: ['wss://relay2.com', 'wss://relay3.com'], blockedRelays: [], lastFetched: Date.now() }
           };
 
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob', participants, 'alice');
 
           expect(result).toHaveLength(3);
           expect(result[0].relay).toBe('wss://relay2.com'); // Shared relay first
@@ -2819,7 +2754,7 @@ describe('DMLib', () => {
             bob: { pubkey: 'bob', derivedRelays: ['wss://relay2.com'], blockedRelays: [], lastFetched: Date.now() }
           };
 
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob', participants, 'alice');
 
           const aliceRelay = result.find(r => r.relay === 'wss://relay1.com');
           const bobRelay = result.find(r => r.relay === 'wss://relay2.com');
@@ -2836,7 +2771,7 @@ describe('DMLib', () => {
             bob: { pubkey: 'bob', derivedRelays: ['wss://relay1.com'], blockedRelays: [], lastFetched: Date.now() }
           };
 
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob', participants, 'alice');
 
           expect(result).toHaveLength(1); // Should be treated as same relay
           expect(result[0].relay).toBe('wss://relay1.com');
@@ -2850,7 +2785,7 @@ describe('DMLib', () => {
             charlie: { pubkey: 'charlie', derivedRelays: ['wss://relay3.com', 'wss://shared.com'], blockedRelays: [], lastFetched: Date.now() }
           };
 
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob,charlie:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob,charlie', participants, 'alice');
 
           expect(result[0].relay).toBe('wss://shared.com');
           expect(result[0].users).toHaveLength(3); // All three users share this relay
@@ -2861,7 +2796,7 @@ describe('DMLib', () => {
             alice: { pubkey: 'alice', derivedRelays: ['wss://relay1.com'], blockedRelays: [], lastFetched: Date.now() }
           };
 
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob', participants, 'alice');
 
           expect(result).toHaveLength(1);
           expect(result[0].relay).toBe('wss://relay1.com');
@@ -2870,7 +2805,7 @@ describe('DMLib', () => {
 
         it('should return empty array for conversation with no participants', () => {
           const participants = {};
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob', participants, 'alice');
           expect(result).toEqual([]);
         });
 
@@ -2880,7 +2815,7 @@ describe('DMLib', () => {
             bob: { pubkey: 'bob', derivedRelays: [], blockedRelays: [], lastFetched: Date.now() }
           };
 
-          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob:', participants, 'alice');
+          const result = DMLib.Pure.Conversation.getConversationRelays('group:alice,bob', participants, 'alice');
           expect(result).toEqual([]);
         });
       });
@@ -3047,8 +2982,8 @@ describe('DMLib', () => {
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
           expect(Object.keys(result.conversationMessages)).toHaveLength(2);
-          expect(result.conversationMessages['group:alice,bob:']).toHaveLength(2);
-          expect(result.conversationMessages['group:alice,charlie:']).toHaveLength(1);
+          expect(result.conversationMessages['group:alice,bob']).toHaveLength(2);
+          expect(result.conversationMessages['group:alice,charlie']).toHaveLength(1);
         });
 
         it('should build conversation metadata correctly', () => {
@@ -3064,8 +2999,8 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          const conv = result.conversationMetadata['group:alice,bob:'];
-          expect(conv.id).toBe('group:alice,bob:');
+          const conv = result.conversationMetadata['group:alice,bob'];
+          expect(conv.id).toBe('group:alice,bob');
           expect(conv.participantPubkeys).toEqual(['alice', 'bob']);
           expect(conv.subject).toBe('');
           expect(conv.lastActivity).toBe(200); // Latest message timestamp
@@ -3089,7 +3024,7 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          const conv = result.conversationMetadata['group:alice,bob:Meeting'];
+          const conv = result.conversationMetadata['group:alice,bob'];
           expect(conv.subject).toBe('Meeting');
           expect(conv.participantPubkeys).toEqual(['alice', 'bob']);
         });
@@ -3107,7 +3042,7 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          const conv = result.conversationMetadata['group:alice,bob:'];
+          const conv = result.conversationMetadata['group:alice,bob'];
           expect(conv.hasNIP04).toBe(true);
           expect(conv.hasNIP17).toBe(true);
         });
@@ -3163,7 +3098,7 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          const conv = result.conversationMetadata['group:alice,bob,charlie:'];
+          const conv = result.conversationMetadata['group:alice,bob,charlie'];
           expect(conv.participantPubkeys).toEqual(['alice', 'bob', 'charlie']);
         });
 
@@ -3200,7 +3135,7 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          expect(result.conversationMetadata['group:alice,bob:'].lastActivity).toBe(500);
+          expect(result.conversationMetadata['group:alice,bob'].lastActivity).toBe(500);
         });
 
         it('should set lastMessage to the chronologically last message', () => {
@@ -3217,7 +3152,7 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          expect(result.conversationMetadata['group:alice,bob:'].lastMessage?.decryptedContent).toBe('last');
+          expect(result.conversationMetadata['group:alice,bob'].lastMessage?.decryptedContent).toBe('last');
         });
 
         it('should handle realistic multi-conversation scenario', () => {
@@ -3243,14 +3178,14 @@ describe('DMLib', () => {
 
           // Check conversations
           expect(Object.keys(result.conversationMetadata)).toHaveLength(3);
-          expect(result.conversationMetadata['group:alice,bob:'].hasNIP04).toBe(true);
-          expect(result.conversationMetadata['group:alice,charlie:'].hasNIP17).toBe(true);
-          expect(result.conversationMetadata['group:alice,bob,charlie:Team'].subject).toBe('Team');
+          expect(result.conversationMetadata['group:alice,bob'].hasNIP04).toBe(true);
+          expect(result.conversationMetadata['group:alice,charlie'].hasNIP17).toBe(true);
+          expect(result.conversationMetadata['group:alice,bob,charlie'].subject).toBe('Team');
 
           // Check messages grouped correctly
-          expect(result.conversationMessages['group:alice,bob:']).toHaveLength(2);
-          expect(result.conversationMessages['group:alice,charlie:']).toHaveLength(1);
-          expect(result.conversationMessages['group:alice,bob,charlie:Team']).toHaveLength(1);
+          expect(result.conversationMessages['group:alice,bob']).toHaveLength(2);
+          expect(result.conversationMessages['group:alice,charlie']).toHaveLength(1);
+          expect(result.conversationMessages['group:alice,bob,charlie']).toHaveLength(1);
 
           // Check syncState
           expect(result.syncState.queriedRelays).toEqual(queriedRelays);
@@ -3266,8 +3201,8 @@ describe('DMLib', () => {
 
           const result = DMLib.Pure.Sync.buildMessagingAppState('alice', participants, messages, [], [], false, new Map());
 
-          const conv = result.conversationMetadata['group::'];
-          expect(conv.participantPubkeys).toEqual([]); // Empty string splits to empty array
+          const conv = result.conversationMetadata['group:'];
+          expect(conv.participantPubkeys).toEqual(['']); // Empty string after 'group:' splits to ['']
           expect(conv.subject).toBe('');
         });
       });

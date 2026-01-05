@@ -226,50 +226,46 @@ describe('dmUtils', () => {
 
   describe('computeConversationId', () => {
     it('creates ID for self-messaging', () => {
-      const id = DMLib.Conversation.computeConversationId(['alice'], '');
-      expect(id).toBe('group:alice:');
+      const id = DMLib.Conversation.computeConversationId(['alice']);
+      expect(id).toBe('group:alice');
     });
 
     it('creates ID for 1-on-1 conversation', () => {
-      const id = DMLib.Conversation.computeConversationId(['alice', 'bob'], '');
+      const id = DMLib.Conversation.computeConversationId(['alice', 'bob']);
       // Should be sorted alphabetically
-      expect(id).toBe('group:alice,bob:');
+      expect(id).toBe('group:alice,bob');
     });
 
     it('creates ID for group conversation', () => {
-      const id = DMLib.Conversation.computeConversationId(['alice', 'bob', 'charlie'], '');
-      expect(id).toBe('group:alice,bob,charlie:');
+      const id = DMLib.Conversation.computeConversationId(['alice', 'bob', 'charlie']);
+      expect(id).toBe('group:alice,bob,charlie');
     });
 
     it('sorts participants alphabetically', () => {
-      const id1 = DMLib.Conversation.computeConversationId(['charlie', 'alice', 'bob'], '');
-      const id2 = DMLib.Conversation.computeConversationId(['bob', 'alice', 'charlie'], '');
+      const id1 = DMLib.Conversation.computeConversationId(['charlie', 'alice', 'bob']);
+      const id2 = DMLib.Conversation.computeConversationId(['bob', 'alice', 'charlie']);
       
       expect(id1).toBe(id2);
-      expect(id1).toBe('group:alice,bob,charlie:');
+      expect(id1).toBe('group:alice,bob,charlie');
     });
 
     it('removes duplicate participants', () => {
-      const id = DMLib.Conversation.computeConversationId(['alice', 'bob', 'alice', 'bob'], '');
-      expect(id).toBe('group:alice,bob:');
+      const id = DMLib.Conversation.computeConversationId(['alice', 'bob', 'alice', 'bob']);
+      expect(id).toBe('group:alice,bob');
     });
 
     it('ensures same ID regardless of input order', () => {
-      const id1 = DMLib.Conversation.computeConversationId(['bob', 'alice'], '');
-      const id2 = DMLib.Conversation.computeConversationId(['alice', 'bob'], '');
+      const id1 = DMLib.Conversation.computeConversationId(['bob', 'alice']);
+      const id2 = DMLib.Conversation.computeConversationId(['alice', 'bob']);
       
       expect(id1).toBe(id2);
-      expect(id1).toBe('group:alice,bob:');
+      expect(id1).toBe('group:alice,bob');
     });
 
-    it('includes subject when provided', () => {
-      const id = DMLib.Conversation.computeConversationId(['alice', 'bob'], 'Project discussion');
-      expect(id).toBe('group:alice,bob:Project discussion');
-    });
-
-    it('handles empty subject same as no subject', () => {
-      const id = DMLib.Conversation.computeConversationId(['alice', 'bob'], '');
-      expect(id).toBe('group:alice,bob:');
+    it('does not include subject in ID (per NIP-17)', () => {
+      // Subject is mutable metadata, not part of conversation identity
+      const id = DMLib.Conversation.computeConversationId(['alice', 'bob']);
+      expect(id).toBe('group:alice,bob');
     });
   });
 

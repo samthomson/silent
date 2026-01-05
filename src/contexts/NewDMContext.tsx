@@ -285,6 +285,7 @@ interface NewDMContextValue extends MessagingContext {
     content: string;
     protocol: MessageProtocol;
     attachments?: FileAttachment[];
+    subject?: string; // Optional: set/change conversation subject (NIP-17 only)
   }) => Promise<void>;
   protocolMode: ProtocolMode;
   getConversationRelays: (conversationId: string) => ConversationRelayInfo[];
@@ -862,7 +863,8 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   const sendNIP17Message = useCallback(async (
     recipients: string[],
     content: string,
-    attachments: FileAttachment[] = []
+    attachments: FileAttachment[] = [],
+    subject?: string
   ): Promise<NostrEvent> => {
     if (!user) throw new Error('User is not logged in');
     return DMLib.Impure.Message.sendNIP17Message(
@@ -872,7 +874,8 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       recipients,
       content,
       attachments,
-      getInboxRelaysForPubkey
+      getInboxRelaysForPubkey,
+      subject
     );
   }, [user, nostr, getInboxRelaysForPubkey]);
 
@@ -888,10 +891,14 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       return;
     }
 
-    const { recipientPubkey, content, protocol = MESSAGE_PROTOCOL.NIP17, attachments } = params;
+    const { recipientPubkey, content, protocol = MESSAGE_PROTOCOL.NIP17, attachments, subject: newSubject } = params;
 
-    // Parse conversation ID to get participants
-    const { participantPubkeys: allParticipants, subject } = DMLib.Pure.Conversation.parseConversationId(recipientPubkey);
+    // Parse conversation ID to get participants (no subject in ID per NIP-17)
+    const allParticipants = DMLib.Pure.Conversation.parseConversationId(recipientPubkey);
+    
+    // Get current conversation's subject from metadata, or use provided subject
+    const currentConversation = context.messagingState.conversationMetadata[recipientPubkey];
+    const subject = newSubject !== undefined ? newSubject : (currentConversation?.subject || '');
     
     // Recipients are everyone except the sender
     let recipients = allParticipants.filter(p => p !== user.pubkey);
@@ -938,8 +945,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       
       // Compute the conversation ID the same way addMessageToState does
       const computedConversationId = DMLib.Pure.Conversation.computeConversationId(
-        optimisticMessageWithMetadata.participants || [],
-        optimisticMessageWithMetadata.subject || ''
+        optimisticMessageWithMetadata.participants || []
       );
       
       // Mark the optimistic message as sending
@@ -958,7 +964,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       if (protocol === MESSAGE_PROTOCOL.NIP04) {
         await sendNIP4Message(recipients[0], content, attachments);
       } else if (protocol === MESSAGE_PROTOCOL.NIP17) {
-        await sendNIP17Message(recipients, content, attachments);
+        await sendNIP17Message(recipients, content, attachments, subject);
       }
     } catch (error) {
       console.error(`[NewDM] Failed to send ${protocol} message:`, error);

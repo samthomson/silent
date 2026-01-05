@@ -42,6 +42,7 @@ export interface Message {
   event: NostrEvent; // The actual message event (kind 4, 14, or 15) with DECRYPTED content
   conversationId: string;
   protocol: 'nip04' | 'nip17';
+  subject?: string; // For NIP-17: optional subject tag (mutable conversation label)
   giftWrapId?: string; // For NIP-17: the ID of the wrapping kind 1059 event
   // NIP-17 debugging - store the full seal and gift wrap
   sealEvent?: NostrEvent; // For NIP-17: the kind 13 seal (encrypted)

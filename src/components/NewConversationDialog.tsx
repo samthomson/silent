@@ -215,7 +215,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
 
     // Create conversation ID from all participants (including current user)
     // Empty string for subject (no subject for direct 1-on-1 or group chats)
-    const conversationId = DMLib.Conversation.computeConversationId([user.pubkey, ...selectedPubkeys], '');
+    const conversationId = DMLib.Conversation.computeConversationId([user.pubkey, ...selectedPubkeys]);
     onStartConversation(conversationId);
     
     if (selectedPubkeys.length > 1) {

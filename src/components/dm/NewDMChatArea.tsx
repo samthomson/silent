@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import type { NostrEvent } from '@nostrify/nostrify';
@@ -434,7 +434,7 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
   const [copiedPubkey, setCopiedPubkey] = useState<string | null>(null);
   
   // Parse all participants
-  const allParticipants = useMemo(() => DMLib.Conversation.parseConversationId(conversationId).participantPubkeys, [conversationId]);
+  const allParticipants = useMemo(() => DMLib.Conversation.parseConversationId(conversationId), [conversationId]);
   
   // Fetch all participant profiles
   const authorsData = useAuthorsBatch(allParticipants);
@@ -560,7 +560,7 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
 
   // Get all participant pubkeys and fetch their metadata
   const otherParticipants = useMemo(() => {
-    const { participantPubkeys } = DMLib.Conversation.parseConversationId(conversationId);
+    const participantPubkeys = DMLib.Conversation.parseConversationId(conversationId);
     return participantPubkeys.filter(pk => pk !== user?.pubkey);
   }, [conversationId, user?.pubkey]);
   
@@ -646,7 +646,107 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
   );
 };
 
-const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack?: () => void }) => {
+// Subject editing component for NIP-17 conversations
+const SubjectEditor = ({
+  subject,
+  pendingSubject,
+  setPendingSubject,
+  hasNIP17,
+}: {
+  subject: string;
+  pendingSubject: string | null;
+  setPendingSubject: (subject: string | null) => void;
+  hasNIP17: boolean;
+}) => {
+  const [isEditingSubject, setIsEditingSubject] = useState(false);
+  const [editedSubject, setEditedSubject] = useState('');
+
+  const handleEditSubject = () => {
+    setEditedSubject(subject);
+    setIsEditingSubject(true);
+  };
+
+  const handleSaveSubject = () => {
+    const trimmedSubject = editedSubject.trim();
+    setPendingSubject(trimmedSubject);
+    setIsEditingSubject(false);
+  };
+
+  const handleCancelEditSubject = () => {
+    setIsEditingSubject(false);
+    setEditedSubject('');
+  };
+
+  if (isEditingSubject) {
+    return (
+      <div className="flex items-center gap-1 px-3">
+        <input
+          type="text"
+          value={editedSubject}
+          onChange={(e) => setEditedSubject(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSaveSubject();
+            if (e.key === 'Escape') handleCancelEditSubject();
+          }}
+          placeholder="Enter subject..."
+          className="text-xs px-2 py-1 border rounded bg-background flex-1 min-w-0"
+          autoFocus
+        />
+        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleSaveSubject}>
+          <Check className="h-3 w-3" />
+        </Button>
+        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCancelEditSubject}>
+          ×
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {(subject || pendingSubject !== null) && (
+        <div className="flex items-center gap-1 px-3 group">
+          <p className={cn(
+            "text-xs font-medium whitespace-nowrap",
+            pendingSubject !== null ? "text-amber-500 italic" : "text-primary/80"
+          )}>
+            {pendingSubject !== null ? pendingSubject : subject}
+          </p>
+          {pendingSubject !== null && (
+            <span className="text-xs text-amber-500/70">(pending)</span>
+          )}
+          <button
+            onClick={handleEditSubject}
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+          </button>
+        </div>
+      )}
+      {!subject && pendingSubject === null && hasNIP17 && (
+        <button
+          onClick={handleEditSubject}
+          className="px-3 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+        >
+          <Pencil className="h-3 w-3" />
+          Add subject
+        </button>
+      )}
+    </>
+  );
+};
+
+const ChatHeader = ({ 
+  conversationId, 
+  onBack,
+  pendingSubject,
+  setPendingSubject 
+}: { 
+  conversationId: string; 
+  onBack?: () => void;
+  pendingSubject: string | null;
+  setPendingSubject: (subject: string | null) => void;
+}) => {
   const { user } = useCurrentUser();
   const { config } = useAppContext();
   const { getConversationRelays, messagingState } = useNewDMContext();
@@ -654,8 +754,15 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   
   // Parse conversation participants and exclude current user from display
-  const { participantPubkeys: allParticipants } = DMLib.Conversation.parseConversationId(conversationId);
+  const allParticipants = DMLib.Conversation.parseConversationId(conversationId);
   const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
+
+  // Get conversation metadata for subject
+  const conversation = messagingState?.conversationMetadata[conversationId];
+  const subject = conversation?.subject || '';
+  
+  // Track previous subject to detect changes from incoming messages
+  const prevSubjectRef = useRef(subject);
 
   // Check if this is a self-messaging conversation
   const isSelfMessaging = conversationParticipants.length === 0;
@@ -690,6 +797,17 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
     });
   }, [conversationId, getConversationRelays, messagingState]);
 
+  // Clear pending subject if the actual subject changes (from incoming messages)
+  useEffect(() => {
+    // If subject changed from what it was before (not just different from pending)
+    if (subject !== prevSubjectRef.current && pendingSubject !== null) {
+      // Someone else changed the subject, clear our pending change
+      setPendingSubject(null);
+    }
+    // Update the ref to track current subject
+    prevSubjectRef.current = subject;
+  }, [subject, pendingSubject, setPendingSubject]);
+
   return (
     <div className="px-4 py-4 border-b flex items-center gap-3">
       {onBack && (
@@ -703,22 +821,30 @@ const ChatHeader = ({ conversationId, onBack }: { conversationId: string; onBack
         </Button>
       )}
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
         <button
           onClick={() => setShowParticipantModal(true)}
           className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 cursor-help hover:bg-accent"
         >
           <ChatGroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} />
 
-          <div className="text-left">
+          <div className="text-left flex-1">
             <h2 className="font-semibold text-sm whitespace-nowrap">
               {isMultiPerson ? <ParticipantNames pubkeys={conversationParticipants} /> : displayName}
             </h2>
-            {subtitle && (
+            {subtitle && !subject && !isEditingSubject && (
               <p className="text-xs text-muted-foreground whitespace-nowrap">{subtitle}</p>
             )}
           </div>
         </button>
+
+        {/* Subject editing for NIP-17 conversations */}
+        <SubjectEditor
+          subject={subject}
+          pendingSubject={pendingSubject}
+          setPendingSubject={setPendingSubject}
+          hasNIP17={conversation?.hasNIP17 || false}
+        />
       </div>
 
       {devMode && (
@@ -794,12 +920,13 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
   const devMode = config.devMode ?? false;
 
   // Check if this is a group chat (3+ participants including current user)
-  const { participantPubkeys: allParticipants } = conversationId ? DMLib.Conversation.parseConversationId(conversationId) : { participantPubkeys: [] };
+  const allParticipants = conversationId ? DMLib.Conversation.parseConversationId(conversationId) : [];
   const isGroupChat = allParticipants.length >= 3;
 
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [pendingSubject, setPendingSubject] = useState<string | null>(null);
 
   // Determine default protocol based on mode
   const getDefaultProtocol = () => {
@@ -843,14 +970,18 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
         recipientPubkey: conversationId,
         content: messageText.trim(),
         protocol: selectedProtocol,
+        // Include pending subject if it was changed
+        subject: pendingSubject !== null ? pendingSubject : undefined,
       });
       setMessageText('');
+      // Clear pending subject after sending
+      setPendingSubject(null);
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
       setIsSending(false);
     }
-  }, [messageText, conversationId, user, sendMessage, selectedProtocol]);
+  }, [messageText, conversationId, user, sendMessage, selectedProtocol, pendingSubject]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -905,7 +1036,12 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
 
   return (
     <div className={cn("h-full flex flex-col bg-background", className)}>
-      <ChatHeader conversationId={conversationId} onBack={onBack} />
+      <ChatHeader 
+        conversationId={conversationId} 
+        onBack={onBack}
+        pendingSubject={pendingSubject}
+        setPendingSubject={setPendingSubject}
+      />
 
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
         {messages.length === 0 ? (

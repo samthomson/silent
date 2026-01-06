@@ -748,7 +748,6 @@ const ChatHeader = ({
   setPendingSubject: (subject: string | null) => void;
 }) => {
   const { user } = useCurrentUser();
-  const { config } = useAppContext();
   const { getConversationRelays, messagingState } = useNewDMContext();
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
@@ -786,8 +785,6 @@ const ChatHeader = ({
     : isSelfMessaging
       ? 'Private notes to yourself'
       : metadata?.nip05;
-
-  const devMode = config.devMode ?? false;
 
   // Check if conversation has failed relays
   const hasFailedRelays = useMemo(() => {
@@ -848,27 +845,25 @@ const ChatHeader = ({
         />
       </div>
 
-      {devMode && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowRelayModal(true)}
-                className={cn(hasFailedRelays && "text-red-500 hover:text-red-500")}
-              >
-                <Server className="h-5 w-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs">
-                {hasFailedRelays ? 'Some relays failed - click for details' : 'View relay information'}
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowRelayModal(true)}
+              className={cn(hasFailedRelays && "text-red-500 hover:text-red-500")}
+            >
+              <Server className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="text-xs">
+              {hasFailedRelays ? 'Some relays failed - click for details' : 'View relay information'}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       <ParticipantInfoModal
         open={showParticipantModal}
@@ -876,13 +871,11 @@ const ChatHeader = ({
         conversationId={conversationId}
       />
 
-      {devMode && (
-        <RelayInfoModal
-          open={showRelayModal}
-          onOpenChange={setShowRelayModal}
-          conversationId={conversationId}
-        />
-      )}
+      <RelayInfoModal
+        open={showRelayModal}
+        onOpenChange={setShowRelayModal}
+        conversationId={conversationId}
+      />
     </div>
   );
 };

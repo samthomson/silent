@@ -384,8 +384,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         // Before adding, check if this matches an optimistic message from the current user
         // Match by content, timestamp (within 60s), and sender
         const conversationId = DMLib.Pure.Conversation.computeConversationId(
-          messageWithMetadata.participants || [],
-          messageWithMetadata.subject || ''
+          messageWithMetadata.participants || []
         );
         const conversationMessages = prev.messagingState.conversationMessages[conversationId] || [];
         

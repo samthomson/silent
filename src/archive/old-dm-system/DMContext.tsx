@@ -1780,7 +1780,7 @@ export function DMProvider({ children, config }: DMProviderProps) {
       // Extract unique participant pubkeys from all conversations
       const pubkeys: string[] = [];
       conversations.forEach(conv => {
-        const { participantPubkeys } = DMLib.Conversation.parseConversationId(conv.id);
+        const participantPubkeys = DMLib.Conversation.parseConversationId(conv.id);
         pubkeys.push(...participantPubkeys);
       });
       const uniquePubkeys = Array.from(new Set(pubkeys)).filter(p => p !== userPubkey);

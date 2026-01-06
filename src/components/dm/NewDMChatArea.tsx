@@ -832,7 +832,7 @@ const ChatHeader = ({
             <h2 className="font-semibold text-sm whitespace-nowrap">
               {isMultiPerson ? <ParticipantNames pubkeys={conversationParticipants} /> : displayName}
             </h2>
-            {subtitle && !subject && !isEditingSubject && (
+            {subtitle && !subject && pendingSubject === null && (
               <p className="text-xs text-muted-foreground whitespace-nowrap">{subtitle}</p>
             )}
           </div>

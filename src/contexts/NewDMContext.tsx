@@ -1018,12 +1018,22 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       });
       initialisedForPubkey.current = null; // Force re-initialization
       
-      console.log('[NewDM] Cache cleared, reloading...');
+      console.log('[NewDM] Cache cleared, reloading from relays...');
+      toast({
+        title: 'Cache cleared',
+        description: 'All messages have been reloaded from relays',
+        duration: 5000,
+      });
     } catch (error) {
       console.error('[NewDM] Error clearing cache:', error);
+      toast({
+        title: 'Error clearing cache',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
       throw error;
     }
-  }, [user?.pubkey, cleanupSubscriptions]);
+  }, [user?.pubkey, cleanupSubscriptions, toast]);
   
   // Function to reload messages after settings change (called by SettingsModal)
   const reloadAfterSettingsChange = useCallback(async () => {
@@ -1072,12 +1082,17 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       const shouldClearCache = sessionStorage.getItem('dm-clear-cache-on-load');
       if (shouldClearCache) {
         sessionStorage.removeItem('dm-clear-cache-on-load');
+        toast({
+          title: 'Clearing cache',
+          description: 'Reloading all messages from scratch',
+          duration: 5000,
+        });
         clearCacheAndRefetch();
       }
     } catch (error) {
       console.warn('[NewDM] Could not check sessionStorage for cache clear flag:', error);
     }
-  }, [user?.pubkey]);
+  }, [user?.pubkey, clearCacheAndRefetch, toast]);
   
   const isDoingInitialLoad = context.isLoading && (context.phase === NEW_DM_PHASES.CACHE || context.phase === NEW_DM_PHASES.INITIAL_QUERY);
 

@@ -1023,6 +1023,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         title: 'Cache cleared',
         description: 'All messages have been reloaded from relays',
         duration: 5000,
+        className: 'border-2 bg-card',
       });
     } catch (error) {
       console.error('[NewDM] Error clearing cache:', error);
@@ -1086,6 +1087,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
           title: 'Clearing cache',
           description: 'Reloading all messages from scratch',
           duration: 5000,
+          className: 'border-2 bg-card',
         });
         clearCacheAndRefetch();
       }

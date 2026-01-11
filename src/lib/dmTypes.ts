@@ -37,6 +37,21 @@ export interface Conversation {
   hasFailedRelays?: boolean; // True if any relays failed to connect (computed in UI)
 }
 
+export interface FileMetadata {
+  url?: string;
+  mimeType?: string;
+  size?: number;
+  name?: string;
+  dim?: string;
+  blurhash?: string;
+  thumb?: string;
+  fallback?: string[];
+  encryptionAlgorithm?: string;
+  decryptionKey?: string;
+  decryptionNonce?: string;
+  hash?: string; // SHA-256 hash
+}
+
 export interface Message {
   id: string;
   event: NostrEvent; // The actual message event (kind 4, 14, or 15) with DECRYPTED content
@@ -47,6 +62,8 @@ export interface Message {
   // NIP-17 debugging - store the full seal and gift wrap
   sealEvent?: NostrEvent; // For NIP-17: the kind 13 seal (encrypted)
   giftWrapEvent?: NostrEvent; // For NIP-17: the full kind 1059 gift wrap
+  // File metadata parsed from imeta tags (kind 15)
+  fileMetadata?: FileMetadata;
   // Decryption errors
   error?: string;
   // UI state

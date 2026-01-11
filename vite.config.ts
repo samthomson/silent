@@ -8,6 +8,12 @@ export default defineConfig(() => ({
   server: {
     host: "::",
     port: 8080,
+    hmr: {
+      // In dev Docker setup, nginx proxies port 3000 → vite:8080.
+      // HMR WebSocket must connect to nginx (3000), not vite directly (8080).
+      // In production there's no Vite server - nginx serves static files only.
+      clientPort: process.env.DOCKER_DEV ? 3000 : undefined,
+    },
   },
   plugins: [
     react(),

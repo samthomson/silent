@@ -1,9 +1,6 @@
-/* eslint-disable */
-// @ts-nocheck
 import type { NostrEvent, NPool } from '@nostrify/nostrify';
 import { openDB } from 'idb';
 import type {
-  DMSettings,
   Participant,
   Message,
   MessagingState,
@@ -11,6 +8,8 @@ import type {
   RelayListsResult,
   RelayInfo,
   Conversation,
+  FileMetadata,
+  SyncState,
 } from '@/lib/dmTypes';
 
 export const CACHE_DB_NAME = 'nostr-dm-cache-v2';
@@ -32,7 +31,7 @@ const DM_QUERY_CONSTANTS = {
  */
 const mergeRelayInfo = (olderRelayInfo: Map<string, RelayInfo>, newerRelayInfo: Map<string, RelayInfo>): Map<string, RelayInfo> => {
   const merged = new Map(olderRelayInfo);
-  
+
   for (const [relay, info] of newerRelayInfo.entries()) {
     if (!merged.has(relay)) {
       merged.set(relay, { ...info });
@@ -45,7 +44,6 @@ const mergeRelayInfo = (olderRelayInfo: Map<string, RelayInfo>, newerRelayInfo: 
       // isBlocked is set later from participant data, not from queries
     }
   }
-  
   return merged;
 };
 
@@ -70,6 +68,8 @@ export interface MessageWithMetadata {
   sealEvent?: NostrEvent; // For NIP-17: the kind 13 seal (encrypted)
   giftWrapEvent?: NostrEvent; // For NIP-17: the full kind 1059 gift wrap
   giftWrapId?: string; // For NIP-17: gift wrap ID for deduplication
+  // File metadata parsed from imeta tags (kind 15)
+  fileMetadata?: FileMetadata;
 }
 
 export enum StartupMode {
@@ -91,9 +91,9 @@ export enum StartupMode {
  */
 const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
   if (!kind10006) return [];
-  
+
   const relays: string[] = [];
-  
+
   for (const tag of kind10006.tags) {
     // Look for 'r' tags which contain relay URLs
     if (tag[0] === 'r' && tag[1] && typeof tag[1] === 'string') {
@@ -103,7 +103,7 @@ const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
       }
     }
   }
-  
+
   return relays;
 }
 /**
@@ -128,7 +128,7 @@ const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
 const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | null, kind10006: NostrEvent | null, relayMode: RelayMode, discoveryRelays: string[]): { derivedRelays: string[]; blockedRelays: string[] } => {
   // Extract blocked relays
   const blockedRelays = extractBlockedRelays(kind10006);
-  
+
   // Discovery mode: only use discovery relays, ignore user's lists
   if (relayMode === 'discovery') {
     return {
@@ -136,10 +136,10 @@ const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | nu
       blockedRelays
     };
   }
-  
+
   // For hybrid and strict_outbox modes: extract user's relays
   const relaySet = new Set<string>();
-  
+
   // Priority 1: Kind 10050 (DM inbox relays)
   if (kind10050) {
     kind10050.tags
@@ -148,7 +148,7 @@ const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | nu
       .filter(url => url)
       .forEach(relay => relaySet.add(relay));
   }
-  
+
   // Priority 2: Kind 10002 read relays (if no 10050 or in hybrid mode)
   if (kind10002 && (relaySet.size === 0 || relayMode === 'hybrid')) {
     kind10002.tags
@@ -162,12 +162,12 @@ const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | nu
       .filter(url => url)
       .forEach(relay => relaySet.add(relay));
   }
-  
+
   // Hybrid mode: add discovery relays too
   if (relayMode === 'hybrid') {
     discoveryRelays.forEach(relay => relaySet.add(relay));
   }
-  
+
   return {
     derivedRelays: Array.from(relaySet),
     blockedRelays
@@ -184,13 +184,13 @@ const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | nu
 const getStaleParticipants = (participants: Record<string, Participant>, relayTTL: number, now: number): string[] => {
   const staleThreshold = now - relayTTL;
   const stalePubkeys: string[] = [];
-  
+
   for (const [pubkey, participant] of Object.entries(participants)) {
     if (participant.lastFetched < staleThreshold) {
       stalePubkeys.push(pubkey);
     }
   }
-  
+
   return stalePubkeys;
 }
 /**
@@ -204,13 +204,13 @@ const getStaleParticipants = (participants: Record<string, Participant>, relayTT
 const getNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[]): string[] => {
   const existingSet = new Set(existingPubkeys);
   const newSet = new Set<string>();
-  
+
   for (const pubkey of foundPubkeys) {
     if (!existingSet.has(pubkey)) {
       newSet.add(pubkey);
     }
   }
-  
+
   return Array.from(newSet);
 }
 /**
@@ -222,13 +222,13 @@ const getNewPubkeys = (foundPubkeys: string[], existingPubkeys: string[]): strin
  */
 const extractOtherPubkeysFromMessages = (messages: MessageWithMetadata[], myPubkey: string): string[] => {
   const pubkeysSet = new Set<string>();
-  
+
   for (const msg of messages) {
     // Add sender pubkey
     if (msg.senderPubkey && msg.senderPubkey !== myPubkey) {
       pubkeysSet.add(msg.senderPubkey);
     }
-    
+
     // Add all participants
     if (msg.participants) {
       for (const pubkey of msg.participants) {
@@ -238,7 +238,7 @@ const extractOtherPubkeysFromMessages = (messages: MessageWithMetadata[], myPubk
       }
     }
   }
-  
+
   return Array.from(pubkeysSet);
 }
 /**
@@ -252,10 +252,10 @@ const extractOtherPubkeysFromMessages = (messages: MessageWithMetadata[], myPubk
 const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => {
   // Build a set of existing message IDs for O(1) lookup
   const existingIds = new Set(existing.map(m => m.id));
-  
+
   // Filter incoming to only include messages we don't already have
   const newMessages = incoming.filter(m => !existingIds.has(m.id));
-  
+
   // Return existing + new messages
   return [...existing, ...newMessages];
 }
@@ -273,7 +273,7 @@ const dedupeMessages = (existing: Message[], incoming: Message[]): Message[] => 
 const computeConversationId = (participantPubkeys: string[]): string => {
   // Deduplicate and sort for consistent IDs regardless of order
   const uniqueSorted = [...new Set(participantPubkeys)].sort();
-  
+
   // NIP-17: Room is defined by participants only, not subject
   return `group:${uniqueSorted.join(',')}`;
 }
@@ -289,10 +289,10 @@ const parseConversationId = (conversationId: string): string[] => {
   if (!conversationId.startsWith('group:')) {
     throw new Error(`Invalid conversation ID format: ${conversationId}`);
   }
-  
+
   const withoutPrefix = conversationId.substring(6); // Remove "group:"
   const participantPubkeys = withoutPrefix.split(',');
-  
+
   // Handle legacy format: "group:pubkey1,pubkey2:subject"
   // The last element might have ":subject" appended, so we need to strip it
   return participantPubkeys.map(pk => {
@@ -335,7 +335,7 @@ const getConversationRelays = (
 
     const isCurrentUser = pubkey === myPubkey;
     const relays = participant.derivedRelays || [];
-    
+
     // Determine source based on what relay lists exist
     // (In new architecture, derivedRelays are already computed from available lists)
     const source = isCurrentUser ? 'Your inbox relays' : 'Inbox relays';
@@ -366,19 +366,19 @@ const getConversationRelays = (
  * @param myPubkey - The current user's pubkey (currently unused, kept for future validation)
  * @returns Record mapping conversationId to array of messages in that conversation
  */
-const groupMessagesIntoConversations = (messages: Message[], myPubkey: string): Record<string, Message[]> => {
+const groupMessagesIntoConversations = (messages: Message[], _myPubkey: string): Record<string, Message[]> => {
   const conversations: Record<string, Message[]> = {};
-  
+
   for (const message of messages) {
     const convId = message.conversationId;
-    
+
     if (!conversations[convId]) {
       conversations[convId] = [];
     }
-    
+
     conversations[convId].push(message);
   }
-  
+
   return conversations;
 }
 /**
@@ -390,7 +390,7 @@ const groupMessagesIntoConversations = (messages: Message[], myPubkey: string): 
  */
 const buildRelayToUsersMap = (participants: Record<string, Participant>): Map<string, string[]> => {
   const relayMap = new Map<string, string[]>();
-  
+
   for (const [pubkey, participant] of Object.entries(participants)) {
     for (const relayUrl of participant.derivedRelays) {
       if (!relayMap.has(relayUrl)) {
@@ -399,7 +399,7 @@ const buildRelayToUsersMap = (participants: Record<string, Participant>): Map<st
       relayMap.get(relayUrl)!.push(pubkey);
     }
   }
-  
+
   return relayMap;
 }
 /**
@@ -412,13 +412,13 @@ const buildRelayToUsersMap = (participants: Record<string, Participant>): Map<st
 const filterNewRelayUserCombos = (relayUserMap: Map<string, string[]>, alreadyQueriedRelays: string[]): string[] => {
   const alreadyQueriedSet = new Set(alreadyQueriedRelays);
   const newRelays: string[] = [];
-  
+
   for (const relayUrl of relayUserMap.keys()) {
     if (!alreadyQueriedSet.has(relayUrl)) {
       newRelays.push(relayUrl);
     }
   }
-  
+
   return newRelays;
 }
 /**
@@ -444,7 +444,7 @@ const buildParticipant = (
     relayMode,
     discoveryRelays
   );
-  
+
   return {
     pubkey,
     derivedRelays,
@@ -468,12 +468,12 @@ const buildParticipantsMap = (
   discoveryRelays: string[]
 ): Record<string, Participant> => {
   const participants: Record<string, Participant> = {};
-  
+
   for (const pubkey of pubkeys) {
     const lists = relayListsMap.get(pubkey)!;
     participants[pubkey] = buildParticipant(pubkey, lists, relayMode, discoveryRelays);
   }
-  
+
   return participants;
 }
 /**
@@ -500,10 +500,10 @@ const computeSinceTimestamp = (lastCacheTime: number | null, nip17FuzzDays: numb
   if (lastCacheTime === null) {
     return null;
   }
-  
+
   // Convert days to seconds: days * 24 hours * 60 minutes * 60 seconds
   const fuzzSeconds = nip17FuzzDays * 24 * 60 * 60;
-  
+
   // Subtract the fuzz period from the last cache time to ensure we catch all messages
   return lastCacheTime - fuzzSeconds;
 }
@@ -521,7 +521,7 @@ const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetad
     if (!messageId) {
       throw new Error(`Message missing ID: kind=${msg.event.kind}, hasGiftWrapId=${!!msg.giftWrapId}`);
     }
-    
+
     return {
       id: messageId,
       event: msg.event, // The inner message with DECRYPTED content
@@ -533,6 +533,8 @@ const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetad
       giftWrapId: msg.giftWrapId,
       sealEvent: msg.sealEvent,
       giftWrapEvent: msg.giftWrapEvent,
+      // File metadata parsed from imeta tags
+      fileMetadata: msg.fileMetadata,
     };
   });
 };
@@ -553,47 +555,47 @@ const addMessageToState = (
 ): MessagingState => {
   // Convert to Message with conversationId
   const [enrichedMessage] = enrichMessagesWithConversationId([messageWithMetadata]);
-  
+
   // Check if this message already exists (dedupe by ID or giftWrapId)
   const conversationMessages = currentState.conversationMessages[enrichedMessage.conversationId] || [];
-  const exists = conversationMessages.some(msg => 
-    msg.id === enrichedMessage.id || 
+  const exists = conversationMessages.some(msg =>
+    msg.id === enrichedMessage.id ||
     (msg.giftWrapId && enrichedMessage.giftWrapId && msg.giftWrapId === enrichedMessage.giftWrapId)
   );
-  
+
   if (exists) {
     return currentState; // Already have this message
   }
-  
+
   // Add message to conversation
-  const updatedMessages = [...conversationMessages, enrichedMessage].sort((a, b) => 
+  const updatedMessages = [...conversationMessages, enrichedMessage].sort((a, b) =>
     a.event.created_at - b.event.created_at
   );
-  
+
   // Update conversation metadata
   const lastMessage = updatedMessages[updatedMessages.length - 1];
   const hasUserSentMessage = updatedMessages.some(msg => msg.event.pubkey === myPubkey);
-  
+
   const participantPubkeys = messageWithMetadata.participants || [];
-  
+
   // Per NIP-17: "The newest subject in the chat room is the subject of the conversation"
   // Find the most recent message with a subject (iterate backwards from newest)
   let subject = '';
   for (let i = updatedMessages.length - 1; i >= 0; i--) {
     if (updatedMessages[i].subject) {
-      subject = updatedMessages[i].subject;
+      subject = updatedMessages[i].subject ?? '';
       break;
     }
   }
-  
+
   // Efficiently update protocol flags - use existing values or check new message
   const existingMetadata = currentState.conversationMetadata[enrichedMessage.conversationId];
   const hasNIP17 = (existingMetadata?.hasNIP17) || enrichedMessage.protocol === 'nip17';
   const hasNIP04 = (existingMetadata?.hasNIP04) || enrichedMessage.protocol === 'nip04';
-  
+
   // Check if conversation has any decryption errors
   const hasDecryptionErrors = (existingMetadata?.hasDecryptionErrors) || updatedMessages.some(m => m.error !== undefined);
-  
+
   const updatedMetadata: Conversation = {
     id: enrichedMessage.conversationId,
     participantPubkeys,
@@ -610,7 +612,7 @@ const addMessageToState = (
     hasNIP04,
     hasDecryptionErrors,
   };
-  
+
   return {
     ...currentState,
     conversationMessages: {
@@ -635,7 +637,7 @@ const addMessageToState = (
 const mergeMessagingState = (base: MessagingState, updates: MessagingState): MessagingState => {
   // Merge conversation messages properly - combine and sort arrays for overlapping conversations
   const mergedConversationMessages: Record<string, Message[]> = { ...base.conversationMessages };
-  
+
   for (const [convId, updatedMessages] of Object.entries(updates.conversationMessages)) {
     if (mergedConversationMessages[convId]) {
       // Merge arrays, dedupe by ID, and sort
@@ -652,7 +654,7 @@ const mergeMessagingState = (base: MessagingState, updates: MessagingState): Mes
       mergedConversationMessages[convId] = updatedMessages;
     }
   }
-  
+
   // Merge conversation metadata - preserve lastReadAt from base if higher
   const mergedMetadata: Record<string, Conversation> = {};
   for (const [convId, updatedMeta] of Object.entries(updates.conversationMetadata)) {
@@ -669,13 +671,13 @@ const mergeMessagingState = (base: MessagingState, updates: MessagingState): Mes
       mergedMetadata[convId] = baseMeta;
     }
   }
-  
+
   // Merge relay info - updates take precedence (fresher data)
   const mergedRelayInfo: Record<string, RelayInfo> = {
     ...base.relayInfo,
     ...updates.relayInfo
   };
-  
+
   return {
     ...updates,
     conversationMetadata: mergedMetadata,
@@ -707,51 +709,51 @@ const buildMessagingAppState = (
   // 1. Convert MessageWithMetadata to Message (add conversationId + protocol)
   const enrichedInitial = enrichMessagesWithConversationId(messagesFromInitialQuery);
   const enrichedGapFill = enrichMessagesWithConversationId(messagesFromGapFilling);
-  
+
   // 2. Dedupe messages (gap-filling may have overlaps with initial query)
   const allMessages = dedupeMessages(enrichedInitial, enrichedGapFill);
-  
+
   // 3. Sort all messages
   const sortedMessages = allMessages.sort((a, b) => a.event.created_at - b.event.created_at);
-  
+
   // 3. Group messages by conversationId
   const conversationMessages = groupMessagesIntoConversations(sortedMessages, '');
-  
+
   // 5. Build Conversation metadata objects from grouped messages
   const conversationMetadata: Record<string, Conversation> = {};
-  
+
   for (const [conversationId, messages] of Object.entries(conversationMessages)) {
     // Parse conversationId: "group:alice,bob" (no subject in ID per NIP-17)
     const participantPubkeys = parseConversationId(conversationId);
-    
+
     // Find the newest subject from messages (per NIP-17: newest subject wins)
     // Sort by created_at descending and find first message with a subject
     const sortedByNewest = [...messages].sort((a, b) => b.event.created_at - a.event.created_at);
     const subject = sortedByNewest.find(m => m.subject)?.subject || '';
-    
+
     // Find last activity (most recent message timestamp)
     const lastActivity = Math.max(...messages.map(m => m.event.created_at));
-    
+
     // Check protocols used
     const hasNIP04 = messages.some(m => m.protocol === 'nip04');
     const hasNIP17 = messages.some(m => m.protocol === 'nip17');
-    
+
     // Check if any messages have decryption errors
     const hasDecryptionErrors = messages.some(m => m.error !== undefined);
-    
+
     // Get last message for preview
     const lastMsg = messages[messages.length - 1];
     const lastMessage = lastMsg ? {
       decryptedContent: lastMsg.event.content,
       error: lastMsg.error,
     } : null;
-    
+
     // Determine if conversation is known or a request
     // Known = we've sent at least one message, Request = we've only received
     const hasSentMessage = messages.some(m => m.event.pubkey === myPubkey);
     const isKnown = hasSentMessage;
     const isRequest = !hasSentMessage;
-    
+
     conversationMetadata[conversationId] = {
       id: conversationId,
       participantPubkeys,
@@ -766,21 +768,21 @@ const buildMessagingAppState = (
       hasDecryptionErrors,
     };
   }
-  
+
   // 5. Build sync state
   const syncState: SyncState = {
     lastCacheTime: Date.now(),
     queriedRelays,
     queryLimitReached,
   };
-  
+
   // 6. Convert relayInfo map to record and mark blocked relays
   const relayInfo: Record<string, RelayInfo> = {};
-  
+
   for (const [relay, info] of relayInfoMap.entries()) {
     relayInfo[relay] = { ...info };
   }
-  
+
   // Mark relays that the current user has blocked
   const myBlockedRelays = participants[myPubkey]?.blockedRelays || [];
   for (const blockedRelay of myBlockedRelays) {
@@ -788,7 +790,7 @@ const buildMessagingAppState = (
       relayInfo[blockedRelay].isBlocked = true;
     }
   }
-  
+
   return {
     participants,
     conversationMetadata,
@@ -810,10 +812,10 @@ const buildMessagingAppState = (
 const extractNewPubkeys = (messagesWithMetadata: MessageWithMetadata[], baseParticipants: Record<string, Participant>, myPubkey: string): string[] => {
   // 1. Extract all other pubkeys from messages
   const foundPubkeys = extractOtherPubkeysFromMessages(messagesWithMetadata, myPubkey);
-  
+
   // 2. Get existing pubkeys from baseParticipants
   const existingPubkeys = Object.keys(baseParticipants);
-  
+
   // 3. Determine which are new
   return getNewPubkeys(foundPubkeys, existingPubkeys);
 }
@@ -829,7 +831,7 @@ const extractNewPubkeys = (messagesWithMetadata: MessageWithMetadata[], basePart
 const findNewRelaysToQuery = (participants: Record<string, Participant>, alreadyQueried: string[]): string[] => {
   // 1. Build map of relay -> users
   const relayUserMap = buildRelayToUsersMap(participants);
-  
+
   // 2. Filter to only new relays
   return filterNewRelayUserCombos(relayUserMap, alreadyQueried);
 }
@@ -845,7 +847,7 @@ const findNewRelaysToQuery = (participants: Record<string, Participant>, already
  */
 const computeAllQueriedRelays = (mode: StartupMode, lastSessionCache: MessagingState | null, relaySet: string[], newRelays: string[]): string[] => {
   let initialRelays: string[];
-  
+
   if (mode === StartupMode.WARM && lastSessionCache) {
     // Warm start: We queried the relays from last session in step C
     initialRelays = lastSessionCache.syncState.queriedRelays;
@@ -853,7 +855,7 @@ const computeAllQueriedRelays = (mode: StartupMode, lastSessionCache: MessagingS
     // Cold start: We queried the user's current relays in step C
     initialRelays = relaySet;
   }
-  
+
   // Combine initial relays with new relays and deduplicate
   const allRelays = [...initialRelays, ...newRelays];
   return Array.from(new Set(allRelays));
@@ -873,6 +875,283 @@ const computeSettingsFingerprint = (settings: {
   });
 };
 
+/**
+ * Parse imeta tags to extract file metadata
+ * @param imetaTags - Array of imeta tag arrays
+ * @returns Parsed metadata object
+ */
+const parseImetaTags = (imetaTags: string[][]): FileMetadata => {
+  const metadata: FileMetadata = {};
+  const fallbackUrls: string[] = [];
+
+  for (const tag of imetaTags) {
+    if (tag[0] !== 'imeta') continue;
+
+    for (let i = 1; i < tag.length; i++) {
+      const part = tag[i];
+      if (!part) continue;
+
+      const [key, ...valueParts] = part.split(' ');
+      const value = valueParts.join(' ');
+
+      switch (key) {
+        case 'url':
+          metadata.url = value;
+          break;
+        case 'm':
+          metadata.mimeType = value;
+          break;
+        case 'size':
+          metadata.size = parseInt(value, 10);
+          break;
+        case 'alt':
+          metadata.name = value;
+          break;
+        case 'dim':
+          metadata.dim = value;
+          break;
+        case 'blurhash':
+          metadata.blurhash = value;
+          break;
+        case 'thumb':
+          metadata.thumb = value;
+          break;
+        case 'fallback':
+          fallbackUrls.push(value);
+          break;
+        case 'encryption-algorithm':
+          metadata.encryptionAlgorithm = value;
+          break;
+        case 'decryption-key':
+          metadata.decryptionKey = value;
+          break;
+        case 'decryption-nonce':
+          metadata.decryptionNonce = value;
+          break;
+        case 'x':
+          metadata.hash = value;
+          break;
+      }
+    }
+  }
+
+  if (fallbackUrls.length > 0) {
+    metadata.fallback = fallbackUrls;
+  }
+
+  return metadata;
+};
+
+/**
+ * Encrypted file result from encryption
+ */
+interface EncryptedFile {
+  encryptedBlob: Blob;
+  key: string; // Base64-encoded encryption key
+  nonce: string; // Base64-encoded nonce/IV
+  algorithm: string; // Encryption algorithm (default: 'aes-gcm')
+  hash?: string; // SHA-256 hash of encrypted file (hex)
+}
+
+/**
+ * Encrypt a file using AES-GCM
+ * @param file - File to encrypt
+ * @returns Encrypted file with key and nonce
+ */
+const encryptFile = async (file: File): Promise<EncryptedFile> => {
+  const algorithm = 'AES-GCM';
+  const keyLength = 256; // AES-256
+
+  // Generate encryption key
+  const key = await crypto.subtle.generateKey(
+    {
+      name: algorithm,
+      length: keyLength,
+    },
+    true, // extractable
+    ['encrypt']
+  );
+
+  // Generate random nonce (12 bytes for AES-GCM)
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+
+  // Read file as ArrayBuffer
+  const fileBuffer = await file.arrayBuffer();
+
+  // Encrypt file
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    {
+      name: algorithm,
+      iv: nonce,
+    },
+    key,
+    fileBuffer
+  );
+
+  // Export key for storage
+  const exportedKey = await crypto.subtle.exportKey('raw', key);
+  const keyBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
+  const nonceBase64 = btoa(String.fromCharCode(...new Uint8Array(nonce)));
+
+  // Calculate SHA-256 hash of encrypted file for integrity verification
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encryptedBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+  // Create Blob from encrypted buffer
+  const encryptedBlob = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
+
+  return {
+    encryptedBlob,
+    key: keyBase64,
+    nonce: nonceBase64,
+    algorithm: 'aes-gcm',
+    hash: hashHex,
+  };
+};
+
+/**
+ * Decrypt an encrypted file
+ * @param encryptedBlob - Encrypted file blob
+ * @param keyBase64 - Base64-encoded encryption key
+ * @param nonceBase64 - Base64-encoded nonce/IV
+ * @param algorithm - Encryption algorithm (default: 'aes-gcm')
+ * @returns Decrypted file blob
+ */
+/**
+ * Convert hex string to base64
+ */
+const hexToBase64 = (hex: string): string => {
+  const hexBytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+  return btoa(String.fromCharCode(...hexBytes));
+};
+
+/**
+ * Normalize key/nonce to base64 (handles both hex and base64 input)
+ */
+const normalizeToBase64 = (value: string): string => {
+  // If it contains '=' or '+' or '/', it's likely base64
+  if (value.includes('=') || value.includes('+') || value.includes('/')) {
+    return value;
+  }
+  // Check if it's hex (even length, hex chars only)
+  const hexMatch = value.match(/^[0-9a-fA-F]+$/);
+  if (hexMatch && value.length % 2 === 0) {
+    return hexToBase64(value);
+  }
+  // Assume it's already base64 without padding
+  return value;
+};
+
+const decryptFile = async (
+  encryptedBlob: Blob,
+  keyBase64: string,
+  nonceBase64: string,
+  algorithm: string = 'aes-gcm'
+): Promise<Blob> => {
+  console.log('[DecryptFile] Input:', {
+    blobSize: encryptedBlob.size,
+    keyBase64: keyBase64.substring(0, 20) + '...',
+    nonceBase64: nonceBase64.substring(0, 20) + '...',
+    algorithm,
+  });
+
+  // NIP-17 doesn't mandate a specific algorithm - it's flexible
+  // Common algorithms used in Nostr clients:
+  // - aes-gcm: Most common, recommended (AEAD, authenticated encryption)
+  // - aes-cbc: Legacy, less secure (no authentication)
+  // - chacha20-poly1305: Alternative AEAD, good performance
+  // - xchacha20-poly1305: Extended nonce variant
+  // We support aes-gcm for now, but could extend to others if needed
+  if (algorithm !== 'aes-gcm') {
+    throw new Error(`Unsupported encryption algorithm: ${algorithm}. Currently only 'aes-gcm' is supported. Other common options: 'aes-cbc', 'chacha20-poly1305', 'xchacha20-poly1305'`);
+  }
+
+  // Normalize key and nonce to base64 (handle hex input)
+  const normalizedKey = normalizeToBase64(keyBase64);
+  const normalizedNonce = normalizeToBase64(nonceBase64);
+
+  console.log('[DecryptFile] Normalized:', {
+    normalizedKey: normalizedKey.substring(0, 20) + '...',
+    normalizedNonce: normalizedNonce.substring(0, 20) + '...',
+  });
+
+  // Import key
+  const keyData = Uint8Array.from(atob(normalizedKey), c => c.charCodeAt(0));
+  console.log('[DecryptFile] Key length:', keyData.length, 'bytes (expected 32 for AES-256)');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    false, // not extractable
+    ['decrypt']
+  );
+
+  // Decode nonce
+  const nonce = Uint8Array.from(atob(normalizedNonce), c => c.charCodeAt(0));
+
+  // Read encrypted blob as ArrayBuffer
+  const encryptedBuffer = await encryptedBlob.arrayBuffer();
+
+  // Decrypt file
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: nonce,
+    },
+    key,
+    encryptedBuffer
+  );
+
+  // Create Blob from decrypted buffer
+  return new Blob([decryptedBuffer]);
+};
+
+/**
+ * Verify file integrity using SHA-256 hash
+ * @param fileBlob - File blob to verify
+ * @param expectedHash - Expected SHA-256 hash (hex)
+ * @returns True if hash matches
+ */
+const verifyFileHash = async (fileBlob: Blob, expectedHash: string): Promise<boolean> => {
+  const buffer = await fileBlob.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex === expectedHash.toLowerCase();
+};
+
+/**
+ * Extract image dimensions from a File (for images)
+ * @param file - Image file
+ * @returns Promise resolving to dimensions string (e.g., "1920x1080") or undefined
+ */
+const extractImageDimensions = async (file: File): Promise<string | undefined> => {
+  if (!file.type.startsWith('image/')) {
+    return undefined;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(`${img.width}x${img.height}`);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(undefined);
+    };
+
+    img.src = url;
+  });
+};
+
 export const Pure = {
   Relay: {
     extractBlockedRelays,
@@ -886,6 +1165,9 @@ export const Pure = {
   Message: {
     dedupeMessages,
     extractOtherPubkeysFromMessages,
+    parseImetaTags,
+    decryptFile,
+    verifyFileHash,
   },
   Participant: {
     buildParticipant,
@@ -939,11 +1221,11 @@ const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys:
   const completedResults: Array<{ relay: string; success: boolean; events: NostrEvent[]; error: string | null }> = [];
   const majorityThreshold = Math.ceil(discoveryRelays.length * 0.6);
   let majorityResolve: (() => void) | null = null;
-  
+
   const majorityPromise = new Promise<void>((resolve) => {
     majorityResolve = resolve;
   });
-  
+
   // Query each discovery relay individually to track failures
   const relayPromises = discoveryRelays.map(relay =>
     nostr.relay(relay).query(
@@ -1017,7 +1299,7 @@ const fetchRelayLists = async (nostr: NPool, discoveryRelays: string[], pubkeys:
       kind10050: eventsByPubkeyAndKind.get(`${pubkey}:10050`) || null,
       kind10006: eventsByPubkeyAndKind.get(`${pubkey}:10006`) || null,
     };
-    
+
     results.set(pubkey, result);
   }
 
@@ -1052,39 +1334,39 @@ const fetchMessages = async (
   queryLimit: number
 ): Promise<{ messages: NostrEvent[]; limitReached: boolean; relayInfo: Map<string, RelayInfo> }> => {
   const { BATCH_SIZE, QUERY_TIMEOUT_MS } = DM_QUERY_CONSTANTS;
-  
+
   // Initialize 3 separate filter states for independent pagination
   const filterStates: FilterState[] = [
     { kind: 4, pTag: myPubkey, currentSince: since || 0, messagesCollected: 0 },     // NIP-04 TO me
     { kind: 4, author: myPubkey, currentSince: since || 0, messagesCollected: 0 },   // NIP-04 FROM me
     { kind: 1059, pTag: myPubkey, currentSince: since || 0, messagesCollected: 0 }   // NIP-17
   ];
-  
+
   const allMessages: NostrEvent[] = [];
   let totalCollected = 0;
-  
+
   // Track relay info across all queries
   const relayInfo = new Map<string, RelayInfo>();
-  
+
   // Iterate until all filters exhausted or limit reached
   while (totalCollected < queryLimit) {
     // Get filters that haven't reached their limit yet
     const activeFilters = filterStates.filter(f => f.messagesCollected < queryLimit);
     if (activeFilters.length === 0) break;
-    
+
     // Query each active filter in parallel
     const batchPromises = activeFilters.map(async (state) => {
       const batchLimit = Math.min(BATCH_SIZE, queryLimit - state.messagesCollected);
-      
+
       // Build filter for this specific type
-      const filter: any = {
+      const filter: { kinds: number[]; limit: number; since: number; '#p'?: string[]; authors?: string[] } = {
         kinds: [state.kind],
         limit: batchLimit,
         since: state.currentSince,
         ...(state.pTag && { '#p': [state.pTag] }),
         ...(state.author && { authors: [state.author] })
       };
-      
+
       // Query all relays in parallel for this filter
       const relayResults = await Promise.allSettled(
         relays.map(relay =>
@@ -1093,7 +1375,7 @@ const fetchMessages = async (
             .catch(error => ({ relay, success: false, events: [], error: String(error) }))
         )
       );
-      
+
       // Track relay info
       for (const result of relayResults) {
         if (result.status === 'fulfilled') {
@@ -1109,12 +1391,12 @@ const fetchMessages = async (
           }
         }
       }
-      
+
       // Combine results from all relays (ignore failures)
       const messages = relayResults
-        .filter((r): r is PromiseFulfilledResult<{ relay: string; success: boolean; events: NostrEvent[]; error: string | null }> => r.status === 'fulfilled')
-        .flatMap(r => r.value.events);
-      
+        .filter(r => r.status === 'fulfilled')
+        .flatMap(r => (r as PromiseFulfilledResult<{ relay: string; success: boolean; events: NostrEvent[]; error: string | null }>).value.events);
+
       // Deduplicate by event ID (same message from multiple relays)
       const seen = new Set<string>();
       const uniqueMessages = messages.filter(msg => {
@@ -1122,38 +1404,38 @@ const fetchMessages = async (
         seen.add(msg.id);
         return true;
       });
-      
+
       // Update state for next iteration
       if (uniqueMessages.length > 0) {
         state.messagesCollected += uniqueMessages.length;
         // Update currentSince to oldest message timestamp for backward pagination
         state.currentSince = Math.min(...uniqueMessages.map(m => m.created_at));
       }
-      
+
       return {
         state,
         messages: uniqueMessages,
         exhausted: uniqueMessages.length < batchLimit
       };
     });
-    
+
     const batchResults = await Promise.all(batchPromises);
-    
+
     // Collect all messages from this batch
     for (const result of batchResults) {
       allMessages.push(...result.messages);
       totalCollected += result.messages.length;
-      
+
       // Mark filter as exhausted if we got fewer messages than requested
       if (result.exhausted) {
         result.state.messagesCollected = queryLimit; // Mark as done
       }
     }
-    
+
     // Break if all filters are exhausted
     if (batchResults.every(r => r.exhausted)) break;
   }
-  
+
   return {
     messages: allMessages,
     limitReached: totalCollected >= queryLimit,
@@ -1172,15 +1454,15 @@ const fetchMessages = async (
 const processNIP04Message = async (msg: NostrEvent, signer: Signer, myPubkey: string): Promise<MessageWithMetadata | null> => {
   const recipientPubkey = msg.tags.find(t => t[0] === 'p')?.[1];
   const participants = [msg.pubkey, recipientPubkey].filter(Boolean) as string[];
-  
+
   // For NIP-04, we need the "other pubkey" to decrypt
   // If I'm the sender, decrypt with recipient's pubkey; if I'm the recipient, decrypt with sender's pubkey
   const otherPubkey = msg.pubkey === myPubkey ? recipientPubkey : msg.pubkey;
-  
+
   // Check if we can decrypt
   let decryptedContent: string | undefined;
   let decryptionError: string | undefined;
-  
+
   if (!otherPubkey) {
     decryptionError = 'Missing recipient';
   } else if (!signer.nip04) {
@@ -1188,18 +1470,18 @@ const processNIP04Message = async (msg: NostrEvent, signer: Signer, myPubkey: st
   } else {
     try {
       decryptedContent = await signer.nip04.decrypt(otherPubkey, msg.content);
-    } catch (error) {
+    } catch {
       // Decryption failed - could be wrong keys, corrupted message, or not for this account
       decryptionError = 'Unable to decrypt';
     }
   }
-  
+
   // Store decrypted content in the event (or leave encrypted if failed)
   const eventWithDecrypted = {
     ...msg,
     content: decryptedContent || msg.content // Use decrypted or keep original encrypted
   };
-  
+
   return {
     event: eventWithDecrypted,
     senderPubkey: msg.pubkey,
@@ -1208,6 +1490,7 @@ const processNIP04Message = async (msg: NostrEvent, signer: Signer, myPubkey: st
     error: decryptionError, // Pass error flag through
   };
 };
+
 
 const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<MessageWithMetadata | null> => {
   if (!signer.nip44) {
@@ -1222,40 +1505,115 @@ const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<Mes
       giftWrapId: msg.id,
     };
   }
-  
+
   try {
     // Step 1: Decrypt gift wrap (kind 1059) to get seal (kind 13)
     const sealContent = await signer.nip44.decrypt(msg.pubkey, msg.content);
-    
+
     // Check if decryption failed
     if (!sealContent || typeof sealContent !== 'string') {
       throw new Error('Invalid seal content');
     }
-    
+
     const seal = JSON.parse(sealContent) as NostrEvent;
-    
+
     if (seal.kind !== 13) {
       throw new Error(`Invalid seal kind: ${seal.kind}`);
     }
-    
+
     // Step 2: Decrypt seal to get inner message (kind 14 or 15)
     const innerContent = await signer.nip44.decrypt(seal.pubkey, seal.content);
     const inner = JSON.parse(innerContent) as NostrEvent;
-    
+
     if (inner.kind !== 14 && inner.kind !== 15) {
       throw new Error(`Invalid inner kind: ${inner.kind}`);
     }
-    
+
     // Step 3: Extract participants from p tags
     const recipients = inner.tags
       .filter(t => t[0] === 'p')
       .map(t => t[1]);
-    
+
     const participants = [seal.pubkey, ...recipients];
-    
+
     // Extract optional subject tag (default to empty string)
     const subject = inner.tags.find(t => t[0] === 'subject')?.[1] || '';
-    
+
+    // Parse file metadata for kind 15 messages
+    // Can be in imeta tags (NIP-92) or direct tags (legacy/compatibility)
+    let fileMetadata: FileMetadata | undefined;
+    const imetaTags = inner.tags.filter(t => t[0] === 'imeta');
+    if (imetaTags.length > 0) {
+      // Parse from imeta tags (NIP-92 standard)
+      fileMetadata = parseImetaTags(imetaTags);
+    } else if (inner.kind === 15) {
+      // Parse from direct tags (legacy/compatibility mode)
+      // Extract URL from content
+      const url = inner.content.trim();
+      const encryptionAlgorithm = inner.tags.find(t => t[0] === 'encryption-algorithm')?.[1];
+      let decryptionKey = inner.tags.find(t => t[0] === 'decryption-key')?.[1];
+      let decryptionNonce = inner.tags.find(t => t[0] === 'decryption-nonce')?.[1];
+
+      console.log('[DM] Parsing kind 15 direct tags:', {
+        url,
+        encryptionAlgorithm,
+        hasDecryptionKey: !!decryptionKey,
+        hasDecryptionNonce: !!decryptionNonce,
+        allTags: inner.tags.map(t => [t[0], t[1]?.substring(0, 20)]),
+      });
+
+      // Convert hex keys/nonces to base64 if needed
+      // Some clients store keys as hex instead of base64
+      if (decryptionKey && !decryptionKey.includes('=') && decryptionKey.length === 64) {
+        // Looks like hex (64 chars = 32 bytes), convert to base64
+        const hexBytes = new Uint8Array(decryptionKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+        decryptionKey = btoa(String.fromCharCode(...hexBytes));
+        console.log('[DM] Converted hex decryptionKey to base64');
+      }
+      if (decryptionNonce && !decryptionNonce.includes('=')) {
+        // Check if it's hex (even length, hex chars only)
+        const hexMatch = decryptionNonce.match(/^[0-9a-fA-F]+$/);
+        if (hexMatch && decryptionNonce.length % 2 === 0) {
+          const hexBytes = new Uint8Array(decryptionNonce.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+          decryptionNonce = btoa(String.fromCharCode(...hexBytes));
+          console.log('[DM] Converted hex decryptionNonce to base64');
+        }
+      }
+
+      // Parse size if available
+      const sizeTag = inner.tags.find(t => t[0] === 'size')?.[1];
+      const size = sizeTag ? parseInt(sizeTag, 10) : undefined;
+
+      // Parse dimensions from URL query params if not in tags
+      let dim = inner.tags.find(t => t[0] === 'dim')?.[1];
+      if (!dim && url) {
+        try {
+          const urlObj = new URL(url);
+          const width = urlObj.searchParams.get('width');
+          const height = urlObj.searchParams.get('height');
+          if (width && height) {
+            dim = `${width}x${height}`;
+          }
+        } catch { /* ignore */ }
+      }
+
+      fileMetadata = {
+        url: url || undefined,
+        mimeType: inner.tags.find(t => t[0] === 'file-type')?.[1],
+        size,
+        dim,
+        encryptionAlgorithm,
+        decryptionKey,
+        decryptionNonce,
+        hash: inner.tags.find(t => t[0] === 'x')?.[1], // SHA-256 hash
+      };
+      console.log('[DM] Created fileMetadata for kind 15:', {
+        url: fileMetadata.url,
+        mimeType: fileMetadata.mimeType,
+        hasEncryption: !!(fileMetadata.encryptionAlgorithm && fileMetadata.decryptionKey && fileMetadata.decryptionNonce),
+      });
+    }
+
     return {
       event: inner, // Store the INNER event (kind 14/15) with DECRYPTED content
       senderPubkey: seal.pubkey, // Real sender is in the seal
@@ -1264,14 +1622,16 @@ const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<Mes
       // Store encrypted layers for debugging
       sealEvent: seal, // Kind 13 with encrypted content
       giftWrapEvent: msg, // Kind 1059 with encrypted seal
-      giftWrapId: msg.id // For deduplication
+      giftWrapId: msg.id, // For deduplication
+      // Store parsed file metadata
+      fileMetadata,
     };
   } catch (error) {
     // Decryption failed - show error in UI rather than hiding the message
     if (process.env.NODE_ENV === 'development') {
       console.debug('[DM] Failed to unwrap gift wrap:', msg.id, error instanceof Error ? error.message : error);
     }
-    
+
     return {
       event: msg,
       senderPubkey: msg.pubkey,
@@ -1288,7 +1648,7 @@ const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubk
   const results: MessageWithMetadata[] = [];
   let nip04FailCount = 0;
   let nip17FailCount = 0;
-  
+
   for (const msg of messages) {
     if (msg.kind === 4) {
       const result = await processNIP04Message(msg, signer, myPubkey);
@@ -1306,7 +1666,7 @@ const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubk
       }
     }
   }
-  
+
   // Log summary if there were failures
   if (nip04FailCount > 0 || nip17FailCount > 0) {
     const parts: string[] = [];
@@ -1314,7 +1674,7 @@ const decryptAllMessages = async (messages: NostrEvent[], signer: Signer, myPubk
     if (nip17FailCount > 0) parts.push(`${nip17FailCount} NIP-17`);
     console.log(`[DM] Successfully processed ${results.length} messages, skipped ${parts.join(', ')} undecryptable messages`);
   }
-  
+
   return results;
 };
 const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> => {
@@ -1326,18 +1686,65 @@ const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> =
         }
       },
     });
-    
+
     const key = `${CACHE_KEY_PREFIX}${myPubkey}`;
     const data = await db.get(CACHE_STORE_NAME, key);
-    
+
     if (!data) return null;
-    
+
     // Basic structure validation
     if (!data.participants || !data.conversationMetadata || !data.conversationMessages || !data.syncState || !data.relayInfo) {
       console.error('[DM Cache] Invalid cache structure, missing required keys');
       return null;
     }
-    
+
+    // Migrate: ensure fileMetadata exists for kind 15 messages
+    // Old cache entries may not have fileMetadata - parse it from event tags
+    let needsSave = false;
+    for (const conversationId in data.conversationMessages) {
+      const messages = data.conversationMessages[conversationId];
+      for (const message of messages) {
+        if (message.event.kind === 15 && !message.fileMetadata) {
+          // Parse fileMetadata from event tags
+          const event = message.event;
+          const url = event.content.trim();
+          const encryptionAlgorithm = event.tags.find((t: string[]) => t[0] === 'encryption-algorithm')?.[1];
+          let decryptionKey = event.tags.find((t: string[]) => t[0] === 'decryption-key')?.[1];
+          let decryptionNonce = event.tags.find((t: string[]) => t[0] === 'decryption-nonce')?.[1];
+
+          // Convert hex to base64 if needed
+          if (decryptionKey && !decryptionKey.includes('=') && decryptionKey.length === 64) {
+            const hexBytes = new Uint8Array(decryptionKey.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+            decryptionKey = btoa(String.fromCharCode(...hexBytes));
+          }
+          if (decryptionNonce && !decryptionNonce.includes('=')) {
+            const hexMatch = decryptionNonce.match(/^[0-9a-fA-F]+$/);
+            if (hexMatch && decryptionNonce.length % 2 === 0) {
+              const hexBytes = new Uint8Array(decryptionNonce.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+              decryptionNonce = btoa(String.fromCharCode(...hexBytes));
+            }
+          }
+
+          message.fileMetadata = {
+            url: url || undefined,
+            mimeType: event.tags.find((t: string[]) => t[0] === 'file-type')?.[1],
+            encryptionAlgorithm,
+            decryptionKey,
+            decryptionNonce,
+            hash: event.tags.find((t: string[]) => t[0] === 'x')?.[1],
+          };
+          needsSave = true;
+          console.log('[DM Cache] Migrated fileMetadata for kind 15 message:', message.id);
+        }
+      }
+    }
+
+    // Save migrated cache if needed
+    if (needsSave) {
+      console.log('[DM Cache] Saving migrated cache with fileMetadata');
+      await saveToCache(myPubkey, data as MessagingState);
+    }
+
     return data as MessagingState;
   } catch (error) {
     console.error('[DM Cache] Error loading from cache:', error);
@@ -1353,7 +1760,7 @@ const saveToCache = async (myPubkey: string, data: MessagingState): Promise<void
         }
       },
     });
-    
+
     const key = `${CACHE_KEY_PREFIX}${myPubkey}`;
     await db.put(CACHE_STORE_NAME, data, key);
     db.close();
@@ -1382,18 +1789,18 @@ const refreshStaleParticipants = async (
 ): Promise<Record<string, Participant>> => {
   // 1. Find stale participants
   const stalePubkeys = getStaleParticipants(participants, relayTTL, Date.now());
-  
+
   // 2. If no stale participants, return original
   if (stalePubkeys.length === 0) {
     return participants;
   }
-  
+
   // 3. Fetch fresh relay lists for stale participants
   const { results: relayListsMap } = await fetchRelayLists(nostr, discoveryRelays, stalePubkeys);
-  
+
   // 4. Build updated participants
   const updatedParticipants = buildParticipantsMap(stalePubkeys, relayListsMap, relayMode, discoveryRelays);
-  
+
   // 5. Merge with existing (updated take precedence)
   return mergeParticipants(participants, updatedParticipants);
 }
@@ -1410,10 +1817,10 @@ const fetchMyRelayInfo = async (nostr: NPool, discoveryRelays: string[], myPubke
   // Fetch relay lists for the current user
   const { results: relayListsMap, relayInfo } = await fetchRelayLists(nostr, discoveryRelays, [myPubkey]);
   const myLists = relayListsMap.get(myPubkey) || { kind10002: null, kind10050: null, kind10006: null };
-  
+
   // Extract blocked relays from kind 10006
   const myBlockedRelays = extractBlockedRelays(myLists.kind10006);
-  
+
   return {
     myLists,
     myBlockedRelays,
@@ -1442,10 +1849,10 @@ const queryMessages = async (
 ): Promise<{ messagesWithMetadata: MessageWithMetadata[]; limitReached: boolean; relayInfo: Map<string, RelayInfo> }> => {
   // Fetch raw messages (batched iteration with 3 filters)
   const { messages, limitReached, relayInfo } = await fetchMessages(nostr, relays, myPubkey, since, queryLimit);
-  
+
   // Decrypt all messages (NIP-04 and NIP-17)
   const messagesWithMetadata = await decryptAllMessages(messages, signer, myPubkey);
-  
+
   return { messagesWithMetadata, limitReached, relayInfo };
 }
 /**
@@ -1470,13 +1877,13 @@ const fetchAndMergeParticipants = async (
   if (newPubkeys.length === 0) {
     return baseParticipants;
   }
-  
+
   // Fetch relay lists for new pubkeys
   const { results: relayListsMap } = await fetchRelayLists(nostr, discoveryRelays, newPubkeys);
-  
+
   // Build participants for new pubkeys
   const newParticipants = buildParticipantsMap(newPubkeys, relayListsMap, relayMode, discoveryRelays);
-  
+
   // Merge with base participants (base takes precedence - keeps current user intact)
   return mergeParticipants(newParticipants, baseParticipants);
 }
@@ -1500,10 +1907,10 @@ const queryNewRelays = async (
 ): Promise<{ allMessages: MessageWithMetadata[]; limitReached: boolean; relayInfo: Map<string, RelayInfo> }> => {
   // Fetch raw messages from beginning (since=null for gap filling)
   const { messages, limitReached, relayInfo } = await fetchMessages(nostr, relays, myPubkey, null, queryLimit);
-  
+
   // Decrypt all messages (NIP-04 and NIP-17)
   const allMessages = await decryptAllMessages(messages, signer, myPubkey);
-  
+
   return { allMessages, limitReached, relayInfo };
 }
 /**
@@ -1537,12 +1944,18 @@ const buildAndSaveCache = async (
     limitReached,
     relayInfoMap
   );
-  
+
   // Save to cache
   await saveToCache(myPubkey, state);
-  
+
   return state;
 }
+
+/**
+ * File metadata parsed from imeta tags
+ * Re-exported from dmTypes.ts for convenience
+ */
+export type { FileMetadata } from './dmTypes';
 
 /**
  * File attachment for direct messages (NIP-92 compatible).
@@ -1553,7 +1966,55 @@ export interface FileAttachment {
   size: number;
   name: string;
   tags: string[][];
+  // Optional metadata for NIP-17 kind 15 messages
+  dim?: string; // Image dimensions (e.g., "1920x1080")
+  blurhash?: string; // Blurhash placeholder string
+  thumb?: string; // Thumbnail URL
+  fallback?: string[]; // Fallback URLs
+  fileType?: string; // MIME type (alias for mimeType, for consistency)
+  // Encryption metadata (set when file is encrypted)
+  encrypted?: boolean;
+  encryptionKey?: string; // Base64-encoded encryption key
+  encryptionNonce?: string; // Base64-encoded nonce
+  encryptionAlgorithm?: string; // Encryption algorithm (default: 'aes-gcm')
+  encryptionHash?: string; // SHA-256 hash of encrypted file (hex)
 }
+
+/**
+ * Prepare encrypted file attachment for sending
+ * Encrypts file, uploads encrypted blob, returns FileAttachment with encryption metadata
+ * @param file - Original file to encrypt
+ * @param uploadFile - Function to upload encrypted blob and return tags
+ * @returns FileAttachment with encryption metadata
+ */
+const prepareEncryptedAttachment = async (
+  file: File,
+  uploadFile: (blob: Blob) => Promise<string[][]>
+): Promise<FileAttachment> => {
+  // Encrypt file
+  const encrypted = await encryptFile(file);
+
+  // Upload encrypted blob
+  const tags = await uploadFile(encrypted.encryptedBlob);
+
+  // Extract image dimensions if it's an image
+  const dim = await extractImageDimensions(file);
+
+  return {
+    url: tags[0][1], // URL from first tag
+    mimeType: file.type,
+    size: encrypted.encryptedBlob.size, // Size of encrypted file
+    name: file.name,
+    tags: tags,
+    dim,
+    // Encryption metadata
+    encrypted: true,
+    encryptionKey: encrypted.key,
+    encryptionNonce: encrypted.nonce,
+    encryptionAlgorithm: encrypted.algorithm,
+    encryptionHash: encrypted.hash,
+  };
+};
 
 /**
  * Prepare message content with file URLs appended
@@ -1566,18 +2027,58 @@ const prepareMessageContent = (content: string, attachments: FileAttachment[] = 
 
 /**
  * Create imeta tags for file attachments (NIP-92)
+ * Includes all optional metadata tags for NIP-17 kind 15 messages
  */
 const createImetaTags = (attachments: FileAttachment[] = []): string[][] => {
   return attachments.map(file => {
     const imetaTag = ['imeta'];
     imetaTag.push(`url ${file.url}`);
-    if (file.mimeType) imetaTag.push(`m ${file.mimeType}`);
+
+    // MIME type (use fileType if provided, otherwise mimeType)
+    const mimeType = file.fileType || file.mimeType;
+    if (mimeType) imetaTag.push(`m ${mimeType}`);
+
     if (file.size) imetaTag.push(`size ${file.size}`);
     if (file.name) imetaTag.push(`alt ${file.name}`);
+
+    // Image dimensions
+    if (file.dim) imetaTag.push(`dim ${file.dim}`);
+
+    // Blurhash placeholder
+    if (file.blurhash) imetaTag.push(`blurhash ${file.blurhash}`);
+
+    // Thumbnail URL
+    if (file.thumb) imetaTag.push(`thumb ${file.thumb}`);
+
+    // Fallback URLs
+    if (file.fallback && file.fallback.length > 0) {
+      file.fallback.forEach(fallbackUrl => {
+        imetaTag.push(`fallback ${fallbackUrl}`);
+      });
+    }
+
+    // Hash tags from file.tags (x and ox)
     file.tags.forEach(tag => {
       if (tag[0] === 'x') imetaTag.push(`x ${tag[1]}`);
       if (tag[0] === 'ox') imetaTag.push(`ox ${tag[1]}`);
     });
+
+    // Encryption metadata (if file is encrypted)
+    if (file.encrypted) {
+      if (file.encryptionAlgorithm) {
+        imetaTag.push(`encryption-algorithm ${file.encryptionAlgorithm}`);
+      }
+      if (file.encryptionKey) {
+        imetaTag.push(`decryption-key ${file.encryptionKey}`);
+      }
+      if (file.encryptionNonce) {
+        imetaTag.push(`decryption-nonce ${file.encryptionNonce}`);
+      }
+      if (file.encryptionHash) {
+        imetaTag.push(`x ${file.encryptionHash}`); // SHA-256 hash of encrypted file
+      }
+    }
+
     return imetaTag;
   });
 };
@@ -1733,6 +2234,11 @@ export const Impure = {
     sendNIP17Message,
     prepareMessageContent,
     createImetaTags,
+    prepareEncryptedAttachment,
+    encryptFile,
+    decryptFile,
+    verifyFileHash,
+    extractImageDimensions,
   },
   Participant: {
     refreshStaleParticipants,

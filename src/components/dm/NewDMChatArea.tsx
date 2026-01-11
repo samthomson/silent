@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
+import { EncryptedMediaDisplay } from '@/components/dm/EncryptedMediaDisplay';
 import type { NostrEvent } from '@nostrify/nostrify';
 import { nip19 } from 'nostr-tools';
 
@@ -29,21 +30,47 @@ interface DMChatAreaProps {
   className?: string;
 }
 
-const RawEventModal = ({ 
-  outerEvent, 
+const RawEventModal = ({
+  outerEvent,
   innerEvent,
   giftWrapEvent,
-  open, 
+  fileMetadata,
+  open,
   onOpenChange
 }: {
   outerEvent: NostrEvent;
   innerEvent?: NostrEvent;
   giftWrapEvent?: NostrEvent;
+  fileMetadata?: import('@/lib/dmTypes').FileMetadata;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
   // NIP-17 has a seal (kind 13) wrapping the inner message
   const isNIP17 = outerEvent.kind === 13 && !!innerEvent;
+  const isFileMessage = innerEvent?.kind === 15 || outerEvent.kind === 15;
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const extractDomain = (url: string) => {
+    try { return new URL(url).hostname; } catch { return null; }
+  };
+
+  const extractDimensions = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url);
+      const width = urlObj.searchParams.get('width');
+      const height = urlObj.searchParams.get('height');
+      if (width && height) return `${width}x${height}`;
+      return null;
+    } catch { return null; }
+  };
+
+  // Get dimensions from fileMetadata or extract from URL
+  const dimensions = fileMetadata?.dim || (fileMetadata?.url ? extractDimensions(fileMetadata.url) : null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,7 +80,7 @@ const RawEventModal = ({
         </DialogHeader>
         {isNIP17 ? (
           <Tabs defaultValue="inner" className="flex-1 flex flex-col min-h-0">
-            <TabsList className="h-auto bg-transparent px- pt-0 pb-2 flex items-center gap-2">
+            <TabsList className="h-auto bg-transparent px- pt-0 pb-2 flex items-center gap-2 flex-wrap">
               <TabsTrigger value="giftwrap" className="px-3 py-1.5 rounded data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
                 Gift Wrap (1059)
               </TabsTrigger>
@@ -65,7 +92,53 @@ const RawEventModal = ({
               <TabsTrigger value="inner" className="px-3 py-1.5 rounded data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
                 Message ({innerEvent.kind})
               </TabsTrigger>
+              {isFileMessage && (
+                <>
+                  <span className="text-muted-foreground">|</span>
+                  <TabsTrigger value="media" className="px-3 py-1.5 rounded data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
+                    📎 Media Info
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
+            {isFileMessage && (
+              <TabsContent value="media" className="flex-1 mt-4 overflow-auto">
+                <div className="bg-muted p-4 rounded-md space-y-3">
+                  <h3 className="font-medium text-sm">File Information</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-muted-foreground">Source Host:</div>
+                    <div className="font-mono">{fileMetadata?.url ? extractDomain(fileMetadata.url) : 'Unknown'}</div>
+
+                    <div className="text-muted-foreground">File Type:</div>
+                    <div>{fileMetadata?.mimeType || 'Unknown'}</div>
+
+                    <div className="text-muted-foreground">File Size:</div>
+                    <div>{fileMetadata?.size ? formatBytes(fileMetadata.size) : <span className="text-muted-foreground/70">Not provided by sender</span>}</div>
+
+                    <div className="text-muted-foreground">Dimensions:</div>
+                    <div>{dimensions || <span className="text-muted-foreground/70">Not provided</span>}</div>
+
+                    <div className="text-muted-foreground">Encrypted:</div>
+                    <div>{fileMetadata?.encryptionAlgorithm ? `Yes (${fileMetadata.encryptionAlgorithm})` : 'No'}</div>
+
+                    {fileMetadata?.hash && (
+                      <>
+                        <div className="text-muted-foreground">Hash (x):</div>
+                        <div className="font-mono text-xs break-all">{fileMetadata.hash}</div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t">
+                    <div className="text-muted-foreground text-sm mb-1">Full URL:</div>
+                    <div className="font-mono text-xs break-all bg-background p-2 rounded">
+                      {fileMetadata?.url || 'Not available'}
+                    </div>
+                  </div>
+
+                </div>
+              </TabsContent>
+            )}
             <TabsContent value="giftwrap" className="flex-1 mt-4 overflow-auto">
               {giftWrapEvent ? (
                 <pre className="text-xs bg-muted p-4 rounded-md">
@@ -119,7 +192,7 @@ const MessageBubble = memo(({
 }) => {
   const [showRawEvent, setShowRawEvent] = useState(false);
   const { config } = useAppContext();
-  
+
   // Access the actual event (kind 4, 14, or 15 with decrypted content)
   const event = message.event;
   const actualKind = event.kind;
@@ -128,10 +201,14 @@ const MessageBubble = memo(({
   const isFileAttachment = actualKind === 15; // Kind 15 = files/attachments
   const renderInlineMedia = config.renderInlineMedia ?? true;
   const shouldRenderMedia = isFileAttachment || renderInlineMedia;
+  const fileMetadata = message.fileMetadata;
 
-  // Check if it's an encrypted file attachment
-  const hasEncryption = isFileAttachment && event.tags.some(
-    ([tagName]) => tagName === 'encryption-algorithm' || tagName === 'decryption-key'
+  // Check if it's an encrypted file attachment (use fileMetadata if available, otherwise parse tags)
+  const hasEncryption = isFileAttachment && (
+    message.fileMetadata?.encryptionAlgorithm ||
+    event.tags.some(
+      ([tagName]) => tagName === 'encryption-algorithm' || tagName === 'decryption-key'
+    )
   );
 
   // Fetch sender profile for group chats
@@ -165,6 +242,19 @@ const MessageBubble = memo(({
               <p className="text-xs">{message.error}</p>
             </TooltipContent>
           </Tooltip>
+        ) : shouldRenderMedia && fileMetadata && isFileAttachment ? (
+          <div className="text-sm">
+            <EncryptedMediaDisplay
+              fileMetadata={fileMetadata}
+              className="my-2"
+            />
+            {/* Only show text content if it's not just the file URL */}
+            {event.content && event.content !== fileMetadata.url && !event.content.startsWith(fileMetadata.url) && (
+              <div className="mt-2 whitespace-pre-wrap break-words">
+                <NoteContent event={messageEvent} className="whitespace-pre-wrap break-words" />
+              </div>
+            )}
+          </div>
         ) : shouldRenderMedia ? (
           <div className="text-sm">
             <NoteContent event={messageEvent} className="whitespace-pre-wrap break-words" />
@@ -215,7 +305,7 @@ const MessageBubble = memo(({
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">Encrypted file (not yet supported)</p>
+                    <p className="text-xs">Encrypted file</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -251,6 +341,7 @@ const MessageBubble = memo(({
           outerEvent={message.sealEvent || event}
           innerEvent={isNIP17Message ? event : undefined}
           giftWrapEvent={message.giftWrapEvent}
+          fileMetadata={fileMetadata}
           open={showRawEvent}
           onOpenChange={setShowRawEvent}
         />
@@ -366,8 +457,8 @@ const ParticipantNames = ({ pubkeys }: { pubkeys: string[] }) => {
 };
 
 // Component to display user labels for a relay
-const RelayUserLabels = ({ users, authorsMap, relay, discoveryRelays }: { 
-  users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }>; 
+const RelayUserLabels = ({ users, authorsMap, relay, discoveryRelays }: {
+  users: Array<{ pubkey: string; isCurrentUser: boolean; source: string }>;
   authorsMap: Map<string, { event?: NostrEvent; metadata?: import('@nostrify/nostrify').NostrMetadata }>;
   relay?: string;
   discoveryRelays?: Set<string>;
@@ -376,24 +467,24 @@ const RelayUserLabels = ({ users, authorsMap, relay, discoveryRelays }: {
     if (user.isCurrentUser) {
       // Check if this relay is ONLY in discovery relays (not in user's actual relay lists)
       const isOnlyDiscovery = relay && discoveryRelays && discoveryRelays.has(relay);
-      return { 
-        label: isOnlyDiscovery ? 'Discovery' : 'Yours', 
-        source: user.source, 
+      return {
+        label: isOnlyDiscovery ? 'Discovery' : 'Yours',
+        source: user.source,
         isCurrentUser: !isOnlyDiscovery,
         isDiscovery: isOnlyDiscovery,
         type: isOnlyDiscovery ? 'discovery' : 'yours'
       };
     }
-    
+
     const authorData = authorsMap.get(user.pubkey);
     const metadata = authorData?.metadata;
     const displayName = getDisplayName(user.pubkey, metadata);
     // Add possessive 's to show it's their relay
     const possessiveLabel = displayName.endsWith('s') ? `${displayName}'` : `${displayName}'s`;
-    return { 
-      label: possessiveLabel, 
-      source: user.source, 
-      isCurrentUser: false, 
+    return {
+      label: possessiveLabel,
+      source: user.source,
+      isCurrentUser: false,
       isDiscovery: false,
       type: 'other'
     };
@@ -425,17 +516,17 @@ const RelayUserLabels = ({ users, authorsMap, relay, discoveryRelays }: {
 };
 
 // Modal to display participant profile information
-const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
+const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   conversationId: string;
 }) => {
   const { user } = useCurrentUser();
   const [copiedPubkey, setCopiedPubkey] = useState<string | null>(null);
-  
+
   // Parse all participants
   const allParticipants = useMemo(() => DMLib.Conversation.parseConversationId(conversationId), [conversationId]);
-  
+
   // Fetch all participant profiles
   const authorsData = useAuthorsBatch(allParticipants);
 
@@ -471,7 +562,7 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
                     {displayName.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-sm truncate">
@@ -481,24 +572,24 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
                       )}
                     </h3>
                   </div>
-                  
+
                   {metadata?.nip05 && (
                     <p className="text-xs text-muted-foreground truncate mb-1">
                       ✓ {metadata.nip05}
                     </p>
                   )}
-                  
+
                   {metadata?.about && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                       {metadata.about}
                     </p>
                   )}
-                  
+
                   <div className="flex items-center gap-2 mt-2">
                     <code className="text-xs bg-muted px-2 py-1 rounded flex-1 break-all">
                       {npub}
                     </code>
-                    
+
                     <TooltipProvider>
                       <Tooltip delayDuration={500}>
                         <TooltipTrigger asChild>
@@ -520,7 +611,7 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                    
+
                     <TooltipProvider>
                       <Tooltip delayDuration={500}>
                         <TooltipTrigger asChild>
@@ -554,7 +645,7 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
   const { user } = useCurrentUser();
   const { config } = useAppContext();
   const { getConversationRelays, messagingState } = useNewDMContext();
-  
+
   // This is reactive - updates when cache updates
   const relayInfo = useMemo(() => getConversationRelays(conversationId), [getConversationRelays, conversationId]);
 
@@ -563,9 +654,9 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
     const participantPubkeys = DMLib.Conversation.parseConversationId(conversationId);
     return participantPubkeys.filter(pk => pk !== user?.pubkey);
   }, [conversationId, user?.pubkey]);
-  
+
   const authorsData = useAuthorsBatch(otherParticipants);
-  
+
   // Get discovery relays for comparison
   const discoveryRelays = useMemo(() => new Set(config.discoveryRelays), [config.discoveryRelays]);
 
@@ -611,7 +702,7 @@ const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean;
                 {relayInfo.map(({ relay, users }) => {
                   const info = messagingState?.relayInfo[relay];
                   const isFailed = info && !info.lastQuerySucceeded;
-                  
+
                   return (
                     <div key={relay} className={cn(
                       "flex flex-col gap-2 px-3 py-2 rounded",
@@ -735,13 +826,13 @@ const SubjectEditor = ({
   );
 };
 
-const ChatHeader = ({ 
-  conversationId, 
+const ChatHeader = ({
+  conversationId,
   onBack,
   pendingSubject,
-  setPendingSubject 
-}: { 
-  conversationId: string; 
+  setPendingSubject
+}: {
+  conversationId: string;
   onBack?: () => void;
   pendingSubject: string | null;
   setPendingSubject: (subject: string | null) => void;
@@ -750,7 +841,7 @@ const ChatHeader = ({
   const { getConversationRelays, messagingState } = useNewDMContext();
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
-  
+
   // Parse conversation participants and exclude current user from display
   const allParticipants = DMLib.Conversation.parseConversationId(conversationId);
   const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
@@ -758,7 +849,7 @@ const ChatHeader = ({
   // Get conversation metadata for subject
   const conversation = messagingState?.conversationMetadata[conversationId];
   const subject = conversation?.subject || '';
-  
+
   // Track previous subject to detect changes from incoming messages
   const prevSubjectRef = useRef(subject);
 
@@ -774,7 +865,7 @@ const ChatHeader = ({
   const isMultiPerson = conversationParticipants.length > 1;
   // For header, show full npub if no metadata (plenty of space here)
   const baseName = metadata?.display_name || metadata?.name || (displayPubkey ? nip19.npubEncode(displayPubkey) : '');
-  const displayName = isMultiPerson 
+  const displayName = isMultiPerson
     ? null // Will use ParticipantNames component
     : isSelfMessaging
       ? `${baseName} (You)`
@@ -938,10 +1029,10 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
 
   // Auto-scroll to bottom when new messages arrive
   // Use the last message's id/timestamp as dependency to catch both new messages and replacements
-  const lastMessageKey = messages.length > 0 
+  const lastMessageKey = messages.length > 0
     ? `${messages[messages.length - 1].id}-${messages[messages.length - 1].event.created_at}`
     : '';
-  
+
   useEffect(() => {
     // Use requestAnimationFrame to ensure DOM has updated before scrolling
     requestAnimationFrame(() => {
@@ -1029,8 +1120,8 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
 
   return (
     <div className={cn("h-full flex flex-col bg-background", className)}>
-      <ChatHeader 
-        conversationId={conversationId} 
+      <ChatHeader
+        conversationId={conversationId}
         onBack={onBack}
         pendingSubject={pendingSubject}
         setPendingSubject={setPendingSubject}

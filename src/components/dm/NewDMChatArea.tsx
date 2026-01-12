@@ -7,9 +7,11 @@ import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { useAppContext } from '@/hooks/useAppContext';
 import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@/lib/dmConstants';
 import { getDisplayName } from '@/lib/genUserName';
-import { formatConversationTime, formatFullDateTime, getPubkeyColor, formatBytes } from '@/lib/dmUtils';
-import { Pure as DMLib } from '@/lib/dmLib';
+import { formatConversationTime, formatFullDateTime, getPubkeyColor, formatBytes, isMediaFile } from '@/lib/dmUtils';
+import { Pure as DMLib, type FileAttachment } from '@/lib/dmLib';
 import { isCached } from '@/lib/dmMediaCache';
+import { useUploadFile } from '@/hooks/useUploadFile';
+import { useToast } from '@/hooks/useToast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil, Paperclip, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import { EncryptedMediaDisplay } from '@/components/dm/EncryptedMediaDisplay';
@@ -1037,6 +1039,10 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [pendingSubject, setPendingSubject] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mutateAsync: uploadFile, isPending: isUploading } = useUploadFile();
+  const { toast } = useToast();
 
   // Determine default protocol based on mode
   const getDefaultProtocol = () => {
@@ -1052,6 +1058,17 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
 
   // Determine if selection is allowed
   const allowSelection = protocolMode === PROTOCOL_MODE.NIP04_OR_NIP17;
+
+  useEffect(() => {
+    if (selectedProtocol === MESSAGE_PROTOCOL.NIP04 && pendingFiles.length > 0) {
+      setPendingFiles([]);
+      toast({
+        title: 'Files cleared',
+        description: 'NIP-04 does not support file attachments. Please switch to NIP-17.',
+        variant: 'destructive',
+      });
+    }
+  }, [selectedProtocol, pendingFiles.length, toast]);
 
   // Auto-scroll to bottom when new messages arrive
   // Use the last message's id/timestamp as dependency to catch both new messages and replacements
@@ -1072,26 +1089,73 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
   }, [lastMessageKey]);
 
   const handleSend = useCallback(async () => {
-    if (!messageText.trim() || !conversationId || !user) return;
+    if ((!messageText.trim() && pendingFiles.length === 0) || !conversationId || !user) return;
+
+    if (selectedProtocol === MESSAGE_PROTOCOL.NIP04 && pendingFiles.length > 0) {
+      toast({
+        title: 'File attachments not supported',
+        description: 'NIP-04 does not support file attachments. Please switch to NIP-17.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsSending(true);
     try {
+      const attachments: FileAttachment[] = [];
+      if (pendingFiles.length > 0 && selectedProtocol === MESSAGE_PROTOCOL.NIP17) {
+        for (const file of pendingFiles) {
+          try {
+            if (!isMediaFile(file)) {
+              toast({
+                title: 'Invalid file type',
+                description: 'Only images, videos, and audio files are supported',
+                variant: 'destructive',
+              });
+              continue;
+            }
+
+            const result = await uploadFile({ file, encrypt: true });
+            console.log('[NewDMChatArea] Upload result:', { result, type: typeof result, hasUrl: typeof result !== 'string' && 'url' in result });
+            if (typeof result !== 'string' && 'url' in result) {
+              attachments.push(result);
+            } else {
+              console.error('[NewDMChatArea] Upload returned unexpected format:', result);
+              toast({
+                title: 'Upload failed',
+                description: `Upload returned unexpected format for ${file.name}`,
+                variant: 'destructive',
+              });
+            }
+          } catch (error) {
+            console.error('[NewDMChatArea] Failed to upload file:', error);
+            toast({
+              title: 'Upload failed',
+              description: `Failed to upload ${file.name}. Please try again.`,
+              variant: 'destructive',
+            });
+          }
+        }
+      }
+
+      console.log('[NewDMChatArea] Sending message with attachments:', { attachmentsCount: attachments.length, attachments });
+
       await sendMessage({
         recipientPubkey: conversationId,
         content: messageText.trim(),
         protocol: selectedProtocol,
-        // Include pending subject if it was changed
+        attachments,
         subject: pendingSubject !== null ? pendingSubject : undefined,
       });
       setMessageText('');
-      // Clear pending subject after sending
+      setPendingFiles([]);
       setPendingSubject(null);
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
       setIsSending(false);
     }
-  }, [messageText, conversationId, user, sendMessage, selectedProtocol, pendingSubject]);
+  }, [messageText, conversationId, user, sendMessage, selectedProtocol, pendingSubject, pendingFiles, uploadFile, toast]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1099,6 +1163,66 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
       handleSend();
     }
   }, [handleSend]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const mediaFiles = files.filter(isMediaFile);
+
+    if (mediaFiles.length !== files.length) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Only images, videos, and audio files are supported',
+        variant: 'destructive',
+      });
+    }
+
+    if (mediaFiles.length > 0) {
+      setPendingFiles(prev => [...prev, ...mediaFiles]);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [toast]);
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (selectedProtocol === MESSAGE_PROTOCOL.NIP04) {
+      toast({
+        title: 'File attachments not supported',
+        description: 'NIP-04 does not support file attachments. Please switch to NIP-17.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      try {
+        const filePromises = imageItems.map(item => {
+          const file = item.getAsFile();
+          return file ? Promise.resolve(file) : Promise.reject(new Error('Failed to get file'));
+        });
+
+        const files = await Promise.all(filePromises);
+        setPendingFiles(prev => [...prev, ...files]);
+      } catch {
+        toast({
+          title: 'Paste failed',
+          description: 'Failed to paste image. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    }
+  }, [selectedProtocol, toast]);
+
+  const removePendingFile = useCallback((index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleLoadMore = useCallback(async () => {
     if (!scrollAreaRef.current || isLoadingMore) return;
@@ -1197,31 +1321,101 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
       </ScrollArea>
 
       <div className="p-4 border-t">
+        {/* File previews */}
+        {pendingFiles.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pendingFiles.map((file, index) => (
+              <div key={index} className="relative group">
+                {file.type.startsWith('image/') ? (
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      onClick={() => removePendingFile(index)}
+                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative w-20 h-20 rounded-lg border bg-muted flex items-center justify-center">
+                    <Paperclip className="h-6 w-6 text-muted-foreground" />
+                    <button
+                      onClick={() => removePendingFile(index)}
+                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2">
-          <Textarea
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
-            className="min-h-[80px] resize-none"
-          />
+          <div className="flex-1 flex flex-col gap-2">
+            <Textarea
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+              className="min-h-[80px] resize-none"
+              disabled={isSending || isUploading}
+            />
+          </div>
           <div className="flex flex-col gap-2">
-            <Button
-              onClick={handleSend}
-              disabled={!messageText.trim() || isSending}
-              size="icon"
-              className="h-[44px] w-[90px]"
-            >
-              {isSending ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*,audio/*"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isSending || isUploading || selectedProtocol === MESSAGE_PROTOCOL.NIP04}
+                      className="h-[44px] w-[44px]"
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  {selectedProtocol === MESSAGE_PROTOCOL.NIP04 && (
+                    <TooltipContent>
+                      <p className="text-xs">File attachments require NIP-17</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+              <Button
+                onClick={handleSend}
+                disabled={(!messageText.trim() && pendingFiles.length === 0) || isSending || isUploading}
+                size="icon"
+                className="h-[44px] w-[44px]"
+              >
+                {isSending || isUploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
             <Select
               value={selectedProtocol}
               onValueChange={(value) => setSelectedProtocol(value as MessageProtocol)}
-              disabled={!allowSelection}
+              disabled={!allowSelection || isSending || isUploading}
             >
               <SelectTrigger className="h-[32px] w-[90px] text-xs px-2">
                 <SelectValue />

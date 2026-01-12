@@ -388,14 +388,30 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         );
         const conversationMessages = prev.messagingState.conversationMessages[conversationId] || [];
         
-        // Find optimistic message that matches
         const optimisticIndex = messageWithMetadata.event.pubkey === user.pubkey
-          ? conversationMessages.findIndex(msg =>
-              msg.isSending &&
-              msg.event.pubkey === messageWithMetadata.event.pubkey &&
-              msg.event.content === messageWithMetadata.event.content &&
-              Math.abs(msg.event.created_at - messageWithMetadata.event.created_at) <= 60
-            )
+          ? conversationMessages.findIndex(msg => {
+              if (!msg.isSending || msg.event.pubkey !== messageWithMetadata.event.pubkey) return false;
+              
+              // Match by ID (giftWrapId for NIP-17, id for NIP-04)
+              if (messageWithMetadata.giftWrapId) {
+                const matches = msg.giftWrapId === messageWithMetadata.giftWrapId;
+                console.log('[NewDM] Matching optimistic (NIP-17):', {
+                  optimisticGiftWrapId: msg.giftWrapId,
+                  realGiftWrapId: messageWithMetadata.giftWrapId,
+                  matches,
+                  optimisticId: msg.id,
+                  realEventId: messageWithMetadata.event.id,
+                });
+                return matches;
+              }
+              const matches = msg.id === messageWithMetadata.event.id;
+              console.log('[NewDM] Matching optimistic (NIP-04):', {
+                optimisticId: msg.id,
+                realEventId: messageWithMetadata.event.id,
+                matches,
+              });
+              return matches;
+            })
           : -1;
         
         // If we found a matching optimistic message, remove it before adding the real one
@@ -835,17 +851,17 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     return fetchedRelays;
   }, [nostr, appConfig.relayMode, discoveryRelays]);
 
-  // Send NIP-04 Message (internal)
-  const sendNIP4Message = useCallback(async (
+  // Prepare NIP-04 Message (internal)
+  const prepareNIP4Message = useCallback(async (
     recipientPubkey: string,
     content: string,
     attachments: FileAttachment[] = []
-  ): Promise<NostrEvent> => {
+  ) => {
     if (!user) throw new Error('User is not logged in');
     const userInbox = messagingStateRef.current?.participants[user.pubkey]?.derivedRelays;
     if (!userInbox?.length) throw new Error('User inbox relays not found');
     const recipientInbox = await getInboxRelaysForPubkey(recipientPubkey);
-    return DMLib.Impure.Message.sendNIP04Message(
+    return DMLib.Impure.Message.prepareNIP04Message(
       nostr,
       user.signer,
       user.pubkey,
@@ -858,15 +874,15 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     );
   }, [user, nostr, createEvent, getInboxRelaysForPubkey]);
 
-  // Send NIP-17 Message (internal)
-  const sendNIP17Message = useCallback(async (
+  // Prepare NIP-17 Message (internal)
+  const prepareNIP17Message = useCallback(async (
     recipients: string[],
     content: string,
     attachments: FileAttachment[] = [],
     subject?: string
-  ): Promise<NostrEvent> => {
+  ) => {
     if (!user) throw new Error('User is not logged in');
-    return DMLib.Impure.Message.sendNIP17Message(
+    return DMLib.Impure.Message.prepareNIP17Message(
       nostr,
       user.signer,
       user.pubkey,
@@ -907,32 +923,57 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       recipients = [user.pubkey];
     }
 
-    // Create optimistic message
-    const optimisticId = `optimistic-${Date.now()}-${Math.random()}`;
+    let eventId: string;
+    let giftWrapId: string | undefined;
+    let publishFn: () => Promise<NostrEvent>;
+    const attachmentsArray = attachments || [];
+    const hasAttachments = attachmentsArray.length > 0;
+
+    console.log('[NewDM] Preparing message:', { protocol, hasAttachments, attachmentsCount: attachmentsArray.length });
+
+    try {
+      if (protocol === MESSAGE_PROTOCOL.NIP04) {
+        const result = await prepareNIP4Message(recipients[0], content, attachmentsArray);
+        eventId = result.eventId;
+        publishFn = result.publish;
+      } else if (protocol === MESSAGE_PROTOCOL.NIP17) {
+        const result = await prepareNIP17Message(recipients, content, attachmentsArray, subject);
+        giftWrapId = result.giftWrapId;
+        eventId = giftWrapId;
+        publishFn = result.publish;
+        console.log('[NewDM] NIP-17 message prepared:', { giftWrapId, hasAttachments, expectedKind: hasAttachments ? 15 : 14 });
+      } else {
+        throw new Error(`Unsupported protocol: ${protocol}`);
+      }
+    } catch (error) {
+      console.error(`[NewDM] Failed to prepare ${protocol} message:`, error);
+      toast({ title: 'Failed to send message', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+      return;
+    }
+
     const now = Math.floor(Date.now() / 1000);
+    const optimisticKind = protocol === MESSAGE_PROTOCOL.NIP04 ? 4 : (hasAttachments ? 15 : 14);
     
-    // Create optimistic inner event (kind 4, 14, or 15)
     const optimisticEvent: NostrEvent = {
-      id: optimisticId,
-      kind: protocol === MESSAGE_PROTOCOL.NIP04 ? 4 : (attachments && attachments.length > 0 ? 15 : 14),
+      id: eventId,
+      kind: optimisticKind,
       pubkey: user.pubkey,
       created_at: now,
       tags: recipients.map(p => ['p', p]),
-      content: content, // Plaintext for optimistic message
+      content: content,
       sig: '',
     };
 
-    // Create MessageWithMetadata for optimistic message
-    // For NIP-17 (kind 14/15), set giftWrapId since inner events don't have IDs
+    console.log('[NewDM] Optimistic message:', { id: eventId, giftWrapId, kind: optimisticKind, hasAttachments });
+
     const optimisticMessageWithMetadata: DMLib.MessageWithMetadata = {
       event: optimisticEvent,
       senderPubkey: user.pubkey,
       participants: [user.pubkey, ...recipients],
       subject: subject || '',
-      ...(protocol === MESSAGE_PROTOCOL.NIP17 && { giftWrapId: optimisticId }),
+      ...(giftWrapId && { giftWrapId }),
     };
 
-    // Add optimistic message to state
     setContext(prev => {
       if (!prev.messagingState) return prev;
       
@@ -942,14 +983,14 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         user.pubkey
       );
       
-      // Compute the conversation ID the same way addMessageToState does
       const computedConversationId = DMLib.Pure.Conversation.computeConversationId(
         optimisticMessageWithMetadata.participants || []
       );
       
-      // Mark the optimistic message as sending
       const conversationMessages = updatedState.conversationMessages[computedConversationId] || [];
-      const optimisticMessage = conversationMessages.find(msg => msg.id === optimisticId);
+      const optimisticMessage = conversationMessages.find(msg => 
+        (giftWrapId && msg.giftWrapId === giftWrapId) || (!giftWrapId && msg.id === eventId)
+      );
       
       if (optimisticMessage) {
         optimisticMessage.isSending = true;
@@ -960,19 +1001,16 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     });
 
     try {
-      if (protocol === MESSAGE_PROTOCOL.NIP04) {
-        await sendNIP4Message(recipients[0], content, attachments);
-      } else if (protocol === MESSAGE_PROTOCOL.NIP17) {
-        await sendNIP17Message(recipients, content, attachments, subject);
-      }
+      await publishFn();
     } catch (error) {
-      console.error(`[NewDM] Failed to send ${protocol} message:`, error);
+      console.error(`[NewDM] Failed to publish ${protocol} message:`, error);
       toast({ title: 'Failed to send message', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
-      // Remove optimistic message on error
       setContext(prev => {
         if (!prev.messagingState) return prev;
         const conversationMessages = prev.messagingState.conversationMessages[recipientPubkey] || [];
-        const filteredMessages = conversationMessages.filter(msg => msg.id !== optimisticId);
+        const filteredMessages = conversationMessages.filter(msg => 
+          (giftWrapId && msg.giftWrapId !== giftWrapId) || (!giftWrapId && msg.id !== eventId)
+        );
         return {
           ...prev,
           messagingState: {
@@ -985,7 +1023,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
         };
       });
     }
-  }, [user, context.messagingState, sendNIP4Message, sendNIP17Message, toast]);
+  }, [user, context.messagingState, prepareNIP4Message, prepareNIP17Message, toast]);
   
   const getConversationRelays = useCallback((conversationId: string): ConversationRelayInfo[] => {
     if (!user?.pubkey || !context.messagingState) {

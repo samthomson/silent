@@ -2093,9 +2093,10 @@ const createImetaTags = (attachments: FileAttachment[] = []): string[][] => {
 };
 
 /**
- * Send NIP-04 encrypted message
+ * Prepare NIP-04 encrypted message for sending
+ * Returns event ID and a publish function that must be called to actually send
  */
-const sendNIP04Message = async (
+const prepareNIP04Message = async (
   nostr: NPool,
   signer: Signer,
   myPubkey: string,
@@ -2105,7 +2106,7 @@ const sendNIP04Message = async (
   myInboxRelays: string[],
   recipientInboxRelays: string[],
   signEvent: (event: Omit<NostrEvent, 'id' | 'sig'>) => Promise<NostrEvent>
-): Promise<NostrEvent> => {
+): Promise<{ eventId: string; publish: () => Promise<NostrEvent> }> => {
   if (!signer.nip04) throw new Error('NIP-04 encryption not available');
 
   const messageContent = prepareMessageContent(content, attachments);
@@ -2123,14 +2124,21 @@ const sendNIP04Message = async (
   };
 
   const signedEvent = await signEvent(privateMessage);
-  await relayGroup.event(signedEvent);
-  return signedEvent;
+
+  return {
+    eventId: signedEvent.id,
+    publish: async () => {
+      await relayGroup.event(signedEvent);
+      return signedEvent;
+    },
+  };
 };
 
 /**
- * Send NIP-17 encrypted message (supports group chats)
+ * Prepare NIP-17 encrypted message for sending (supports group chats)
+ * Returns gift wrap ID and a publish function that must be called to actually send
  */
-const sendNIP17Message = async (
+const prepareNIP17Message = async (
   nostr: NPool,
   signer: Signer,
   myPubkey: string,
@@ -2139,7 +2147,7 @@ const sendNIP17Message = async (
   attachments: FileAttachment[],
   getInboxRelays: (pubkey: string) => Promise<string[]>,
   subject?: string
-): Promise<NostrEvent> => {
+): Promise<{ giftWrapId: string; publish: () => Promise<NostrEvent> }> => {
   if (!signer.nip44) throw new Error('NIP-44 encryption not available');
 
   const now = Math.floor(Date.now() / 1000);
@@ -2192,39 +2200,50 @@ const sendNIP17Message = async (
     giftWraps.push(giftWrap);
   }
 
-  const inboxRelayPromises = giftWraps.map(async (giftWrap) => {
-    const recipientPubkey = giftWrap.tags.find(tag => tag[0] === 'p')?.[1];
-    if (!recipientPubkey) throw new Error('Gift wrap missing recipient pubkey');
-    return { giftWrap, inboxRelays: await getInboxRelays(recipientPubkey) };
+  const myGiftWrap = giftWraps.find(gw => {
+    const recipientPubkey = gw.tags.find(tag => tag[0] === 'p')?.[1];
+    return recipientPubkey === myPubkey;
   });
+  if (!myGiftWrap) throw new Error('Failed to create gift wrap for self');
 
-  const giftWrapWithRelays = await Promise.all(inboxRelayPromises);
-  const publishPromises = giftWrapWithRelays.map(({ giftWrap, inboxRelays }) => {
-    const relayGroup = nostr.group(inboxRelays);
-    return relayGroup.event(giftWrap);
-  });
+  return {
+    giftWrapId: myGiftWrap.id,
+    publish: async () => {
+      const inboxRelayPromises = giftWraps.map(async (giftWrap) => {
+        const recipientPubkey = giftWrap.tags.find(tag => tag[0] === 'p')?.[1];
+        if (!recipientPubkey) throw new Error('Gift wrap missing recipient pubkey');
+        return { giftWrap, inboxRelays: await getInboxRelays(recipientPubkey) };
+      });
 
-  const results = await Promise.allSettled(publishPromises);
-  const failures = results.filter(r => r.status === 'rejected');
+      const giftWrapWithRelays = await Promise.all(inboxRelayPromises);
+      const publishPromises = giftWrapWithRelays.map(({ giftWrap, inboxRelays }) => {
+        const relayGroup = nostr.group(inboxRelays);
+        return relayGroup.event(giftWrap);
+      });
 
-  if (failures.length > 0) {
-    console.error(`[DM] Failed to publish ${failures.length}/${giftWraps.length} gift wraps`);
-    failures.forEach((result) => {
-      if (result.status === 'rejected') console.error('[DM] Gift wrap failed:', result.reason);
-    });
-  }
+      const results = await Promise.allSettled(publishPromises);
+      const failures = results.filter(r => r.status === 'rejected');
 
-  if (failures.length === giftWraps.length) {
-    throw new Error('All gift wraps rejected. Check console for details.');
-  }
+      if (failures.length > 0) {
+        console.error(`[DM] Failed to publish ${failures.length}/${giftWraps.length} gift wraps`);
+        failures.forEach((result) => {
+          if (result.status === 'rejected') console.error('[DM] Gift wrap failed:', result.reason);
+        });
+      }
 
-  const recipientGiftWrapCount = giftWraps.length - 1;
-  const recipientFailures = failures.length > 0 && failures.length >= recipientGiftWrapCount;
-  if (recipientFailures && recipients.length > 0) {
-    throw new Error('Message may not have been delivered to recipients. Please check your relay connection and try again.');
-  }
+      if (failures.length === giftWraps.length) {
+        throw new Error('All gift wraps rejected. Check console for details.');
+      }
 
-  return giftWraps[0];
+      const recipientGiftWrapCount = giftWraps.length - 1;
+      const recipientFailures = failures.length > 0 && failures.length >= recipientGiftWrapCount;
+      if (recipientFailures && recipients.length > 0) {
+        throw new Error('Message may not have been delivered to recipients. Please check your relay connection and try again.');
+      }
+
+      return myGiftWrap;
+    },
+  };
 };
 
 export const Impure = {
@@ -2239,8 +2258,8 @@ export const Impure = {
     decryptAllMessages,
     queryMessages,
     queryNewRelays,
-    sendNIP04Message,
-    sendNIP17Message,
+    prepareNIP04Message,
+    prepareNIP17Message,
     prepareMessageContent,
     createImetaTags,
     prepareEncryptedAttachment,

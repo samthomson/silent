@@ -123,6 +123,13 @@ export function formatSpeed(bytesPerSec: number): string {
   return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
 }
 
+/**
+ * Check if a file is a media file (image, video, or audio)
+ */
+export function isMediaFile(file: File): boolean {
+  return file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/');
+}
+
 export function getPubkeyColor(pubkey: string): string {
   const colors = [
     '#dc2626', // red

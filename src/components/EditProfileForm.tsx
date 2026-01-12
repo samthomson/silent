@@ -67,8 +67,8 @@ export const EditProfileForm: React.FC = () => {
   // Handle file uploads for profile picture
   const uploadPicture = async (file: File) => {
     try {
-      // The first tuple in the array contains the URL
-      const [[_, url]] = await uploadFile(file);
+      // For profile pictures, uploadFile returns string[][] (unencrypted)
+      const [[_, url]] = await uploadFile(file) as string[][];
       form.setValue('picture', url);
       toast({
         title: 'Success',
@@ -186,9 +186,9 @@ export const EditProfileForm: React.FC = () => {
           )}
         />
 
-        <Button 
-          type="submit" 
-          className="w-full md:w-auto" 
+        <Button
+          type="submit"
+          className="w-full md:w-auto"
           disabled={isPending || isUploading}
         >
           {(isPending || isUploading) && (
@@ -238,8 +238,8 @@ const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           />
         </FormControl>
         <div className="flex items-center gap-2">
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
             accept="image/*"
             className="hidden"
@@ -261,9 +261,9 @@ const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           </Button>
           {field.value && (
             <div className="h-10 w-10 rounded overflow-hidden">
-              <img 
-                src={field.value} 
-                alt={`${label} preview`} 
+              <img
+                src={field.value}
+                alt={`${label} preview`}
                 className="h-full w-full object-cover"
               />
             </div>

@@ -4,7 +4,8 @@ import { Pure as DMLib } from '@/lib/dmLib';
 import type { FileMetadata } from '@/lib/dmTypes';
 import { formatBytes, formatSpeed } from '@/lib/dmUtils';
 import { getCachedDecryptedBlob, cacheDecryptedBlob } from '@/lib/dmMediaCache';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface EncryptedMediaDisplayProps {
@@ -18,19 +19,11 @@ interface EncryptedMediaDisplayProps {
  * - Shows download progress with speed indicator
  */
 export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMediaDisplayProps) {
-	// Debug: log what metadata we received
-	console.log('[EncryptedMedia] fileMetadata:', {
-		url: fileMetadata.url,
-		blurhash: fileMetadata.blurhash,
-		dim: fileMetadata.dim,
-		mimeType: fileMetadata.mimeType,
-		hasEncryption: !!(fileMetadata.encryptionAlgorithm && fileMetadata.decryptionKey),
-	});
-
 	const [decryptedBlob, setDecryptedBlob] = useState<Blob | null>(null);
 	const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
 	const [isDecrypting, setIsDecrypting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [retryKey, setRetryKey] = useState(0); // Force useEffect to re-run on retry
 	const [downloadProgress, setDownloadProgress] = useState<{
 		loaded: number;
 		total: number | null;
@@ -39,6 +32,7 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 
 	const downloadStartTime = useRef<number | null>(null);
 	const isDownloading = useRef(false);
+	const downloadControllerRef = useRef<AbortController | null>(null);
 
 	const isEncrypted = !!(
 		fileMetadata.encryptionAlgorithm &&
@@ -53,6 +47,12 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 	useEffect(() => {
 		if (!isEncrypted || !fileMetadata.url || decryptedBlob || decryptedUrl) return;
 		if (isDownloading.current) return; // Prevent duplicate downloads
+
+		// Cancel any previous download
+		if (downloadControllerRef.current) {
+			downloadControllerRef.current.abort();
+		}
+		downloadControllerRef.current = new AbortController();
 
 		const decryptAndDisplay = async () => {
 			isDownloading.current = true;
@@ -77,7 +77,10 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 				const proxyUrl = `/media-proxy/${fileMetadata.url!}`;
 				console.log('[EncryptedMedia] Downloading via proxy:', proxyUrl);
 
-				const response = await fetch(proxyUrl, { cache: 'no-cache' });
+				const response = await fetch(proxyUrl, {
+					cache: 'no-cache',
+					signal: downloadControllerRef.current?.signal
+				});
 				console.log('[EncryptedMedia] Proxy response status:', response.status, response.statusText);
 
 				if (!response.ok) {
@@ -140,6 +143,10 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 				setDecryptedUrl(url);
 				console.log('[EncryptedMedia] Decryption complete');
 			} catch (err) {
+				// Don't set error if download was aborted
+				if (err instanceof Error && err.name === 'AbortError') {
+					return;
+				}
 				console.error('[EncryptedMedia] Download/decryption failed:', err);
 				setError(err instanceof Error ? err.message : 'Failed to download or decrypt file');
 			} finally {
@@ -155,8 +162,21 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 			if (decryptedUrl) {
 				URL.revokeObjectURL(decryptedUrl);
 			}
+			if (downloadControllerRef.current) {
+				downloadControllerRef.current.abort();
+			}
 		};
-	}, [isEncrypted, fileMetadata, decryptedBlob, decryptedUrl]);
+	}, [isEncrypted, fileMetadata, decryptedBlob, decryptedUrl, retryKey]);
+
+	const handleRetry = () => {
+		// Reset state to trigger retry
+		setError(null);
+		setDecryptedBlob(null);
+		setDecryptedUrl(null);
+		setDownloadProgress(null);
+		isDownloading.current = false;
+		setRetryKey(prev => prev + 1); // Force useEffect to re-run
+	};
 
 	// Determine what to display
 	const displayUrl = decryptedUrl || (!isEncrypted ? fileMetadata.url : null);
@@ -171,6 +191,15 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 						<div className="text-sm font-medium text-amber-100">Failed to decrypt file</div>
 						<div className="text-sm mt-1 text-amber-200/90">{error}</div>
 					</div>
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={handleRetry}
+						className="h-7 w-7 text-amber-200 hover:text-amber-100 hover:bg-amber-900/50"
+						title="Retry download"
+					>
+						<RotateCcw className="h-4 w-4" />
+					</Button>
 				</div>
 			</div>
 		);

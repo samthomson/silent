@@ -1327,7 +1327,20 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
             {pendingFiles.map((file, index) => (
               <div key={index} className="relative group">
                 {file.type.startsWith('image/') ? (
-                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border">
+                  <div
+                    className="relative w-20 h-20 rounded-lg overflow-hidden border"
+                    style={{
+                      backgroundImage: `
+                        linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+                        linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)
+                      `,
+                      backgroundSize: '8px 8px',
+                      backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+                      backgroundColor: '#ffffff',
+                    }}
+                  >
                     <img
                       src={URL.createObjectURL(file)}
                       alt={file.name}

@@ -4452,18 +4452,23 @@ describe('DMLib', () => {
       const testPubkey = 'test-pubkey-123';
 
       beforeEach(async () => {
-        const db = await openDB(CACHE_DB_NAME, 1, {
-          upgrade(db) {
-            if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+        const db = await openDB(CACHE_DB_NAME, 2, {
+          upgrade(db, oldVersion) {
+            if (oldVersion < 1 || !db.objectStoreNames.contains(CACHE_STORE_NAME)) {
               db.createObjectStore(CACHE_STORE_NAME);
+            }
+            if (oldVersion < 2 && !db.objectStoreNames.contains('media-blobs')) {
+              const store = db.createObjectStore('media-blobs', { keyPath: 'id' });
+              store.createIndex('timestamp', 'timestamp');
             }
           },
         });
         await db.clear(CACHE_STORE_NAME);
+        db.close();
       });
 
       afterEach(async () => {
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.clear(CACHE_STORE_NAME);
         db.close();
       });
@@ -4482,7 +4487,7 @@ describe('DMLib', () => {
           relayInfo: {}
         };
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.put(CACHE_STORE_NAME, validData, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 
@@ -4498,7 +4503,7 @@ describe('DMLib', () => {
           relayInfo: {}
         };
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.put(CACHE_STORE_NAME, invalidData, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 
@@ -4514,7 +4519,7 @@ describe('DMLib', () => {
           relayInfo: {}
         };
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.put(CACHE_STORE_NAME, invalidData, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 
@@ -4530,7 +4535,7 @@ describe('DMLib', () => {
           relayInfo: {}
         };
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.put(CACHE_STORE_NAME, invalidData, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 
@@ -4546,7 +4551,7 @@ describe('DMLib', () => {
           relayInfo: {}
         };
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.put(CACHE_STORE_NAME, invalidData, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 
@@ -4562,7 +4567,7 @@ describe('DMLib', () => {
           syncState: { lastCacheTime: 123456, queriedRelays: [], queryLimitReached: false }
         };
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         await db.put(CACHE_STORE_NAME, invalidData, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 
@@ -4581,7 +4586,7 @@ describe('DMLib', () => {
 
         await DMLib.Impure.Cache.saveToCache(testPubkey, testData);
 
-        const db = await openDB(CACHE_DB_NAME, 1);
+        const db = await openDB(CACHE_DB_NAME, 2);
         const retrieved = await db.get(CACHE_STORE_NAME, `${CACHE_KEY_PREFIX}${testPubkey}`);
         db.close();
 

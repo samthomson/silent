@@ -62,8 +62,8 @@ export interface Message {
   // NIP-17 debugging - store the full seal and gift wrap
   sealEvent?: NostrEvent; // For NIP-17: the kind 13 seal (encrypted)
   giftWrapEvent?: NostrEvent; // For NIP-17: the full kind 1059 gift wrap
-  // File metadata parsed from imeta tags (kind 15)
-  fileMetadata?: FileMetadata;
+  // File metadata parsed from imeta tags (kind 15) - array for multiple attachments
+  fileMetadata?: FileMetadata[];
   // Decryption errors
   error?: string;
   // UI state

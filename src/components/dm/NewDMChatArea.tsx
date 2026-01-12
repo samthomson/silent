@@ -9,7 +9,6 @@ import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@/lib/dmC
 import { getDisplayName } from '@/lib/genUserName';
 import { formatConversationTime, formatFullDateTime, getPubkeyColor, formatBytes, isMediaFile } from '@/lib/dmUtils';
 import { Pure as DMLib, type FileAttachment } from '@/lib/dmLib';
-import { isCached } from '@/lib/dmMediaCache';
 import { useUploadFile } from '@/hooks/useUploadFile';
 import { useToast } from '@/hooks/useToast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -20,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil, Paperclip, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
@@ -33,6 +33,52 @@ interface DMChatAreaProps {
   className?: string;
 }
 
+// Video thumbnail component that properly manages blob URL lifecycle
+const VideoThumbnail = memo(({ file, onRemove }: { file: File; onRemove: () => void }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setThumbnailUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <div className="relative w-20 h-20 rounded-lg overflow-hidden border bg-black group">
+      {thumbnailUrl && (
+        <video
+          ref={videoRef}
+          src={thumbnailUrl}
+          className="w-full h-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+          onLoadedMetadata={() => {
+            if (videoRef.current) {
+              videoRef.current.currentTime = 0.1;
+            }
+          }}
+        />
+      )}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center opacity-80">
+          <svg className="w-3 h-3 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+      <button
+        onClick={onRemove}
+        className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
+});
+VideoThumbnail.displayName = 'VideoThumbnail';
+
 const RawEventModal = ({
   outerEvent,
   innerEvent,
@@ -44,7 +90,7 @@ const RawEventModal = ({
   outerEvent: NostrEvent;
   innerEvent?: NostrEvent;
   giftWrapEvent?: NostrEvent;
-  fileMetadata?: import('@/lib/dmTypes').FileMetadata;
+  fileMetadata?: import('@/lib/dmTypes').FileMetadata[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
@@ -66,18 +112,8 @@ const RawEventModal = ({
     } catch { return null; }
   };
 
-  // Get dimensions from fileMetadata or extract from URL
-  const dimensions = fileMetadata?.dim || (fileMetadata?.url ? extractDimensions(fileMetadata.url) : null);
-
-  // Check cache status
-  const [isCachedBlob, setIsCachedBlob] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (fileMetadata && open) {
-      isCached(fileMetadata).then(setIsCachedBlob).catch(() => setIsCachedBlob(false));
-    } else {
-      setIsCachedBlob(null);
-    }
-  }, [fileMetadata, open]);
+  // Normalize to array
+  const fileMetadataArray = Array.isArray(fileMetadata) ? fileMetadata : (fileMetadata ? [fileMetadata] : []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -110,50 +146,49 @@ const RawEventModal = ({
             </TabsList>
             {isFileMessage && (
               <TabsContent value="media" className="flex-1 mt-4 overflow-auto">
-                <div className="bg-muted p-4 rounded-md space-y-3">
-                  <h3 className="font-medium text-sm">File Information</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-muted-foreground">Source Host:</div>
-                    <div className="font-mono">{fileMetadata?.url ? extractDomain(fileMetadata.url) : 'Unknown'}</div>
+                <div className="bg-muted p-4 rounded-md space-y-4">
+                  <h3 className="font-medium text-sm">File Information {fileMetadataArray.length > 1 && `(${fileMetadataArray.length} files)`}</h3>
+                  {fileMetadataArray.map((fm, idx) => {
+                    const dimensions = fm.dim || (fm.url ? extractDimensions(fm.url) : null);
+                    return (
+                      <div key={idx}>
+                        {idx > 0 && <Separator className="my-4" />}
+                        {fileMetadataArray.length > 1 && (
+                          <div className="text-xs font-semibold text-muted-foreground mb-3">File {idx + 1}</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="text-muted-foreground">Source Host:</div>
+                          <div className="font-mono">{fm.url ? extractDomain(fm.url) : 'Unknown'}</div>
 
-                    <div className="text-muted-foreground">File Type:</div>
-                    <div>{fileMetadata?.mimeType || 'Unknown'}</div>
+                          <div className="text-muted-foreground">File Type:</div>
+                          <div>{fm.mimeType || 'Unknown'}</div>
 
-                    <div className="text-muted-foreground">File Size:</div>
-                    <div>{fileMetadata?.size ? formatBytes(fileMetadata.size) : <span className="text-muted-foreground/70">Not provided by sender</span>}</div>
+                          <div className="text-muted-foreground">File Size:</div>
+                          <div>{fm.size ? formatBytes(fm.size) : <span className="text-muted-foreground/70">Not provided by sender</span>}</div>
 
-                    <div className="text-muted-foreground">Dimensions:</div>
-                    <div>{dimensions || <span className="text-muted-foreground/70">Not provided</span>}</div>
+                          <div className="text-muted-foreground">Dimensions:</div>
+                          <div>{dimensions || <span className="text-muted-foreground/70">Not provided</span>}</div>
 
-                    <div className="text-muted-foreground">Encrypted:</div>
-                    <div>{fileMetadata?.encryptionAlgorithm ? `Yes (${fileMetadata.encryptionAlgorithm})` : 'No'}</div>
+                          <div className="text-muted-foreground">Encrypted:</div>
+                          <div>{fm.encryptionAlgorithm ? `Yes (${fm.encryptionAlgorithm})` : 'No'}</div>
 
-                    <div className="text-muted-foreground">Cached:</div>
-                    <div>
-                      {isCachedBlob === null ? (
-                        <span className="text-muted-foreground/70">Checking...</span>
-                      ) : isCachedBlob ? (
-                        <span className="text-green-600 dark:text-green-400">Yes</span>
-                      ) : (
-                        <span className="text-muted-foreground/70">No</span>
-                      )}
-                    </div>
+                          {fm.hash && (
+                            <>
+                              <div className="text-muted-foreground">Hash (x):</div>
+                              <div className="font-mono text-xs break-all">{fm.hash}</div>
+                            </>
+                          )}
+                        </div>
 
-                    {fileMetadata?.hash && (
-                      <>
-                        <div className="text-muted-foreground">Hash (x):</div>
-                        <div className="font-mono text-xs break-all">{fileMetadata.hash}</div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t">
-                    <div className="text-muted-foreground text-sm mb-1">Full URL:</div>
-                    <div className="font-mono text-xs break-all bg-background p-2 rounded">
-                      {fileMetadata?.url || 'Not available'}
-                    </div>
-                  </div>
-
+                        <div className="pt-2 border-t mt-2">
+                          <div className="text-muted-foreground text-sm mb-1">Full URL:</div>
+                          <div className="font-mono text-xs break-all bg-background p-2 rounded">
+                            {fm.url || 'Not available'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </TabsContent>
             )}
@@ -221,9 +256,24 @@ const MessageBubble = memo(({
   const shouldRenderMedia = isFileAttachment || renderInlineMedia;
   const fileMetadata = message.fileMetadata;
 
+  // Normalize to array for consistent handling
+  const fileMetadataArray = Array.isArray(fileMetadata) ? fileMetadata : (fileMetadata ? [fileMetadata] : []);
+
+  // Debug logging for multiple files
+  if (isFileAttachment) {
+    console.log('[MessageBubble] Kind 15 fileMetadata DEBUG:', {
+      messageId: message.id,
+      rawFileMetadata: fileMetadata,
+      isArray: Array.isArray(fileMetadata),
+      arrayLength: fileMetadataArray.length,
+      files: fileMetadataArray.map(fm => ({ url: fm.url, mimeType: fm.mimeType })),
+      eventTags: event.tags.filter(t => t[0] === 'imeta').map(t => t.slice(0, 3))
+    });
+  }
+
   // Check if it's an encrypted file attachment (use fileMetadata if available, otherwise parse tags)
   const hasEncryption = isFileAttachment && (
-    message.fileMetadata?.encryptionAlgorithm ||
+    fileMetadataArray.some(fm => fm.encryptionAlgorithm) ||
     event.tags.some(
       ([tagName]) => tagName === 'encryption-algorithm' || tagName === 'decryption-key'
     )
@@ -240,11 +290,16 @@ const MessageBubble = memo(({
 
   // Determine content rendering mode (mutually exclusive)
   const isDecryptionError = !!message.error;
-  const isEncryptedMedia = !isDecryptionError && shouldRenderMedia && !!fileMetadata && isFileAttachment;
+  const hasFileMetadata = Array.isArray(fileMetadata) ? fileMetadata.length > 0 : !!fileMetadata;
+  const isEncryptedMedia = !isDecryptionError && shouldRenderMedia && hasFileMetadata && isFileAttachment;
   const isRichContent = !isDecryptionError && !isEncryptedMedia && shouldRenderMedia;
   const isPlainText = !isDecryptionError && !isEncryptedMedia && !isRichContent;
-  const isAdditionalText = isEncryptedMedia && event.content && fileMetadata?.url &&
-    event.content !== fileMetadata.url && !event.content.startsWith(fileMetadata.url);
+
+  // Check if there's additional text beyond file URLs
+  const allFileUrls = fileMetadataArray.map(fm => fm.url).filter((url): url is string => !!url);
+  const isAdditionalText = isEncryptedMedia && event.content &&
+    allFileUrls.length > 0 &&
+    !allFileUrls.some(url => event.content === url || event.content.startsWith(url));
 
   return (
     <div className={cn("flex mb-4", isFromCurrentUser ? "justify-end" : "justify-start")}>
@@ -273,7 +328,9 @@ const MessageBubble = memo(({
 
         {isEncryptedMedia && (
           <div className="text-sm">
-            <EncryptedMediaDisplay fileMetadata={fileMetadata!} className="my-2" />
+            {fileMetadataArray.map((fm, idx) => (
+              <EncryptedMediaDisplay key={idx} fileMetadata={fm} className="my-2" />
+            ))}
             {isAdditionalText && (
               <div className="mt-2 whitespace-pre-wrap break-words">
                 <NoteContent event={messageEvent} className="whitespace-pre-wrap break-words" />
@@ -1103,13 +1160,14 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
     setIsSending(true);
     try {
       const attachments: FileAttachment[] = [];
+
       if (pendingFiles.length > 0 && selectedProtocol === MESSAGE_PROTOCOL.NIP17) {
         for (const file of pendingFiles) {
           try {
             if (!isMediaFile(file)) {
               toast({
                 title: 'Invalid file type',
-                description: 'Only images, videos, and audio files are supported',
+                description: `${file.name} is not a supported media file. Only images, videos, and audio files are supported.`,
                 variant: 'destructive',
               });
               continue;
@@ -1136,6 +1194,17 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
             });
           }
         }
+      }
+
+      // Prevent sending empty message if files were selected but none succeeded
+      if (pendingFiles.length > 0 && attachments.length === 0 && !messageText.trim()) {
+        toast({
+          title: 'Cannot send message',
+          description: 'No files were successfully uploaded. Please check the file types and try again.',
+          variant: 'destructive',
+        });
+        setIsSending(false);
+        return;
       }
 
       console.log('[NewDMChatArea] Sending message with attachments:', { attachmentsCount: attachments.length, attachments });
@@ -1324,48 +1393,57 @@ export const NewDMChatArea = ({ conversationId, onBack, className }: DMChatAreaP
         {/* File previews */}
         {pendingFiles.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
-            {pendingFiles.map((file, index) => (
-              <div key={index} className="relative group">
-                {file.type.startsWith('image/') ? (
-                  <div
-                    className="relative w-20 h-20 rounded-lg overflow-hidden border"
-                    style={{
-                      backgroundImage: `
-                        linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
-                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
-                        linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
-                        linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)
-                      `,
-                      backgroundSize: '8px 8px',
-                      backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
-                      backgroundColor: '#ffffff',
-                    }}
-                  >
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={file.name}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={() => removePendingFile(index)}
-                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            {pendingFiles.map((file, index) => {
+              const fileUrl = URL.createObjectURL(file);
+              const isImage = file.type.startsWith('image/');
+              const isVideo = file.type.startsWith('video/');
+
+              return (
+                <div key={index} className="relative group">
+                  {isImage ? (
+                    <div
+                      className="relative w-20 h-20 rounded-lg overflow-hidden border"
+                      style={{
+                        backgroundImage: `
+                          linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+                          linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+                          linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+                          linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)
+                        `,
+                        backgroundSize: '8px 8px',
+                        backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+                        backgroundColor: '#ffffff',
+                      }}
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative w-20 h-20 rounded-lg border bg-muted flex items-center justify-center">
-                    <Paperclip className="h-6 w-6 text-muted-foreground" />
-                    <button
-                      onClick={() => removePendingFile(index)}
-                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                      <img
+                        src={fileUrl}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                        onLoad={() => URL.revokeObjectURL(fileUrl)}
+                      />
+                      <button
+                        onClick={() => removePendingFile(index)}
+                        className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : isVideo ? (
+                    <VideoThumbnail file={file} onRemove={() => removePendingFile(index)} />
+                  ) : (
+                    <div className="relative w-20 h-20 rounded-lg border bg-muted flex items-center justify-center">
+                      <Paperclip className="h-6 w-6 text-muted-foreground" />
+                      <button
+                        onClick={() => removePendingFile(index)}
+                        className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

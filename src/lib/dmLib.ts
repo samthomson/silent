@@ -68,8 +68,8 @@ export interface MessageWithMetadata {
   sealEvent?: NostrEvent; // For NIP-17: the kind 13 seal (encrypted)
   giftWrapEvent?: NostrEvent; // For NIP-17: the full kind 1059 gift wrap
   giftWrapId?: string; // For NIP-17: gift wrap ID for deduplication
-  // File metadata parsed from imeta tags (kind 15)
-  fileMetadata?: FileMetadata;
+  // File metadata parsed from imeta tags (kind 15) - array for multiple attachments
+  fileMetadata?: FileMetadata[];
 }
 
 export enum StartupMode {
@@ -536,6 +536,17 @@ const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetad
       // File metadata parsed from imeta tags
       fileMetadata: msg.fileMetadata,
     };
+  }).map(msg => {
+    // Debug: log fileMetadata when enriching
+    if (msg.event.kind === 15 && msg.fileMetadata) {
+      console.log('[DM] enrichMessagesWithConversationId - fileMetadata:', {
+        messageId: msg.id,
+        isArray: Array.isArray(msg.fileMetadata),
+        arrayLength: Array.isArray(msg.fileMetadata) ? msg.fileMetadata.length : 1,
+        files: Array.isArray(msg.fileMetadata) ? msg.fileMetadata.map(fm => ({ url: fm.url, mimeType: fm.mimeType })) : [{ url: msg.fileMetadata.url, mimeType: msg.fileMetadata.mimeType }]
+      });
+    }
+    return msg;
   });
 };
 
@@ -877,15 +888,18 @@ const computeSettingsFingerprint = (settings: {
 
 /**
  * Parse imeta tags to extract file metadata
- * @param imetaTags - Array of imeta tag arrays
- * @returns Parsed metadata object
+ * @param imetaTags - Array of imeta tag arrays (one per file)
+ * @returns Array of parsed metadata objects (one per file)
  */
-const parseImetaTags = (imetaTags: string[][]): FileMetadata => {
-  const metadata: FileMetadata = {};
-  const fallbackUrls: string[] = [];
+const parseImetaTags = (imetaTags: string[][]): FileMetadata[] => {
+  const results: FileMetadata[] = [];
 
+  // Each imeta tag represents one file
   for (const tag of imetaTags) {
     if (tag[0] !== 'imeta') continue;
+
+    const metadata: FileMetadata = {};
+    const fallbackUrls: string[] = [];
 
     for (let i = 1; i < tag.length; i++) {
       const part = tag[i];
@@ -933,13 +947,18 @@ const parseImetaTags = (imetaTags: string[][]): FileMetadata => {
           break;
       }
     }
+
+    if (fallbackUrls.length > 0) {
+      metadata.fallback = fallbackUrls;
+    }
+
+    // Only add if we have at least a URL
+    if (metadata.url) {
+      results.push(metadata);
+    }
   }
 
-  if (fallbackUrls.length > 0) {
-    metadata.fallback = fallbackUrls;
-  }
-
-  return metadata;
+  return results;
 };
 
 /**
@@ -1541,11 +1560,16 @@ const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<Mes
 
     // Parse file metadata for kind 15 messages
     // Can be in imeta tags (NIP-92) or direct tags (legacy/compatibility)
-    let fileMetadata: FileMetadata | undefined;
+    let fileMetadata: FileMetadata[] | undefined;
     const imetaTags = inner.tags.filter(t => t[0] === 'imeta');
     if (imetaTags.length > 0) {
-      // Parse from imeta tags (NIP-92 standard)
+      // Parse from imeta tags (NIP-92 standard) - returns array of FileMetadata
       fileMetadata = parseImetaTags(imetaTags);
+      console.log('[DM] Parsed imeta tags:', { 
+        imetaTagCount: imetaTags.length, 
+        fileMetadataCount: fileMetadata.length,
+        fileMetadata: fileMetadata.map(fm => ({ url: fm.url, mimeType: fm.mimeType }))
+      });
     } else if (inner.kind === 15) {
       // Parse from direct tags (legacy/compatibility mode)
       // Extract URL from content
@@ -1597,7 +1621,8 @@ const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<Mes
         } catch { /* ignore */ }
       }
 
-      fileMetadata = {
+      // Legacy mode: single file, wrap in array for consistency
+      const singleFile: FileMetadata = {
         url: url || undefined,
         mimeType: inner.tags.find(t => t[0] === 'file-type')?.[1],
         size,
@@ -1607,10 +1632,11 @@ const processNIP17Message = async (msg: NostrEvent, signer: Signer): Promise<Mes
         decryptionNonce,
         hash: inner.tags.find(t => t[0] === 'x')?.[1], // SHA-256 hash
       };
-      console.log('[DM] Created fileMetadata for kind 15:', {
-        url: fileMetadata.url,
-        mimeType: fileMetadata.mimeType,
-        hasEncryption: !!(fileMetadata.encryptionAlgorithm && fileMetadata.decryptionKey && fileMetadata.decryptionNonce),
+      fileMetadata = [singleFile];
+      console.log('[DM] Created fileMetadata for kind 15 (legacy):', {
+        url: singleFile.url,
+        mimeType: singleFile.mimeType,
+        hasEncryption: !!(singleFile.encryptionAlgorithm && singleFile.decryptionKey && singleFile.decryptionNonce),
       });
     }
 
@@ -1705,41 +1731,69 @@ const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> =
 
     // Migrate: ensure fileMetadata exists for kind 15 messages
     // Old cache entries may not have fileMetadata - parse it from event tags
+    // Also migrate old single-file format to array format
     let needsSave = false;
     for (const conversationId in data.conversationMessages) {
       const messages = data.conversationMessages[conversationId];
       for (const message of messages) {
-        if (message.event.kind === 15 && !message.fileMetadata) {
-          // Parse fileMetadata from event tags
+        if (message.event.kind === 15) {
           const event = message.event;
-          const url = event.content.trim();
-          const encryptionAlgorithm = event.tags.find((t: string[]) => t[0] === 'encryption-algorithm')?.[1];
-          let decryptionKey = event.tags.find((t: string[]) => t[0] === 'decryption-key')?.[1];
-          let decryptionNonce = event.tags.find((t: string[]) => t[0] === 'decryption-nonce')?.[1];
+          const imetaTags = event.tags.filter((t: string[]) => t[0] === 'imeta');
+          
+          // Always re-parse from imeta tags if they exist (supports multiple files)
+          // This ensures we get all files even if cache had old single-file format
+          if (imetaTags.length > 0) {
+            const parsedMetadata = parseImetaTags(imetaTags);
+            const currentCount = Array.isArray(message.fileMetadata) ? message.fileMetadata.length : (message.fileMetadata ? 1 : 0);
+            
+            // Always update if counts differ (cache might have old format)
+            if (parsedMetadata.length !== currentCount || parsedMetadata.length !== imetaTags.length) {
+              message.fileMetadata = parsedMetadata;
+              needsSave = true;
+              console.log('[DM Cache] Re-parsed fileMetadata from imeta tags:', message.id, 'files:', parsedMetadata.length, '(was:', currentCount, ', imetaTags:', imetaTags.length, ')');
+            }
+          } else {
+            // Migrate old single-file format to array format
+            if (message.fileMetadata && !Array.isArray(message.fileMetadata)) {
+              message.fileMetadata = [message.fileMetadata];
+              needsSave = true;
+              console.log('[DM Cache] Migrated single fileMetadata to array format:', message.id);
+            }
+            
+            // Parse fileMetadata from event tags if missing (legacy format)
+            if (!message.fileMetadata) {
+              // Fallback to legacy single-file parsing
+              const url = event.content.trim();
+              const encryptionAlgorithm = event.tags.find((t: string[]) => t[0] === 'encryption-algorithm')?.[1];
+              let decryptionKey = event.tags.find((t: string[]) => t[0] === 'decryption-key')?.[1];
+              let decryptionNonce = event.tags.find((t: string[]) => t[0] === 'decryption-nonce')?.[1];
 
-          // Convert hex to base64 if needed
-          if (decryptionKey && !decryptionKey.includes('=') && decryptionKey.length === 64) {
-            const hexBytes = new Uint8Array(decryptionKey.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-            decryptionKey = btoa(String.fromCharCode(...hexBytes));
-          }
-          if (decryptionNonce && !decryptionNonce.includes('=')) {
-            const hexMatch = decryptionNonce.match(/^[0-9a-fA-F]+$/);
-            if (hexMatch && decryptionNonce.length % 2 === 0) {
-              const hexBytes = new Uint8Array(decryptionNonce.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-              decryptionNonce = btoa(String.fromCharCode(...hexBytes));
+              // Convert hex to base64 if needed
+              if (decryptionKey && !decryptionKey.includes('=') && decryptionKey.length === 64) {
+                const hexBytes = new Uint8Array(decryptionKey.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+                decryptionKey = btoa(String.fromCharCode(...hexBytes));
+              }
+              if (decryptionNonce && !decryptionNonce.includes('=')) {
+                const hexMatch = decryptionNonce.match(/^[0-9a-fA-F]+$/);
+                if (hexMatch && decryptionNonce.length % 2 === 0) {
+                  const hexBytes = new Uint8Array(decryptionNonce.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+                  decryptionNonce = btoa(String.fromCharCode(...hexBytes));
+                }
+              }
+
+              // Legacy cache: single file, wrap in array
+              message.fileMetadata = [{
+                url: url || undefined,
+                mimeType: event.tags.find((t: string[]) => t[0] === 'file-type')?.[1],
+                encryptionAlgorithm,
+                decryptionKey,
+                decryptionNonce,
+                hash: event.tags.find((t: string[]) => t[0] === 'x')?.[1],
+              }];
+              needsSave = true;
+              console.log('[DM Cache] Migrated fileMetadata for kind 15 message (legacy):', message.id);
             }
           }
-
-          message.fileMetadata = {
-            url: url || undefined,
-            mimeType: event.tags.find((t: string[]) => t[0] === 'file-type')?.[1],
-            encryptionAlgorithm,
-            decryptionKey,
-            decryptionNonce,
-            hash: event.tags.find((t: string[]) => t[0] === 'x')?.[1],
-          };
-          needsSave = true;
-          console.log('[DM Cache] Migrated fileMetadata for kind 15 message:', message.id);
         }
       }
     }

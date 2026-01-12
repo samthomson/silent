@@ -23,6 +23,7 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 	const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
 	const [isDecrypting, setIsDecrypting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [videoError, setVideoError] = useState<string | null>(null);
 	const [retryKey, setRetryKey] = useState(0); // Force useEffect to re-run on retry
 	const [downloadProgress, setDownloadProgress] = useState<{
 		loaded: number;
@@ -42,6 +43,9 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 
 	const isImage = fileMetadata.mimeType?.startsWith('image/');
 	const isVideo = fileMetadata.mimeType?.startsWith('video/');
+
+	// Determine what to display (defined here to be available for useEffect below)
+	const displayUrl = decryptedUrl || (!isEncrypted ? fileMetadata.url : null);
 
 	// Decrypt main file if encrypted
 	useEffect(() => {
@@ -135,13 +139,17 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 					fileMetadata.encryptionAlgorithm || 'aes-gcm'
 				);
 
-				// Cache decrypted blob
-				await cacheDecryptedBlob(fileMetadata, decrypted);
+				// Create blob with correct MIME type for proper playback
+				const mimeType = fileMetadata.mimeType || 'application/octet-stream';
+				const typedBlob = new Blob([decrypted], { type: mimeType });
 
-				setDecryptedBlob(decrypted);
-				const url = URL.createObjectURL(decrypted);
+				// Cache decrypted blob
+				await cacheDecryptedBlob(fileMetadata, typedBlob);
+
+				setDecryptedBlob(typedBlob);
+				const url = URL.createObjectURL(typedBlob);
 				setDecryptedUrl(url);
-				console.log('[EncryptedMedia] Decryption complete');
+				console.log('[EncryptedMedia] Decryption complete, mimeType:', mimeType);
 			} catch (err) {
 				// Don't set error if download was aborted
 				if (err instanceof Error && err.name === 'AbortError') {
@@ -178,8 +186,12 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 		setRetryKey(prev => prev + 1); // Force useEffect to re-run
 	};
 
-	// Determine what to display
-	const displayUrl = decryptedUrl || (!isEncrypted ? fileMetadata.url : null);
+	// Reset video error when URL changes (for videos)
+	useEffect(() => {
+		if (isVideo) {
+			setVideoError(null);
+		}
+	}, [displayUrl, isVideo]);
 
 	// Error state
 	if (error) {
@@ -298,12 +310,64 @@ export function EncryptedMediaDisplay({ fileMetadata, className }: EncryptedMedi
 	if (isVideo) {
 		return (
 			<div className={cn("relative", className)}>
-				<video
-					src={displayUrl}
-					controls
-					className="max-w-full rounded-md"
-					style={{ maxHeight: '400px' }}
-				/>
+				{videoError ? (
+					<div className="p-4 border border-amber-500/50 rounded-md bg-amber-950/50">
+						<div className="flex flex-col gap-3">
+							<div className="flex items-start gap-2 text-amber-200">
+								<AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
+								<div className="flex-1">
+									<div className="text-sm font-medium text-amber-100">Video playback failed</div>
+									<div className="text-sm mt-1 text-amber-200/90">{videoError}</div>
+									<div className="text-xs mt-2 text-amber-200/70">
+										The video file may use a codec not supported by your browser (e.g., AVI files often use unsupported codecs).
+									</div>
+								</div>
+							</div>
+							{displayUrl && (
+								<a
+									href={displayUrl}
+									download={fileMetadata.name || 'video'}
+									className="text-sm text-amber-300 hover:text-amber-200 underline flex items-center gap-2"
+								>
+									📥 Download video file
+								</a>
+							)}
+						</div>
+					</div>
+				) : (
+					<video
+						src={displayUrl}
+						controls
+						preload="metadata"
+						className="max-w-full rounded-md"
+						style={{ maxHeight: '400px' }}
+						onError={(e) => {
+							const video = e.currentTarget;
+							const error = video.error;
+							let errorMsg = 'Unknown error';
+							if (error) {
+								switch (error.code) {
+									case MediaError.MEDIA_ERR_ABORTED:
+										errorMsg = 'Video loading aborted';
+										break;
+									case MediaError.MEDIA_ERR_NETWORK:
+										errorMsg = 'Network error while loading video';
+										break;
+									case MediaError.MEDIA_ERR_DECODE:
+										errorMsg = 'Video codec not supported or corrupted file';
+										break;
+									case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+										errorMsg = 'Video format not supported by browser';
+										break;
+									default:
+										errorMsg = `Video error: ${error.message || 'Unknown'}`;
+								}
+							}
+							console.error('[EncryptedMedia] Video playback error:', errorMsg, error);
+							setVideoError(errorMsg);
+						}}
+					/>
+				)}
 			</div>
 		);
 	}

@@ -32,7 +32,7 @@ export interface Conversation {
   hasNIP17: boolean;
   isKnown: boolean;
   isRequest: boolean;
-  lastMessage: { decryptedContent?: string; error?: string } | null;
+  lastMessage: { decryptedContent?: string; error?: string; hasAttachments?: boolean } | null;
   hasDecryptionErrors: boolean; // True if any messages failed to decrypt
   hasFailedRelays?: boolean; // True if any relays failed to connect (computed in UI)
 }

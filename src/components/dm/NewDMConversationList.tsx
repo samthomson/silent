@@ -26,7 +26,7 @@ interface ConversationItemProps {
   participantPubkeys: string[];
   isSelected: boolean;
   onClick: () => void;
-  lastMessage: { decryptedContent?: string; error?: string } | null;
+  lastMessage: { decryptedContent?: string; error?: string; hasAttachments?: boolean } | null;
   lastActivity: number;
   hasDecryptionErrors?: boolean;
   hasFailedRelays?: boolean;
@@ -166,9 +166,26 @@ const ConversationItemComponent = ({
     }
   })();
 
-  const lastMessagePreview = lastMessage?.error
-    ? '🔒 Encrypted message'
-    : lastMessage?.decryptedContent || 'No messages yet';
+  const lastMessagePreview = (() => {
+    if (!lastMessage) return 'No messages yet';
+    if (lastMessage.error) return <span className="italic">Message could not be read</span>;
+    
+    // If there's text content, show it
+    if (lastMessage.decryptedContent) return lastMessage.decryptedContent;
+    
+    // If no text but has attachments, show file indicator
+    if (lastMessage.hasAttachments) {
+      return (
+        <span className="flex items-center gap-1.5">
+          <span>📎</span>
+          <span>Attachment</span>
+        </span>
+      );
+    }
+    
+    // Fallback for empty messages
+    return 'No messages yet';
+  })();
 
   // Show skeleton only for name/avatar while loading (we already have message data)
   const isLoadingProfile = !isSelfMessaging && conversationParticipants.length === 1 && firstParticipant.isLoading && !firstMetadata;

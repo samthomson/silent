@@ -763,6 +763,7 @@ const buildMessagingAppState = (
     const lastMessage = lastMsg ? {
       decryptedContent: lastMsg.event.content,
       error: lastMsg.error,
+      hasAttachments: !!(lastMsg.fileMetadata && lastMsg.fileMetadata.length > 0),
     } : null;
 
     // Determine if conversation is known or a request

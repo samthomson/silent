@@ -527,6 +527,7 @@ const enrichMessagesWithConversationId = (messagesWithMetadata: MessageWithMetad
       event: msg.event, // The inner message with DECRYPTED content
       conversationId: computeConversationId(msg.participants || []),
       protocol: (msg.event.kind === 4 ? 'nip04' : 'nip17') as 'nip04' | 'nip17',
+      senderPubkey: msg.senderPubkey, // Copy sender pubkey from metadata
       error: msg.error, // Pass through decryption error flag
       subject: msg.subject, // Store subject for updating conversation metadata
       // NIP-17 debugging - copy over encrypted layers
@@ -584,7 +585,7 @@ const addMessageToState = (
 
   // Update conversation metadata
   const lastMessage = updatedMessages[updatedMessages.length - 1];
-  const hasUserSentMessage = updatedMessages.some(msg => msg.event.pubkey === myPubkey);
+  const hasUserSentMessage = updatedMessages.some(msg => msg.senderPubkey === myPubkey);
 
   const participantPubkeys = messageWithMetadata.participants || [];
 
@@ -665,14 +666,20 @@ const mergeMessagingState = (base: MessagingState, updates: MessagingState): Mes
     }
   }
 
-  // Merge conversation metadata - preserve lastReadAt from base if higher
+  // Merge conversation metadata - once known, always known
   const mergedMetadata: Record<string, Conversation> = {};
+  
   for (const [convId, updatedMeta] of Object.entries(updates.conversationMetadata)) {
     const baseMeta = base.conversationMetadata[convId];
+    
+    // Once a conversation is known (we've sent a message), it stays known
+    const isKnown = baseMeta?.isKnown || updatedMeta.isKnown;
+    
     mergedMetadata[convId] = {
       ...updatedMeta,
-      // Preserve higher lastReadAt (user read state should not regress)
-      lastReadAt: baseMeta ? Math.max(baseMeta.lastReadAt, updatedMeta.lastReadAt) : updatedMeta.lastReadAt
+      lastReadAt: baseMeta ? Math.max(baseMeta.lastReadAt, updatedMeta.lastReadAt) : updatedMeta.lastReadAt,
+      isKnown,
+      isRequest: !isKnown,
     };
   }
   // Add any conversations only in base (shouldn't happen in normal flow, but be safe)
@@ -760,7 +767,7 @@ const buildMessagingAppState = (
 
     // Determine if conversation is known or a request
     // Known = we've sent at least one message, Request = we've only received
-    const hasSentMessage = messages.some(m => m.event.pubkey === myPubkey);
+    const hasSentMessage = messages.some(m => m.senderPubkey === myPubkey);
     const isKnown = hasSentMessage;
     const isRequest = !hasSentMessage;
 
@@ -1728,13 +1735,31 @@ const loadFromCache = async (myPubkey: string): Promise<MessagingState | null> =
       return null;
     }
 
-    // Migrate: ensure fileMetadata exists for kind 15 messages
-    // Old cache entries may not have fileMetadata - parse it from event tags
-    // Also migrate old single-file format to array format
+    // Migrate: ensure senderPubkey and fileMetadata exist
+    // Old cache entries may not have senderPubkey or fileMetadata - derive from event
     let needsSave = false;
     for (const conversationId in data.conversationMessages) {
       const messages = data.conversationMessages[conversationId];
       for (const message of messages) {
+        // Migrate: add senderPubkey if missing
+        if (!message.senderPubkey) {
+          if (message.protocol === 'nip04') {
+            // NIP-04: sender is the event pubkey
+            message.senderPubkey = message.event.pubkey;
+            needsSave = true;
+            console.log('[DM Cache] Migrated senderPubkey (NIP-04) for message:', message.id, 'sender:', message.senderPubkey.substring(0, 12));
+          } else if (message.protocol === 'nip17') {
+            // NIP-17: sender is the seal pubkey
+            if (message.sealEvent) {
+              message.senderPubkey = message.sealEvent.pubkey;
+              needsSave = true;
+              console.log('[DM Cache] Migrated senderPubkey (NIP-17) for message:', message.id, 'sender:', message.senderPubkey.substring(0, 12));
+            } else {
+              console.warn('[DM Cache] Cannot migrate senderPubkey for NIP-17 message - no sealEvent:', message.id);
+            }
+          }
+        }
+        
         if (message.event.kind === 15) {
           const event = message.event;
           const imetaTags = event.tags.filter((t: string[]) => t[0] === 'imeta');

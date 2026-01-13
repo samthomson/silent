@@ -302,7 +302,7 @@ const MessageBubble = memo(({
   const isAdditionalText = isEncryptedMedia && event.content.trim().length > 0;
 
   return (
-    <div className={cn("flex mb-4", isFromCurrentUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex", isFromCurrentUser ? "justify-end" : "justify-start")}>
       <div className={cn(
         "max-w-[70%] rounded-lg px-4 py-2",
         isFromCurrentUser
@@ -1123,6 +1123,7 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [pendingSubject, setPendingSubject] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { mutateAsync: uploadFile, isPending: isUploading } = useUploadFile();
   const { toast } = useToast();
@@ -1171,59 +1172,48 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
     });
   }, [lastMessageKey]);
 
-  // Scroll to specific message when coming from search
+  // Scroll to specific message when coming from search or media panel
   useEffect(() => {
     if (!scrollToMessageId || !conversationId) return;
 
-    const highlightMessage = (element: HTMLElement) => {
-      const messageBubble = element.querySelector('.rounded-lg.px-4.py-2') as HTMLElement;
-      const targetElement = messageBubble || element;
+    const scrollAndHighlight = async () => {
+      // Check if message is already loaded
+      let messageElement = document.getElementById(`message-${scrollToMessageId}`);
       
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
-      setTimeout(() => {
-        const primaryColor = getComputedStyle(document.documentElement)
-          .getPropertyValue('--primary')
-          .trim();
+      // If not found, load earlier messages until we find it
+      if (!messageElement) {
+        let attempts = 0;
+        const maxAttempts = 20;
         
-        targetElement.style.backgroundColor = `hsla(${primaryColor}, 0.35)`;
-        targetElement.style.transition = 'background-color 0.3s ease';
-        
-        setTimeout(() => {
-          targetElement.style.backgroundColor = 'transparent';
-          setTimeout(() => {
-            targetElement.style.transition = '';
-          }, 300);
-        }, 2500);
-      }, 800);
-    };
-
-    const scrollToMessage = async () => {
-      const messageElement = document.getElementById(`message-${scrollToMessageId}`);
-      
-      if (messageElement) {
-        highlightMessage(messageElement);
-        return;
-      }
-
-      // Load earlier messages until we find the target
-      let attempts = 0;
-      const maxAttempts = 20;
-      
-      while (hasMoreMessages && attempts < maxAttempts) {
-        await loadEarlierMessages();
-        attempts++;
-        
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const element = document.getElementById(`message-${scrollToMessageId}`);
-        if (element) {
-          highlightMessage(element);
-          break;
+        while (hasMoreMessages && attempts < maxAttempts) {
+          await loadEarlierMessages();
+          attempts++;
+          
+          // Wait for DOM to update
+          await new Promise(resolve => setTimeout(resolve, 150));
+          
+          messageElement = document.getElementById(`message-${scrollToMessageId}`);
+          if (messageElement) break;
         }
       }
+
+      // If we found the message, scroll to it
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Wait for scroll animation to complete (800ms), then highlight
+        setTimeout(() => {
+          setHighlightedMessageId(scrollToMessageId);
+          
+          // Remove highlight after 2 seconds
+          setTimeout(() => {
+            setHighlightedMessageId(null);
+          }, 2000);
+        }, 800);
+      }
     };
 
-    scrollToMessage();
+    scrollAndHighlight();
   }, [scrollToMessageId, conversationId, hasMoreMessages, loadEarlierMessages]);
 
   const handleSend = useCallback(async () => {
@@ -1459,20 +1449,30 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
                 </Button>
               </div>
             )}
-            {messages.map((message: Message) => (
-              <div
-                key={message.giftWrapId || message.id}
-                id={`message-${message.id}`}
-                className="mb-4"
-              >
-                <MessageBubble
-                  message={message}
-                  isFromCurrentUser={message.event.pubkey === user.pubkey}
-                  showSenderName={isGroupChat}
-                  devMode={devMode}
-                />
-              </div>
-            ))}
+            {messages.map((message: Message) => {
+              const isHighlighted = highlightedMessageId === message.id;
+              return (
+                <div
+                  key={message.giftWrapId || message.id}
+                  id={`message-${message.id}`}
+                  className="mb-3"
+                >
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg transition-all duration-300",
+                      isHighlighted && "bg-primary/35"
+                    )}
+                  >
+                    <MessageBubble
+                      message={message}
+                      isFromCurrentUser={message.event.pubkey === user.pubkey}
+                      showSenderName={isGroupChat}
+                      devMode={devMode}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </ScrollArea>

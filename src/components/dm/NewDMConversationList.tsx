@@ -274,14 +274,14 @@ export const NewDMConversationList = ({
   return (
     <div className={cn("h-full flex flex-col overflow-hidden border-r border-border bg-card", className)}>
       {/* Header - always visible */}
-      <div className="px-4 py-4 border-b flex-shrink-0 h-[73px]">
-        <div className="flex items-center justify-between h-full">
+      <div className="px-4 border-b flex-shrink-0 h-[73px] flex items-center">
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex flex-col justify-center">
-              <h1 className="text-lg font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent leading-none">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent leading-none">
                 {APP_NAME}
               </h1>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{APP_DESCRIPTION}</p>
+              <p className="text-xs text-muted-foreground leading-tight mt-1">{APP_DESCRIPTION}</p>
             </div>
             {/* TODO: Re-implement with new loading phases when cold/warm start flow is finalized */}
             {/* Old code:

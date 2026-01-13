@@ -13,7 +13,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 27%;
 
-    --primary: 214 84% 56%;
+    --primary: 276 48% 52%; /* More vibrant purple - darker + more saturated */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96%;
@@ -30,7 +30,7 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 214 84% 56%;
+    --ring: 276 48% 52%; /* Match primary purple */
 
     --radius: 1rem;
 
@@ -61,7 +61,7 @@
     --popover: 0 0% 12.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 214 84% 56%;
+    --primary: 276 48% 52%; /* More vibrant purple - darker + more saturated */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 0 0% 18.8%;
@@ -78,7 +78,7 @@
 
     --border: 0 0% 18.8%;
     --input: 0 0% 18.8%;
-    --ring: 214 84% 56%;
+    --ring: 276 48% 52%; /* Match primary purple */
 
     --sidebar-bg: 0 0% 18.8%;
     --sidebar-background: 0 0% 18.8%;

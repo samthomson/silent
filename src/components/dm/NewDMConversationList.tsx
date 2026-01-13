@@ -333,20 +333,25 @@ export const NewDMConversationList = ({
       </div>
 
       {/* Search input */}
-      <div className="px-4 py-3 border-b flex-shrink-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <div className="py-3 border-b flex-shrink-0">
+        <div className="relative px-4">
+          <Search className="absolute left-7 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-9"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.currentTarget.blur();
+              }
+            }}
+            className="pl-9 pr-9 border-0 rounded-sm bg-muted/50 placeholder:text-muted-foreground/40 focus-visible:placeholder:text-muted-foreground focus-visible:bg-muted"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute right-7 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Clear search"
             >
               <X className="h-4 w-4" />

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { NewDMConversationList } from '@/components/dm/NewDMConversationList';
 import { NewDMChatArea } from '@/components/dm/NewDMChatArea';
 import { ConversationMediaPanel } from '@/components/dm/ConversationMediaPanel';
@@ -14,7 +14,9 @@ export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagin
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [scrollToMessageId, setScrollToMessageId] = useState<string | undefined>(undefined);
   const [showMediaPanel, setShowMediaPanel] = useState(false);
+  const [filterConversationId, setFilterConversationId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // On mobile, show only one panel at a time
   const showConversationList = !isMobile || !selectedConversationId;
@@ -43,6 +45,18 @@ export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagin
     }
   }, [isMobile]);
 
+  const handleSearchInConversation = useCallback(() => {
+    // Set the filter to the current conversation
+    setFilterConversationId(selectedConversationId);
+    // Focus the search input in the conversation list
+    searchInputRef.current?.focus();
+    searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedConversationId]);
+
+  const handleClearFilter = useCallback(() => {
+    setFilterConversationId(null);
+  }, []);
+
   return (
     <div className={cn("flex overflow-hidden h-full", className)}>
       {/* Conversation List - Left Sidebar */}
@@ -56,6 +70,9 @@ export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagin
           onSelectConversation={handleSelectConversation}
           className="h-full"
           onStatusClick={onStatusClick}
+          searchInputRef={searchInputRef}
+          filterConversationId={filterConversationId}
+          onClearFilter={handleClearFilter}
         />
       </div>
 
@@ -71,6 +88,7 @@ export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagin
           onBack={isMobile ? handleBack : undefined}
           onToggleMediaPanel={handleToggleMediaPanel}
           showMediaPanel={showMediaPanel}
+          onSearchInConversation={handleSearchInConversation}
           className="h-full"
         />
       </div>

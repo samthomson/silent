@@ -965,7 +965,7 @@ const ChatHeader = ({
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
 
-  // Parse conversation participants and exclude current user from display
+  // Parse conversation participants
   const allParticipants = DMLib.Conversation.parseConversationId(conversationId);
   const conversationParticipants = allParticipants.filter(pk => pk !== user?.pubkey);
 
@@ -978,6 +978,9 @@ const ChatHeader = ({
 
   // Check if this is a self-messaging conversation
   const isSelfMessaging = conversationParticipants.length === 0;
+  
+  // Check if this is a group chat (3+ participants including current user)
+  const isGroupChat = allParticipants.length >= 3;
 
   // For 1-on-1 chats, fetch the single participant's profile (or self if messaging yourself)
   const displayPubkey = isSelfMessaging ? user?.pubkey : conversationParticipants[0];
@@ -1037,7 +1040,7 @@ const ChatHeader = ({
           onClick={() => setShowParticipantModal(true)}
           className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 cursor-help hover:bg-accent"
         >
-          <ChatGroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} />
+          <ChatGroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : isGroupChat ? allParticipants : conversationParticipants} />
 
           <div className="text-left flex-1">
             <h2 className="font-semibold text-sm whitespace-nowrap">

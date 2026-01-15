@@ -64,6 +64,9 @@ const ConversationItemComponent = ({
 
   // Check if this is a self-messaging conversation
   const isSelfMessaging = conversationParticipants.length === 0;
+  
+  // Check if this is a group chat (3+ participants including current user)
+  const isGroupChat = participantPubkeys.length >= 3;
 
   // Fetch profile data for participants (used in display name logic)
   const displayPubkey = isSelfMessaging ? user?.pubkey : conversationParticipants[0];
@@ -132,7 +135,7 @@ const ConversationItemComponent = ({
         {isLoadingProfile ? (
           <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
         ) : (
-          <GroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : conversationParticipants} isSelected={isSelected} />
+          <GroupAvatar pubkeys={isSelfMessaging ? [user!.pubkey] : isGroupChat ? participantPubkeys : conversationParticipants} isSelected={isSelected} />
         )}
 
         <div className="flex-1 min-w-0">

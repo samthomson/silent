@@ -8,15 +8,22 @@ interface GroupAvatarProps {
   pubkeys: string[];
   isSelected?: boolean;
   className?: string;
+  size?: 'xs' | 'sm' | 'md';
 }
 
-export const GroupAvatar = ({ pubkeys, isSelected, className }: GroupAvatarProps) => {
+export const GroupAvatar = ({ pubkeys, isSelected, className, size = 'md' }: GroupAvatarProps) => {
   const author1 = useAuthor(pubkeys[0] || '');
   const author2 = useAuthor(pubkeys[1] || '');
   const author3 = useAuthor(pubkeys[2] || '');
   const author4 = useAuthor(pubkeys[3] || '');
 
   const authors = [author1, author2, author3, author4];
+
+  const sizeClasses = {
+    xs: 'h-4 w-4 text-[8px]',
+    sm: 'h-6 w-6 text-[10px]',
+    md: 'h-10 w-10 text-sm'
+  };
 
   if (pubkeys.length === 1) {
     const metadata = author1.data?.metadata;
@@ -27,7 +34,8 @@ export const GroupAvatar = ({ pubkeys, isSelected, className }: GroupAvatarProps
 
     return (
       <Avatar className={cn(
-        "h-10 w-10 flex-shrink-0 transition-opacity",
+        sizeClasses[size],
+        "flex-shrink-0 transition-opacity",
         isSelected !== undefined && !isSelected && "opacity-40",
         className
       )}>
@@ -41,7 +49,8 @@ export const GroupAvatar = ({ pubkeys, isSelected, className }: GroupAvatarProps
   if (pubkeys.length === 2) {
     return (
       <div className={cn(
-        "relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0 transition-opacity",
+        "relative rounded-full overflow-hidden flex-shrink-0 transition-opacity",
+        sizeClasses[size],
         isSelected !== undefined && !isSelected && "opacity-40",
         className
       )}>
@@ -72,7 +81,8 @@ export const GroupAvatar = ({ pubkeys, isSelected, className }: GroupAvatarProps
   // For 3+ people: split into 4 quarters
   return (
     <div className={cn(
-      "relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0 transition-opacity",
+      "relative rounded-full overflow-hidden flex-shrink-0 transition-opacity",
+      sizeClasses[size],
       isSelected !== undefined && !isSelected && "opacity-40",
       className
     )}>

@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil, Paperclip, X, Info } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLock, Server, ExternalLink, Copy, Check, Pencil, Paperclip, X, Info, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import { EncryptedMediaDisplay } from '@/components/dm/EncryptedMediaDisplay';
@@ -33,6 +33,7 @@ interface DMChatAreaProps {
   onBack?: () => void;
   onToggleMediaPanel?: () => void;
   showMediaPanel?: boolean;
+  onSearchInConversation?: () => void;
   className?: string;
 }
 
@@ -917,7 +918,8 @@ const ChatHeader = ({
   pendingSubject,
   setPendingSubject,
   onToggleMediaPanel,
-  showMediaPanel
+  showMediaPanel,
+  onSearchInConversation
 }: {
   conversationId: string;
   onBack?: () => void;
@@ -925,6 +927,7 @@ const ChatHeader = ({
   setPendingSubject: (subject: string | null) => void;
   onToggleMediaPanel?: () => void;
   showMediaPanel?: boolean;
+  onSearchInConversation?: () => void;
 }) => {
   const { user } = useCurrentUser();
   const { getConversationRelays, messagingState } = useNewDMContext();
@@ -1025,6 +1028,25 @@ const ChatHeader = ({
       </div>
 
       <div className="flex items-center gap-1">
+        {onSearchInConversation && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onSearchInConversation}
+                >
+                  <Search className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Search in conversation</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
         {onToggleMediaPanel && (
           <TooltipProvider>
             <Tooltip>
@@ -1106,7 +1128,7 @@ const EmptyState = ({ isLoading }: { isLoading: boolean }) => {
   );
 };
 
-export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onToggleMediaPanel, showMediaPanel, className }: DMChatAreaProps) => {
+export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onToggleMediaPanel, showMediaPanel, onSearchInConversation, className }: DMChatAreaProps) => {
   const { user } = useCurrentUser();
   const { config } = useAppContext();
   const { sendMessage, protocolMode, isLoading } = useNewDMContext();
@@ -1417,6 +1439,7 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
         setPendingSubject={setPendingSubject}
         onToggleMediaPanel={onToggleMediaPanel}
         showMediaPanel={showMediaPanel}
+        onSearchInConversation={onSearchInConversation}
       />
 
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">

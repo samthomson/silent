@@ -78,7 +78,7 @@ const MessageSearchResultComponent = ({ result, onClick }: MessageSearchResultPr
               <span className="text-xs text-muted-foreground truncate">{conversationContext}</span>
             </div>
             <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-              {formatConversationTime(message.event.created_at * 1000)}
+              {formatConversationTime(message.event.created_at)}
             </span>
           </div>
 

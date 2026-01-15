@@ -106,6 +106,18 @@ const extractBlockedRelays = (kind10006: NostrEvent | null): string[] => {
 
   return relays;
 }
+
+/**
+ * Normalizes a relay URL by removing trailing slashes.
+ * Used to ensure consistent relay URL format for comparison and deduplication.
+ * 
+ * @param relay - Relay URL to normalize
+ * @returns Normalized relay URL without trailing slash
+ */
+const normalizeRelayUrl = (relay: string): string => {
+  return relay.endsWith('/') ? relay.slice(0, -1) : relay;
+};
+
 /**
  * Derives the set of relays to use for querying messages based on relay mode and user's relay lists.
  * 
@@ -146,6 +158,7 @@ const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | nu
       .filter(tag => tag[0] === 'relay' && tag[1])
       .map(tag => tag[1].trim())
       .filter(url => url)
+      .map(relay => normalizeRelayUrl(relay))
       .forEach(relay => relaySet.add(relay));
   }
 
@@ -160,12 +173,15 @@ const deriveRelaySet = (kind10002: NostrEvent | null, kind10050: NostrEvent | nu
       })
       .map(tag => tag[1].trim())
       .filter(url => url)
+      .map(relay => normalizeRelayUrl(relay))
       .forEach(relay => relaySet.add(relay));
   }
 
   // Hybrid mode: add discovery relays too
   if (relayMode === 'hybrid') {
-    discoveryRelays.forEach(relay => relaySet.add(relay));
+    discoveryRelays
+      .map(relay => normalizeRelayUrl(relay))
+      .forEach(relay => relaySet.add(relay));
   }
 
   return {
@@ -299,16 +315,6 @@ const parseConversationId = (conversationId: string): string[] => {
     const colonIndex = pk.indexOf(':');
     return colonIndex !== -1 ? pk.substring(0, colonIndex) : pk;
   });
-};
-
-/**
- * Normalizes a relay URL by removing trailing slash for consistent comparison.
- * 
- * @param relay - Relay URL to normalize
- * @returns Normalized relay URL without trailing slash
- */
-const normalizeRelayUrl = (relay: string): string => {
-  return relay.endsWith('/') ? relay.slice(0, -1) : relay;
 };
 
 /**

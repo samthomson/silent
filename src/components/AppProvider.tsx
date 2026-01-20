@@ -64,25 +64,28 @@ export function AppProvider(props: AppProviderProps) {
 }
 
 /**
- * Hook to apply theme changes to the document root
+ * Hook to apply theme changes to the document root and update theme-color meta tag
  */
 function useApplyTheme(theme: Theme) {
   useEffect(() => {
     const root = window.document.documentElement;
+    let currentTheme: 'light' | 'dark';
 
     root.classList.remove('light', 'dark');
 
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
+      currentTheme = window.matchMedia('(prefers-color-scheme: dark)')
         .matches
         ? 'dark'
         : 'light';
-
-      root.classList.add(systemTheme);
-      return;
+      root.classList.add(currentTheme);
+    } else {
+      currentTheme = theme;
+      root.classList.add(theme);
     }
 
-    root.classList.add(theme);
+    // Update theme-color meta tag for mobile browser chrome
+    updateThemeColor(currentTheme);
   }, [theme]);
 
   // Handle system theme changes when theme is set to "system"
@@ -97,9 +100,28 @@ function useApplyTheme(theme: Theme) {
       
       const systemTheme = mediaQuery.matches ? 'dark' : 'light';
       root.classList.add(systemTheme);
+      updateThemeColor(systemTheme);
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
+}
+
+/**
+ * Update the theme-color meta tag based on the current theme
+ */
+function updateThemeColor(theme: 'light' | 'dark') {
+  let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  
+  if (!themeColorMeta) {
+    themeColorMeta = document.createElement('meta');
+    themeColorMeta.setAttribute('name', 'theme-color');
+    document.head.appendChild(themeColorMeta);
+  }
+  
+  // Use purple brand color for both themes (or adjust if needed)
+  // For dark mode, you could use a darker shade: '#6d28d9' or keep the same
+  const color = theme === 'dark' ? '#6d28d9' : '#8b5cf6';
+  themeColorMeta.setAttribute('content', color);
 }

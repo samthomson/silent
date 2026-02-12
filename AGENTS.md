@@ -1099,6 +1099,7 @@ describe('MyComponent', () => {
 
 ### User Interface Text
 - **Never use emojis or icons in user-facing text** - No emojis in toasts, alerts, buttons, or any UI text
+- **Never use em dashes (—) or other special typography** — Use regular hyphens (-) instead. Em dashes are AI-generated content giveaways that look unnatural.
 - Keep messages clear, concise, and professional
 - Avoid overly technical jargon - users don't need to know about IndexedDB, internal APIs, or implementation details
 - Focus on what the user needs to know, not how it works internally

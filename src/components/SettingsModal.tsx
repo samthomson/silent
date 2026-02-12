@@ -1,4 +1,4 @@
-import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User, Wifi } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User, Wifi, LogOut } from 'lucide-react';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
@@ -6,6 +6,7 @@ import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
 import { useNewDMContext } from '@/contexts/NewDMContext';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/useToast';
@@ -228,6 +229,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
   const { messagingState, reloadAfterSettingsChange } = useNewDMContext();
   const { config, updateConfig } = useAppContext();
   const { user } = useCurrentUser();
+  const { currentUser, removeLogin } = useLoggedInAccounts();
   const { toast } = useToast();
   
   // Track initial settings when modal opens
@@ -364,117 +366,133 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
         <Separator />
 
         {/* Mobile: Category list or selected category content */}
-        <div className="md:hidden flex-1 min-h-0 overflow-auto">
+        <div className="md:hidden flex-1 min-h-0 flex flex-col overflow-hidden">
           {!mobileCategory ? (
-            <div className="px-4 py-4 space-y-2">
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Profile')}
-              >
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Profile</span>
-                    <span className="text-xs text-muted-foreground">Edit your profile</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Appearance')}
-              >
-                <div className="flex items-center gap-3">
-                  <Palette className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Appearance</span>
-                    <span className="text-xs text-muted-foreground">Theme and display</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Messages')}
-              >
-                <div className="flex items-center gap-3">
-                  <MessageSquare className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Messages</span>
-                    <span className="text-xs text-muted-foreground">Message display settings</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Relay Mode')}
-              >
-                <div className="flex items-center gap-3">
-                  <Wifi className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Relay Mode</span>
-                    <span className="text-xs text-muted-foreground">Connection strategy</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Relays')}
-              >
-                <div className="flex items-center gap-3">
-                  <Radio className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Relays</span>
-                      {failedRelayCount > 0 && <AlertTriangle className="h-4 w-4 text-red-500" />}
+            <>
+              <div className="flex-1 min-h-0 overflow-auto">
+                <div className="px-4 py-4 space-y-2">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Profile')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <User className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">Profile</span>
+                        <span className="text-xs text-muted-foreground">Edit your profile</span>
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">Manage your relay list</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
 
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Storage')}
-              >
-                <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Storage</span>
-                    <span className="text-xs text-muted-foreground">Data and cache</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Appearance')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Palette className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">Appearance</span>
+                        <span className="text-xs text-muted-foreground">Theme and display</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
 
-              <Button
-                variant="ghost"
-                className="w-full justify-between h-auto py-4 px-4"
-                onClick={() => setMobileCategory('Advanced')}
-              >
-                <div className="flex items-center gap-3">
-                  <Code className="h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Advanced</span>
-                    <span className="text-xs text-muted-foreground">Developer options</span>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Messages')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <MessageSquare className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">Messages</span>
+                        <span className="text-xs text-muted-foreground">Message display settings</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Relay Mode')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Wifi className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">Relay Mode</span>
+                        <span className="text-xs text-muted-foreground">Connection strategy</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Relays')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Radio className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">Relays</span>
+                          {failedRelayCount > 0 && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                        </div>
+                        <span className="text-xs text-muted-foreground">Manage your relay list</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Storage')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Database className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">Storage</span>
+                        <span className="text-xs text-muted-foreground">Data and cache</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-auto py-4 px-4"
+                    onClick={() => setMobileCategory('Advanced')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Code className="h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">Advanced</span>
+                        <span className="text-xs text-muted-foreground">Developer options</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </Button>
                 </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </Button>
-            </div>
+              </div>
+              {user && (
+                <div className="border-t border-sidebar-border px-4">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 h-auto py-4 px-4 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => currentUser && removeLogin(currentUser.id)}
+                  >
+                    <LogOut className="h-5 w-5" />
+                    Log out
+                  </Button>
+                </div>
+              )}
+            </>
           ) : mobileCategory === 'Profile' ? (
             <div className="px-4 py-4">
               <ProfileContent />
@@ -508,8 +526,8 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
 
         {/* Desktop: Tabbed layout */}
         <Tabs defaultValue={defaultTab} className="hidden md:flex flex-1 min-h-0 overflow-hidden">
-          <div className="w-48 border-r flex-shrink-0 flex flex-col">
-            <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pt-4 pb-4 gap-1 items-start justify-start">
+          <div className="w-48 border-r flex-shrink-0 flex flex-col min-h-0">
+            <TabsList className="flex flex-col w-full bg-transparent border-0 rounded-none px-2 pt-4 pb-2 gap-1 items-start justify-start flex-1 min-h-0 overflow-auto">
               <TabsTrigger 
                 value="profile" 
                 className="w-full justify-start gap-3 data-[state=active]:bg-accent"
@@ -561,6 +579,18 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
                 Advanced
               </TabsTrigger>
             </TabsList>
+            {user && (
+              <div className="px-2 pb-4 pt-2 mt-auto border-t border-sidebar-border">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 rounded-sm px-3 py-1.5 text-sm font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => currentUser && removeLogin(currentUser.id)}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log out
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">

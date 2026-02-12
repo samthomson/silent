@@ -15,7 +15,9 @@ export interface ShortVideo {
   videoUrl: string;
   thumbnailUrl?: string;
   duration?: number;
+  bitrate?: number;
   dimensions?: string;
+  blurhash?: string;
   publishedAt: number;
   event: NostrEvent;
 }
@@ -31,6 +33,9 @@ function parseShortFromEvent(event: NostrEvent): ShortVideo | null {
   let videoUrl: string | undefined;
   let thumbnailUrl: string | undefined;
   let dimensions: string | undefined;
+  let duration: number | undefined;
+  let bitrate: number | undefined;
+  let blurhash: string | undefined;
 
   // Parse imeta parts (format: "key value")
   for (let i = 1; i < imetaTag.length; i++) {
@@ -41,13 +46,18 @@ function parseShortFromEvent(event: NostrEvent): ShortVideo | null {
       thumbnailUrl = part.slice(6);
     } else if (part.startsWith('dim ')) {
       dimensions = part.slice(4);
+    } else if (part.startsWith('duration ')) {
+      duration = parseFloat(part.slice(9));
+    } else if (part.startsWith('bitrate ')) {
+      bitrate = parseInt(part.slice(8));
+    } else if (part.startsWith('blurhash ')) {
+      blurhash = part.slice(9);
     }
   }
 
   if (!videoUrl) return null;
 
   const publishedAtTag = event.tags.find(t => t[0] === 'published_at')?.[1];
-  const durationTag = event.tags.find(t => t[0] === 'duration')?.[1];
 
   return {
     id: event.id,
@@ -56,8 +66,10 @@ function parseShortFromEvent(event: NostrEvent): ShortVideo | null {
     description: event.content,
     videoUrl,
     thumbnailUrl,
-    duration: durationTag ? parseFloat(durationTag) : undefined,
+    duration,
+    bitrate,
     dimensions,
+    blurhash,
     publishedAt: publishedAtTag ? parseInt(publishedAtTag) : event.created_at,
     event,
   };

@@ -12,3 +12,4 @@ alwaysApply: true
 - Assert assumptions - ie I'd rather fail fast and throw an error which I can learn from and improve the project with
 - when debugging, prepend related logs with specific strings, so that we can filter for them in the browser easily.
 - don't try to rebuild the project after every change. that's pointless. unless theres an error which makes this seem necessary.
+- never use em dashes (—) or other wide dashes, they look like AI-generated content. Use normal hyphens (-) instead.

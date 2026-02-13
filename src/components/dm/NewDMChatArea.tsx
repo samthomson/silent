@@ -24,6 +24,7 @@ import { ArrowLeft, Send, Loader2, AlertTriangle, AlertCircle, FileJson, FileLoc
 import { cn } from '@/lib/utils';
 import { NoteContent } from '@/components/NoteContent';
 import { EncryptedMediaDisplay } from '@/components/dm/EncryptedMediaDisplay';
+import { MediaLightbox } from '@/components/dm/MediaLightbox';
 import type { NostrEvent } from '@nostrify/nostrify';
 import { nip19 } from 'nostr-tools';
 
@@ -241,11 +242,13 @@ const MessageBubble = memo(({
   isFromCurrentUser,
   showSenderName = false,
   devMode = false,
+  onMediaClick,
 }: {
   message: Message;
   isFromCurrentUser: boolean;
   showSenderName?: boolean;
   devMode?: boolean;
+  onMediaClick?: (fileMetadata: import('@/lib/dmTypes').FileMetadata, messageId: string) => void;
 }) => {
   const [showRawEvent, setShowRawEvent] = useState(false);
   const { config } = useAppContext();
@@ -330,7 +333,12 @@ const MessageBubble = memo(({
         {isEncryptedMedia && (
           <div className="text-sm">
             {fileMetadataArray.map((fm, idx) => (
-              <EncryptedMediaDisplay key={idx} fileMetadata={fm} className="my-2" />
+              <EncryptedMediaDisplay 
+                key={idx} 
+                fileMetadata={fm} 
+                className="my-2" 
+                onClick={() => onMediaClick?.(fm, event.id)}
+              />
             ))}
             {isAdditionalText && (
               <div className="mt-2 whitespace-pre-wrap break-words">
@@ -342,7 +350,19 @@ const MessageBubble = memo(({
 
         {isRichContent && (
           <div className="text-sm">
-            <NoteContent event={messageEvent} className="whitespace-pre-wrap break-words" />
+            <NoteContent 
+              event={messageEvent} 
+              className="whitespace-pre-wrap break-words"
+              onMediaClick={onMediaClick ? (url, messageId) => {
+                // Create a FileMetadata object that matches what we put in mediaItems
+                const fakeFileMetadata = {
+                  url: url,
+                  mimeType: /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url) ? 'image/unknown' : 'video/unknown',
+                  name: url.split('/').pop() || 'media',
+                } as import('@/lib/dmTypes').FileMetadata;
+                onMediaClick(fakeFileMetadata, messageId);
+              } : undefined}
+            />
           </div>
         )}
 
@@ -1187,9 +1207,30 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
   const [pendingSubject, setPendingSubject] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [mediaItems, setMediaItems] = useState<Array<{
+    fileMetadata: import('@/lib/dmTypes').FileMetadata;
+    messageId: string;
+    timestamp: number;
+    displayUrl: string;
+  }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { mutateAsync: uploadFile, isPending: isUploading } = useUploadFile();
   const { toast } = useToast();
+
+  // Handle media click for lightbox
+  const handleMediaClick = useCallback((fileMetadata: import('@/lib/dmTypes').FileMetadata, messageId: string) => {
+    // For inline media, match by URL (message ID might not match due to message updates/duplicates)
+    const index = mediaItems.findIndex(item => 
+      item.fileMetadata.url === fileMetadata.url
+    );
+    
+    if (index >= 0) {
+      setLightboxIndex(index);
+      setLightboxOpen(true);
+    }
+  }, [mediaItems]);
 
   // Determine default protocol based on mode
   const getDefaultProtocol = () => {
@@ -1278,6 +1319,92 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
 
     scrollAndHighlight();
   }, [scrollToMessageId, conversationId, hasMoreMessages, loadEarlierMessages]);
+
+  // Collect all media items for lightbox
+  useEffect(() => {
+    const items: Array<{
+      fileMetadata: import('@/lib/dmTypes').FileMetadata;
+      messageId: string;
+      timestamp: number;
+      displayUrl: string;
+    }> = [];
+
+    messages.forEach((message) => {
+      const addedUrls = new Set<string>(); // Track URLs to avoid duplicates
+
+      // Handle encrypted file attachments (kind 15) first
+      if (message.fileMetadata && message.fileMetadata.length > 0) {
+        message.fileMetadata.forEach((fm) => {
+          // Only include displayable media (images/videos)
+          if (fm.mimeType?.startsWith('image/') || fm.mimeType?.startsWith('video/')) {
+            items.push({
+              fileMetadata: fm,
+              messageId: message.id,
+              timestamp: message.event.created_at,
+              displayUrl: fm.url || '' // MediaLightbox will handle decryption
+            });
+            // Track this URL to avoid adding it again from content
+            if (fm.url) {
+              addedUrls.add(fm.url);
+            }
+          }
+        });
+      }
+
+      // Handle inline media URLs from text content (only if not already added as encrypted file)
+      const text = message.event.content;
+      const urlRegex = /https?:\/\/[^\s]+/g;
+      let match: RegExpExecArray | null;
+      
+      while ((match = urlRegex.exec(text)) !== null) {
+        const url = match[0];
+        
+        // Skip if this URL was already added as an encrypted file
+        if (addedUrls.has(url)) {
+          continue;
+        }
+        
+        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url);
+        const isVideo = /\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(url);
+        
+        if (isImage || isVideo) {
+          // Create a fake fileMetadata object for inline media
+          const fakeFileMetadata = {
+            url: url,
+            mimeType: isImage ? 'image/unknown' : 'video/unknown',
+            name: url.split('/').pop() || 'media',
+          } as import('@/lib/dmTypes').FileMetadata;
+
+          items.push({
+            fileMetadata: fakeFileMetadata,
+            messageId: message.id,
+            timestamp: message.event.created_at,
+            displayUrl: url
+          });
+        }
+      }
+    });
+
+    setMediaItems(items);
+  }, [messages]);
+
+
+  const handleScrollToMessage = useCallback((messageId: string) => {
+    const messageElement = document.getElementById(`message-${messageId}`);
+    if (messageElement && scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const messageRect = messageElement.getBoundingClientRect();
+        const scrollTop = scrollContainer.scrollTop + messageRect.top - containerRect.top - 100;
+        scrollContainer.scrollTo({ top: scrollTop, behavior: 'smooth' });
+        
+        // Highlight the message briefly
+        setHighlightedMessageId(messageId);
+        setTimeout(() => setHighlightedMessageId(null), 2000);
+      }
+    }
+  }, []);
 
   const handleSend = useCallback(async () => {
     if ((!messageText.trim() && pendingFiles.length === 0) || !conversationId || !user) return;
@@ -1532,6 +1659,7 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
                       isFromCurrentUser={message.event.pubkey === user.pubkey}
                       showSenderName={isGroupChat}
                       devMode={devMode}
+                      onMediaClick={handleMediaClick}
                     />
                   </div>
                 </div>
@@ -1675,6 +1803,15 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
           </div>
         </div>
       </div>
+
+      <MediaLightbox
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        mediaItems={mediaItems}
+        currentIndex={lightboxIndex}
+        onIndexChange={setLightboxIndex}
+        onScrollToMessage={handleScrollToMessage}
+      />
     </div>
   );
 };

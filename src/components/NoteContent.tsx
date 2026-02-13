@@ -9,12 +9,14 @@ import { cn } from '@/lib/utils';
 interface NoteContentProps {
   event: NostrEvent;
   className?: string;
+  onMediaClick?: (url: string, messageId: string) => void;
 }
 
 /** Parses content of text note events so that URLs and hashtags are linkified. */
 export function NoteContent({
   event, 
-  className, 
+  className,
+  onMediaClick,
 }: NoteContentProps) {  
   // Process the content to render mentions, links, etc.
   const content = useMemo(() => {
@@ -42,21 +44,39 @@ export function NoteContent({
         const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url);
         
         if (isImage) {
+          const imageElement = (
+            <img 
+              src={url}
+              alt="Attached image"
+              className={cn(
+                "max-w-full rounded-md",
+                onMediaClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
+              )}
+              style={{ maxHeight: '400px' }}
+              onClick={onMediaClick ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onMediaClick(url, event.id);
+              } : undefined}
+            />
+          );
+
           parts.push(
-            <a 
-              key={`img-${keyCounter++}`}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block my-2"
-            >
-              <img 
-                src={url}
-                alt="Attached image"
-                className="max-w-full rounded-md"
-                style={{ maxHeight: '400px' }}
-              />
-            </a>
+            onMediaClick ? (
+              <div key={`img-${keyCounter++}`} className="my-2 block">
+                {imageElement}
+              </div>
+            ) : (
+              <a 
+                key={`img-${keyCounter++}`}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block my-2"
+              >
+                {imageElement}
+              </a>
+            )
           );
         } else {
           parts.push(

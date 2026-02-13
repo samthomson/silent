@@ -13,6 +13,8 @@ interface EncryptedMediaDisplayProps {
 	className?: string;
 	showVideoControls?: boolean;
 	isSidebar?: boolean;
+	isLightbox?: boolean;
+	onClick?: () => void;
 }
 
 /**
@@ -20,13 +22,15 @@ interface EncryptedMediaDisplayProps {
  * - Downloads and decrypts encrypted files automatically
  * - Shows download progress with speed indicator
  */
-export function EncryptedMediaDisplay({ fileMetadata, className, showVideoControls = true, isSidebar = false }: EncryptedMediaDisplayProps) {
+export function EncryptedMediaDisplay({ fileMetadata, className, showVideoControls = true, isSidebar = false, isLightbox = false, onClick }: EncryptedMediaDisplayProps) {
 	const [decryptedBlob, setDecryptedBlob] = useState<Blob | null>(null);
 	const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
 	const [isDecrypting, setIsDecrypting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [videoError, setVideoError] = useState<string | null>(null);
 	const [retryKey, setRetryKey] = useState(0); // Force useEffect to re-run on retry
+	const [showFallback, setShowFallback] = useState(false);
+	const [hashMismatch, setHashMismatch] = useState(false);
 	const [downloadProgress, setDownloadProgress] = useState<{
 		loaded: number;
 		total: number | null;
@@ -135,24 +139,42 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 				setDownloadProgress(null); // Clear progress, now decrypting
 				console.log('[EncryptedMedia] Decrypting...');
 
-				const decrypted = await DMLib.Message.decryptFile(
-					encryptedBlob,
-					fileMetadata.decryptionKey!,
-					fileMetadata.decryptionNonce!,
-					fileMetadata.encryptionAlgorithm || 'aes-gcm'
-				);
+				try {
+					const decrypted = await DMLib.Message.decryptFile(
+						encryptedBlob,
+						fileMetadata.decryptionKey!,
+						fileMetadata.decryptionNonce!,
+						fileMetadata.encryptionAlgorithm || 'aes-gcm'
+					);
 
-				// Create blob with correct MIME type for proper playback
-				const mimeType = fileMetadata.mimeType || 'application/octet-stream';
-				const typedBlob = new Blob([decrypted], { type: mimeType });
+					// Create blob with correct MIME type for proper playback
+					const mimeType = fileMetadata.mimeType || 'application/octet-stream';
+					const typedBlob = new Blob([decrypted], { type: mimeType });
 
-				// Cache decrypted blob
-				await cacheDecryptedBlob(fileMetadata, typedBlob);
+					// Cache decrypted blob
+					await cacheDecryptedBlob(fileMetadata, typedBlob);
 
-				setDecryptedBlob(typedBlob);
-				const url = URL.createObjectURL(typedBlob);
-				setDecryptedUrl(url);
-				console.log('[EncryptedMedia] Decryption complete, mimeType:', mimeType);
+					setDecryptedBlob(typedBlob);
+					const url = URL.createObjectURL(typedBlob);
+					setDecryptedUrl(url);
+					console.log('[EncryptedMedia] Decryption complete, mimeType:', mimeType);
+				} catch (decryptError: any) {
+					console.error('[EncryptedMedia] Decryption failed:', decryptError);
+					
+					// Check if it's a hash mismatch
+					if (decryptError.message?.includes('hash mismatch') || decryptError.message?.includes('integrity check failed')) {
+						setHashMismatch(true);
+						if (isLightbox) {
+							// In lightbox, offer fallback option
+							setError('File integrity verification failed. The encrypted file may be corrupted.');
+						} else {
+							setError('File integrity check failed - hash mismatch');
+						}
+					} else {
+						setError(decryptError.message || 'Decryption failed');
+					}
+					throw decryptError; // Re-throw to be caught by outer catch
+				}
 			} catch (err) {
 				// Don't set error if download was aborted
 				if (err instanceof Error && err.name === 'AbortError') {
@@ -203,8 +225,26 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 				<div className="flex items-start gap-2 text-amber-200">
 					<AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
 					<div className="flex-1">
-						<div className="text-sm font-medium text-amber-100">Failed to decrypt file</div>
+						<div className="text-sm font-medium text-amber-100">
+							{hashMismatch ? 'File integrity verification failed' : 'Failed to decrypt file'}
+						</div>
 						<div className="text-sm mt-1 text-amber-200/90">{error}</div>
+						
+						{hashMismatch && !showFallback && (
+							<div className="mt-3 space-y-2">
+								<p className="text-xs text-amber-200/80">
+									The file appears corrupted or tampered with. You can still view the original file, but it may not display correctly.
+								</p>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => setShowFallback(true)}
+									className="h-7 text-xs bg-amber-900/30 border-amber-600/50 text-amber-200 hover:bg-amber-800/50"
+								>
+									Show original file anyway
+								</Button>
+							</div>
+						)}
 					</div>
 					<Button
 						variant="ghost"
@@ -220,8 +260,8 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 		);
 	}
 
-	// Loading/downloading state
-	if (isDecrypting && !decryptedUrl) {
+	// Loading/downloading state - don't show for lightbox videos to avoid overlay issues
+	if (isDecrypting && !decryptedUrl && !(isLightbox && isVideo)) {
 		const progressPercent = downloadProgress?.total
 			? Math.round((downloadProgress.loaded / downloadProgress.total) * 100)
 			: null;
@@ -291,6 +331,71 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 		);
 	}
 
+	// Show fallback for hash mismatch if user requested it
+	if (hashMismatch && showFallback && fileMetadata.url) {
+		const fallbackUrl = fileMetadata.url;
+		const isImage = fileMetadata.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(fallbackUrl);
+		const isVideo = fileMetadata.mimeType?.startsWith('video/') || /\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(fallbackUrl);
+		
+		return (
+			<div className={cn("relative", className)}>
+				{/* Warning banner */}
+				<div className="absolute top-0 left-0 right-0 z-10 bg-amber-600/90 text-white text-xs px-2 py-1 rounded-t-md">
+					⚠️ Showing original encrypted file - integrity not verified
+				</div>
+				
+				<div className="pt-6">
+					{isImage ? (
+					<img
+						src={fallbackUrl}
+						alt={fileMetadata.name || 'Attached image (unverified)'}
+						className={cn(
+							"max-w-full", 
+							isSidebar ? "rounded-sm" : "rounded-md",
+							isLightbox ? "w-full h-full object-contain" : "",
+							onClick && !isSidebar ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
+						)}
+						style={{ maxHeight: isSidebar ? '100%' : isLightbox ? '100%' : '400px' }}
+						onClick={onClick && !isSidebar ? (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							onClick();
+						} : undefined}
+					/>
+					) : isVideo ? (
+					<video
+						src={fallbackUrl}
+						controls={showVideoControls}
+						preload={isLightbox ? "none" : "metadata"}
+						className={cn(
+							"max-w-full", 
+							isSidebar ? "rounded-sm" : "rounded-md",
+							isLightbox ? "w-full h-full object-contain" : ""
+						)}
+						style={{ maxHeight: isSidebar ? '100%' : isLightbox ? '100%' : '400px' }}
+						muted
+						playsInline
+						onClick={onClick && !isSidebar ? onClick : undefined}
+					/>
+					) : (
+						<div className="p-3 border rounded-md bg-muted/50">
+							<a
+								href={fallbackUrl}
+								download={fileMetadata.name || 'file'}
+								className="text-sm text-primary hover:underline flex items-center gap-2"
+							>
+								📎 {fileMetadata.name || 'Download file (unverified)'}
+								{fileMetadata.size && (
+									<span className="text-muted-foreground">({formatBytes(fileMetadata.size)})</span>
+								)}
+							</a>
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	}
+
 	if (!displayUrl) {
 		return null;
 	}
@@ -343,8 +448,18 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 				<img
 					src={displayUrl}
 					alt={fileMetadata.name || 'Attached image'}
-					className={cn("max-w-full", isSidebar ? "rounded-sm" : "rounded-md")}
-					style={{ maxHeight: isSidebar ? '100%' : '400px' }}
+					className={cn(
+						"max-w-full", 
+						isSidebar ? "rounded-sm" : "rounded-md",
+						isLightbox ? "w-full h-full object-contain" : "",
+						onClick && !isSidebar ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
+					)}
+					style={{ maxHeight: isSidebar ? '100%' : isLightbox ? '100%' : '400px' }}
+					onClick={onClick && !isSidebar ? (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						onClick();
+					} : undefined}
 				/>
 			</div>
 		);
@@ -353,7 +468,7 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 	// Render video
 	if (isVideo && isDisplayable) {
 		return (
-			<div className={cn("relative", className)}>
+			<div className={cn("relative", isLightbox ? "bg-transparent" : "", className)}>
 				{videoError ? (
 					// Video playback error - use same unified format as unsupported files
 					isSidebar ? (
@@ -388,15 +503,27 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 						</div>
 					)
 				) : (
-					<video
-						src={displayUrl}
-						controls={showVideoControls}
-						preload="metadata"
-						className={cn("max-w-full", isSidebar ? "rounded-sm" : "rounded-md")}
-						style={{ maxHeight: isSidebar ? '100%' : '400px' }}
-						muted
-						playsInline
-						onError={(e) => {
+					<div 
+						className={cn(
+							"relative",
+							isLightbox ? "w-full h-full bg-transparent" : "",
+							onClick && !isSidebar ? "cursor-pointer" : ""
+						)}
+						onClick={onClick && !isSidebar ? onClick : undefined}
+					>
+						<video
+							src={displayUrl}
+							controls={showVideoControls}
+							preload={isLightbox ? "none" : "metadata"}
+							className={cn(
+								"max-w-full", 
+								isSidebar ? "rounded-sm" : "rounded-md",
+								isLightbox ? "w-full h-full object-contain bg-transparent" : ""
+							)}
+							style={{ maxHeight: isSidebar ? '100%' : isLightbox ? '100%' : '400px' }}
+							muted
+							playsInline
+							onError={(e) => {
 							const video = e.currentTarget;
 							const error = video.error;
 							let errorMsg = 'Unknown error';
@@ -422,6 +549,7 @@ export function EncryptedMediaDisplay({ fileMetadata, className, showVideoContro
 							setVideoError(errorMsg);
 						}}
 					/>
+					</div>
 				)}
 			</div>
 		);

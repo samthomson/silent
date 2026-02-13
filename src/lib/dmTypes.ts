@@ -35,6 +35,7 @@ export interface Conversation {
   lastMessage: { decryptedContent?: string; error?: string; hasAttachments?: boolean } | null;
   hasDecryptionErrors: boolean; // True if any messages failed to decrypt
   hasFailedRelays?: boolean; // True if any relays failed to connect (computed in UI)
+  unreadCount?: number; // Calculated unread message count
 }
 
 export interface FileMetadata {

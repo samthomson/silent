@@ -37,6 +37,7 @@ interface ConversationItemProps {
   lastActivity: number;
   hasDecryptionErrors?: boolean;
   hasFailedRelays?: boolean;
+  unreadCount: number;
 }
 
 // Truncated version for chip display
@@ -57,6 +58,7 @@ const ConversationItemComponent = ({
   lastActivity,
   hasDecryptionErrors,
   hasFailedRelays,
+  unreadCount,
 }: ConversationItemProps) => {
   const { user } = useCurrentUser();
   
@@ -140,12 +142,16 @@ const ConversationItemComponent = ({
         )}
 
         <div className="flex-1 min-w-0">
+          {/* Line 1: Name and timestamp */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               {isLoadingProfile ? (
-                <Skeleton className="h-[1.25rem] w-24" />
+                <Skeleton className="h-[1.125rem] w-24" />
               ) : (
-                <span className="font-medium text-sm truncate">{conversationDisplayName}</span>
+                <span className={cn(
+                  "text-sm truncate",
+                  unreadCount > 0 ? "font-semibold" : "font-medium"
+                )}>{conversationDisplayName}</span>
               )}
             </div>
             <TooltipProvider>
@@ -162,34 +168,44 @@ const ConversationItemComponent = ({
             </TooltipProvider>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          {/* Line 2: Message preview and unread count + indicators */}
+          <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground truncate flex-1">
               {lastMessagePreview}
             </p>
-            {hasFailedRelays && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Radio className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    <p className="text-xs">Some relays failed to connect</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {hasDecryptionErrors && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AlertCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    <p className="text-xs">Some messages failed to decrypt</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            
+            {/* Right side: other indicators then unread count (most important) */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {hasFailedRelays && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Radio className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      <p className="text-xs">Some relays failed to connect</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {hasDecryptionErrors && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      <p className="text-xs">Some messages failed to decrypt</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {unreadCount > 0 && (
+                <div className="bg-purple-500 text-white text-xs font-medium rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-lg">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -495,6 +511,7 @@ export const NewDMConversationList = ({
                   lastActivity={conversation.lastActivity}
                   hasDecryptionErrors={conversation.hasDecryptionErrors}
                   hasFailedRelays={conversation.hasFailedRelays}
+                  unreadCount={conversation.unreadCount || 0}
                 />
               ))}
             </div>

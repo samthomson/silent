@@ -1192,7 +1192,7 @@ const EmptyState = ({ isLoading }: { isLoading: boolean }) => {
 export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onToggleMediaPanel, showMediaPanel, onSearchInConversation, className }: DMChatAreaProps) => {
   const { user } = useCurrentUser();
   const { config } = useAppContext();
-  const { sendMessage, protocolMode, isLoading } = useNewDMContext();
+  const { sendMessage, protocolMode, isLoading, markConversationAsRead } = useNewDMContext();
   const { messages, hasMoreMessages, loadEarlierMessages } = useConversationMessages(conversationId || '');
 
   const devMode = config.devMode ?? false;
@@ -1220,7 +1220,7 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
   const { toast } = useToast();
 
   // Handle media click for lightbox
-  const handleMediaClick = useCallback((fileMetadata: import('@/lib/dmTypes').FileMetadata, messageId: string) => {
+  const handleMediaClick = useCallback((fileMetadata: import('@/lib/dmTypes').FileMetadata) => {
     // For inline media, match by URL (message ID might not match due to message updates/duplicates)
     const index = mediaItems.findIndex(item => 
       item.fileMetadata.url === fileMetadata.url
@@ -1319,6 +1319,16 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
 
     scrollAndHighlight();
   }, [scrollToMessageId, conversationId, hasMoreMessages, loadEarlierMessages]);
+
+  // Mark conversation as read when opened
+  useEffect(() => {
+    if (conversationId) {
+      const timeoutId = setTimeout(() => {
+        markConversationAsRead(conversationId);
+      }, 750);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [conversationId, markConversationAsRead]);
 
   // Collect all media items for lightbox
   useEffect(() => {

@@ -330,6 +330,7 @@ interface NewDMContextValue extends MessagingContext {
   reloadAfterSettingsChange: () => Promise<void>; // Reload messages after settings change
   searchMessages: (query: string, conversationId?: string) => MessageSearchResult[];
   searchConversations: (query: string) => ConversationSearchResult[];
+  markConversationAsRead: (conversationId: string) => void;
 }
 
 const NewDMContext = createContext<NewDMContextValue | undefined>(undefined);
@@ -1335,6 +1336,95 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   
   const isDoingInitialLoad = context.isLoading && (context.phase === NEW_DM_PHASES.CACHE || context.phase === NEW_DM_PHASES.INITIAL_QUERY);
 
+  // Helper function to calculate unread count for a conversation
+  const calculateUnreadCount = useCallback((conversationId: string, messages: any[], lastReadAt: number, userPubkey?: string): number => {
+    if (!userPubkey) return 0;
+    return messages.filter(msg => 
+      msg.event.created_at > lastReadAt && 
+      msg.event.pubkey !== userPubkey
+    ).length;
+  }, []);
+
+  // Initialize all conversations for first-time users
+  const initializeConversationsForFirstTime = useCallback((): void => {
+    if (!context.messagingState) return;
+    
+    const updatedMetadata = { ...context.messagingState.conversationMetadata };
+    let hasUpdates = false;
+    
+    for (const [conversationId, conversation] of Object.entries(updatedMetadata)) {
+      const messages = context.messagingState.conversationMessages?.[conversationId] || [];
+      let needsUpdate = false;
+      let updatedConversation = { ...conversation };
+      
+      // Initialize lastReadAt if needed (first-time)
+      if (!conversation.lastReadAt || conversation.lastReadAt === 0) {
+        const latestMessageTime = messages.length > 0 ? Math.max(...messages.map(m => m.event.created_at)) : Date.now();
+        updatedConversation.lastReadAt = latestMessageTime;
+        needsUpdate = true;
+      }
+      
+      // Calculate and store unread count
+      const unreadCount = calculateUnreadCount(conversationId, messages, updatedConversation.lastReadAt, user?.pubkey);
+      if (updatedConversation.unreadCount !== unreadCount) {
+        updatedConversation.unreadCount = unreadCount;
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        updatedMetadata[conversationId] = updatedConversation;
+        hasUpdates = true;
+      }
+    }
+    
+    if (hasUpdates) {
+      setContext(prevContext => ({
+        ...prevContext,
+        messagingState: prevContext.messagingState ? {
+          ...prevContext.messagingState,
+          conversationMetadata: updatedMetadata
+        } : null
+      }));
+    }
+  }, [context.messagingState]);
+  
+  // Run initialization once when messaging state is loaded
+  useEffect(() => {
+    if (context.messagingState && !context.isLoading) {
+      initializeConversationsForFirstTime();
+    }
+  }, [context.messagingState, context.isLoading, initializeConversationsForFirstTime]);
+
+  const markConversationAsRead = useCallback((conversationId: string): void => {
+    if (!context.messagingState?.conversationMetadata?.[conversationId]) return;
+    
+    const conversation = context.messagingState.conversationMetadata[conversationId];
+    const messages = context.messagingState.conversationMessages?.[conversationId] || [];
+    
+    // If this is the first time marking as read and lastReadAt is 0 or undefined,
+    // set it to the latest message timestamp to avoid marking old messages as unread
+    const latestMessageTime = messages.length > 0 ? Math.max(...messages.map(m => m.event.created_at)) : Date.now();
+    const newLastReadAt = conversation.lastReadAt && conversation.lastReadAt > 0 ? Date.now() : latestMessageTime;
+    
+    // Calculate new unread count after marking as read
+    const newUnreadCount = calculateUnreadCount(conversationId, messages, newLastReadAt, user?.pubkey);
+    
+    setContext(prevContext => ({
+      ...prevContext,
+      messagingState: prevContext.messagingState ? {
+        ...prevContext.messagingState,
+        conversationMetadata: {
+          ...prevContext.messagingState.conversationMetadata,
+          [conversationId]: {
+            ...prevContext.messagingState.conversationMetadata[conversationId],
+            lastReadAt: newLastReadAt,
+            unreadCount: newUnreadCount
+          }
+        }
+      } : null
+    }));
+  }, [context.messagingState]);
+
   const value: NewDMContextValue = {
     ...context,
     sendMessage,
@@ -1347,7 +1437,31 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     reloadAfterSettingsChange,
     searchMessages,
     searchConversations,
+    markConversationAsRead,
   };
+  
+  // Add debug function to window for testing
+  if (typeof window !== 'undefined') {
+    (window as any).debugUnreadMessages = {
+      resetAllConversations: () => {
+        if (!context.messagingState) return;
+        const updatedMetadata = { ...context.messagingState.conversationMetadata };
+        for (const conversationId of Object.keys(updatedMetadata)) {
+          updatedMetadata[conversationId] = {
+            ...updatedMetadata[conversationId],
+            lastReadAt: 0 // Reset to show all as unread for testing
+          };
+        }
+        setContext(prevContext => ({
+          ...prevContext,
+          messagingState: prevContext.messagingState ? {
+            ...prevContext.messagingState,
+            conversationMetadata: updatedMetadata
+          } : null
+        }));
+      }
+    };
+  }
   
   return (
     <NewDMContext.Provider value={value}>

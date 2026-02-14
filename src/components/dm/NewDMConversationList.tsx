@@ -201,7 +201,7 @@ const ConversationItemComponent = ({
                 </TooltipProvider>
               )}
               {unreadCount > 0 && (
-                <div className="bg-purple-500 text-white text-xs font-medium rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-lg">
+                <div className="bg-primary text-primary-foreground text-xs font-medium rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-lg">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </div>
               )}
@@ -245,7 +245,7 @@ export const NewDMConversationList = ({
   filterConversationId,
   onClearFilter
 }: DMConversationListProps) => {
-  const { messagingState, isLoading, phase, getConversationRelays } = useNewDMContext();
+  const { messagingState, isLoading, phase, getConversationRelays, unreadActive, unreadRequests } = useNewDMContext();
   const { user } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<'known' | 'requests'>('known');
   const [searchQuery, setSearchQuery] = useState('');
@@ -453,6 +453,7 @@ export const NewDMConversationList = ({
               )}
             >
               Active {knownConversations.length > 0 && `(${knownConversations.length})`}
+              {unreadActive > 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary ml-1 align-middle" aria-hidden />}
               {activeTab === 'known' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}
@@ -467,6 +468,7 @@ export const NewDMConversationList = ({
               )}
             >
               Requests {requestConversations.length > 0 && `(${requestConversations.length})`}
+              {unreadRequests > 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary ml-1 align-middle" aria-hidden />}
               {activeTab === 'requests' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}

@@ -349,6 +349,12 @@ interface NewDMContextValue extends MessagingContext {
   searchMessages: (query: string, conversationId?: string) => MessageSearchResult[];
   searchConversations: (query: string) => ConversationSearchResult[];
   markConversationAsRead: (conversationId: string) => void;
+  /** Unread count for active (known) conversations only */
+  unreadActive: number;
+  /** Unread count for request conversations only */
+  unreadRequests: number;
+  /** Unread across active + requests */
+  unreadTotal: number;
 }
 
 const NewDMContext = createContext<NewDMContextValue | undefined>(undefined);
@@ -1450,6 +1456,18 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     }));
   }, [context.messagingState]);
 
+  const { unreadActive, unreadRequests, unreadTotal } = useMemo(() => {
+    const meta = context.messagingState?.conversationMetadata ?? {};
+    let active = 0;
+    let requests = 0;
+    for (const c of Object.values(meta)) {
+      const n = c.unreadCount ?? 0;
+      if (c.isKnown) active += n;
+      if (c.isRequest) requests += n;
+    }
+    return { unreadActive: active, unreadRequests: requests, unreadTotal: active + requests };
+  }, [context.messagingState?.conversationMetadata]);
+
   const value: NewDMContextValue = {
     ...context,
     sendMessage,
@@ -1463,6 +1481,9 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     searchMessages,
     searchConversations,
     markConversationAsRead,
+    unreadActive,
+    unreadRequests,
+    unreadTotal,
   };
   
   // Add debug function to window for testing

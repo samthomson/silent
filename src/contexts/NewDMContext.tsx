@@ -23,20 +23,26 @@ import { PROTOCOL_MODE, type ProtocolMode, type MessageProtocol, NEW_DM_PHASES, 
 import type { ConversationRelayInfo } from '@/lib/dmTypes';
 import type { NostrEvent } from '@nostrify/nostrify';
 import type { FileAttachment } from '@/lib/dmLib';
+const MESSAGES_PER_PAGE = 25;
+
+// lastReadAt is stored in ms; message.event.created_at is Unix seconds (inner event for NIP-17).
+const countUnread = (messages: { event: { created_at: number; pubkey: string }; senderPubkey?: string }[], lastReadAt: number, userPubkey: string): number => {
+  const lastReadAtMs = lastReadAt >= 1e12 ? lastReadAt : lastReadAt * 1000;
+  return messages.filter(msg => {
+    const messageTimeMs = msg.event.created_at * 1000;
+    const fromOther = (msg.senderPubkey || msg.event.pubkey) !== userPubkey;
+    return messageTimeMs > lastReadAtMs && fromOther;
+  }).length;
+};
+
 // Simple notification function - add your sound/notification logic here
-const handleNewMessage = (conversationId: string, authorPubkey: string, content: string) => {
-  console.log('🔔 New message:', { 
-    conversationId, 
-    from: authorPubkey.slice(0, 8), 
-    content: content.slice(0, 50) 
-  });
-  
+const handleNewMessage = (conversationId: string, authorPubkey: string, content: string): void => {
+  console.log('🔔 New message:', { conversationId, from: authorPubkey.slice(0, 8), content: content.slice(0, 50) });
   // TODO: Add sound notification here
-  // TODO: Add browser notification here  
+  // TODO: Add browser notification here
   // TODO: Add title flashing here
 };
 
-const MESSAGES_PER_PAGE = 25;
 const DEFAULT_RELAY_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 const DEFAULT_QUERY_LIMIT = 20000;
 
@@ -604,12 +610,25 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
           return msg.id === messageWithMetadata.event.id;
         });
 
-        // Fire new message notification if message was successfully added
-        if (wasAdded && messageWithMetadata.event.pubkey !== user.pubkey) {
-          handleNewMessage(conversationId, messageWithMetadata.event.pubkey, messageWithMetadata.decryptedContent || '');
+        // Recalculate unread from messages (msg.event is inner for NIP-17, so created_at is correct)
+        let finalState = updatedState;
+        if (wasAdded && updatedState.conversationMetadata[conversationId]) {
+          const conv = updatedState.conversationMetadata[conversationId];
+          const lastReadAt = conv.lastReadAt ?? 0;
+          const unreadCount = countUnread(finalMessages, lastReadAt, user.pubkey);
+          finalState = {
+            ...updatedState,
+            conversationMetadata: {
+              ...updatedState.conversationMetadata,
+              [conversationId]: { ...conv, unreadCount },
+            },
+          };
+          const fromPubkey = messageWithMetadata.senderPubkey || messageWithMetadata.event.pubkey;
+          if (fromPubkey !== user.pubkey) {
+            handleNewMessage(conversationId, fromPubkey, messageWithMetadata.decryptedContent ?? messageWithMetadata.event.content ?? '');
+          }
         }
-        
-        return { ...prev, messagingState: updatedState };
+        return { ...prev, messagingState: finalState };
       });
     } catch (error) {
       console.error('[NewDM] Failed to process incoming message:', error);
@@ -1353,15 +1372,6 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
   
   const isDoingInitialLoad = context.isLoading && (context.phase === NEW_DM_PHASES.CACHE || context.phase === NEW_DM_PHASES.INITIAL_QUERY);
 
-  // Helper function to calculate unread count for a conversation
-  const calculateUnreadCount = useCallback((conversationId: string, messages: any[], lastReadAt: number, userPubkey?: string): number => {
-    if (!userPubkey) return 0;
-    return messages.filter(msg => 
-      msg.event.created_at > lastReadAt && 
-      msg.event.pubkey !== userPubkey
-    ).length;
-  }, []);
-
   // Initialize all conversations for first-time users
   const initializeConversationsForFirstTime = useCallback((): void => {
     if (!context.messagingState) return;
@@ -1374,15 +1384,17 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
       let needsUpdate = false;
       let updatedConversation = { ...conversation };
       
-      // Initialize lastReadAt if needed (first-time)
+      // Initialize lastReadAt if needed (first-time); store in ms for comparison with message timestamps
       if (!conversation.lastReadAt || conversation.lastReadAt === 0) {
-        const latestMessageTime = messages.length > 0 ? Math.max(...messages.map(m => m.event.created_at)) : Date.now();
+        const latestMessageTime = messages.length > 0
+          ? Math.max(...messages.map(m => m.event.created_at)) * 1000
+          : Date.now();
         updatedConversation.lastReadAt = latestMessageTime;
         needsUpdate = true;
       }
       
-      // Calculate and store unread count
-      const unreadCount = calculateUnreadCount(conversationId, messages, updatedConversation.lastReadAt, user?.pubkey);
+      // Set unread count from actual messages (uses inner event timestamp for NIP-17)
+      const unreadCount = countUnread(messages, updatedConversation.lastReadAt, user?.pubkey ?? '');
       if (updatedConversation.unreadCount !== unreadCount) {
         updatedConversation.unreadCount = unreadCount;
         needsUpdate = true;
@@ -1418,13 +1430,9 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
     const conversation = context.messagingState.conversationMetadata[conversationId];
     const messages = context.messagingState.conversationMessages?.[conversationId] || [];
     
-    // If this is the first time marking as read and lastReadAt is 0 or undefined,
-    // set it to the latest message timestamp to avoid marking old messages as unread
-    const latestMessageTime = messages.length > 0 ? Math.max(...messages.map(m => m.event.created_at)) : Date.now();
-    const newLastReadAt = conversation.lastReadAt && conversation.lastReadAt > 0 ? Date.now() : latestMessageTime;
-    
-    // Calculate new unread count after marking as read
-    const newUnreadCount = calculateUnreadCount(conversationId, messages, newLastReadAt, user?.pubkey);
+    // If this is the first time marking as read, set lastReadAt to latest message time (ms); else now
+    const latestMessageTimeMs = messages.length > 0 ? Math.max(...messages.map(m => m.event.created_at)) * 1000 : Date.now();
+    const newLastReadAt = conversation.lastReadAt && conversation.lastReadAt > 0 ? Date.now() : latestMessageTimeMs;
     
     setContext(prevContext => ({
       ...prevContext,
@@ -1435,7 +1443,7 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
           [conversationId]: {
             ...prevContext.messagingState.conversationMetadata[conversationId],
             lastReadAt: newLastReadAt,
-            unreadCount: newUnreadCount
+            unreadCount: 0 // Reset to 0 when marked as read
           }
         }
       } : null

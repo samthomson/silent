@@ -446,14 +446,14 @@ export const NewDMConversationList = ({
             <button
               onClick={() => setActiveTab('known')}
               className={cn(
-                "text-sm py-3 font-medium transition-colors relative",
+                "text-sm py-3 font-medium transition-colors relative flex items-start gap-1",
                 activeTab === 'known'
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              Active {knownConversations.length > 0 && `(${knownConversations.length})`}
-              {unreadActive > 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary ml-1 align-middle" aria-hidden />}
+              <span>Active {knownConversations.length > 0 && `(${knownConversations.length})`}</span>
+              {unreadActive > 0 && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 ml-0.5 mt-0" aria-hidden />}
               {activeTab === 'known' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}
@@ -461,14 +461,14 @@ export const NewDMConversationList = ({
             <button
               onClick={() => setActiveTab('requests')}
               className={cn(
-                "text-sm py-3 font-medium transition-colors relative",
+                "text-sm py-3 font-medium transition-colors relative flex items-start gap-1",
                 activeTab === 'requests'
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              Requests {requestConversations.length > 0 && `(${requestConversations.length})`}
-              {unreadRequests > 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary ml-1 align-middle" aria-hidden />}
+              <span>Requests {requestConversations.length > 0 && `(${requestConversations.length})`}</span>
+              {unreadRequests > 0 && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 ml-0.5 mt-0" aria-hidden />}
               {activeTab === 'requests' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}

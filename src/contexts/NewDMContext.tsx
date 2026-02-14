@@ -23,6 +23,18 @@ import { PROTOCOL_MODE, type ProtocolMode, type MessageProtocol, NEW_DM_PHASES, 
 import type { ConversationRelayInfo } from '@/lib/dmTypes';
 import type { NostrEvent } from '@nostrify/nostrify';
 import type { FileAttachment } from '@/lib/dmLib';
+// Simple notification function - add your sound/notification logic here
+const handleNewMessage = (conversationId: string, authorPubkey: string, content: string) => {
+  console.log('🔔 New message:', { 
+    conversationId, 
+    from: authorPubkey.slice(0, 8), 
+    content: content.slice(0, 50) 
+  });
+  
+  // TODO: Add sound notification here
+  // TODO: Add browser notification here  
+  // TODO: Add title flashing here
+};
 
 const MESSAGES_PER_PAGE = 25;
 const DEFAULT_RELAY_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
@@ -591,6 +603,11 @@ export const NewDMProvider = ({ children, config }: NewDMProviderProps) => {
           // For NIP-04, use message ID
           return msg.id === messageWithMetadata.event.id;
         });
+
+        // Fire new message notification if message was successfully added
+        if (wasAdded && messageWithMetadata.event.pubkey !== user.pubkey) {
+          handleNewMessage(conversationId, messageWithMetadata.event.pubkey, messageWithMetadata.decryptedContent || '');
+        }
         
         return { ...prev, messagingState: updatedState };
       });

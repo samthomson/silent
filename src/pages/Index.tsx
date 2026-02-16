@@ -7,15 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { APP_NAME } from '@/lib/constants';
+import { useNewDMContext } from '@/contexts/NewDMContext';
+
+const BASE_TITLE = `${APP_NAME} - DMs on Nostr`;
 
 const Index = () => {
   const { user } = useCurrentUser();
   const { theme, setTheme } = useTheme();
+  const { unreadTotal } = useNewDMContext();
 
-  useSeoMeta({
-    title: `${APP_NAME} - DMs on Nostr`,
-    description: 'Nostr direct messaging client. NIP-17, NIP-44, search, shorts. Your keys, your relays.',
-  });
+  const title = user && unreadTotal > 0 ? `(${unreadTotal}) ${BASE_TITLE}` : BASE_TITLE;
+  useSeoMeta({ title });
 
   if (user) {
     return (

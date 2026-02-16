@@ -6,13 +6,13 @@ const DEFAULT_FAVICON_HREF = '/icon.svg';
  */
 function buildFaviconSvg(count: number): string {
   const display = count > 99 ? '99' : String(count);
-  const fontSize = display.length > 1 ? 280 : 360;
+  const fontSize = display.length > 1 ? 320 : 360;
   // Path: rounded rect body y=3 to y=17 (14 units), tail y=17 to y=21 (4 units)
   // x: 3-21 (18 units), y: 3-21 (18 units total)
   const margin = 4;
   const scale = (512 - margin * 2) / 18;
   const offsetX = margin - 3 * scale;
-  const offsetY = margin - 3 * scale;
+  const offsetY = margin - 3 * scale + 60;
   // Center number in bubble body: midpoint between y=3 and y=17 is y=10
   // Adjust down slightly (10.5) for better visual centering
   const textY = 10.5 * scale + offsetY;
@@ -26,7 +26,7 @@ function buildFaviconSvg(count: number): string {
   <g transform="translate(${offsetX},${offsetY}) scale(${scale})">
     <path d="M21 15a2.5 2.5 0 0 1-2.5 2.5H7l-4 4V5a2.5 2.5 0 0 1 2.5-2.5h14a2.5 2.5 0 0 1 2.5 2.5z" fill="url(#bubble)"/>
   </g>
-  <text x="256" y="${textY}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="bold" fill="white" font-family="system-ui, sans-serif">${display}</text>
+  <text x="256" y="${textY}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="600" fill="white" font-family="system-ui, sans-serif">${display}</text>
 </svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }

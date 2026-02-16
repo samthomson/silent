@@ -16,6 +16,7 @@ import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
 import { RELAY_MODE } from '@/lib/dmTypes';
 import { NewDMProvider } from '@/contexts/NewDMContext';
+import { FaviconSync } from '@/components/FaviconSync';
 import { NetworkStatus } from '@/components/NetworkStatus';
 import AppRouter from './AppRouter';
 
@@ -64,6 +65,7 @@ export function App() {
           <NostrLoginProvider storageKey='nostr:login'>
             <NostrProvider>
               <NewDMProvider>
+                <FaviconSync />
                 <NWCProvider>
                   <TooltipProvider>
                     <NetworkStatus />

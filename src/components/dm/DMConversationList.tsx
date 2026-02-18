@@ -1,6 +1,6 @@
 import { useMemo, useState, memo, useEffect, useRef } from 'react';
 import { Info, Loader2, AlertCircle, Radio, Search, X } from 'lucide-react';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { NewConversationDialog } from '@/components/NewConversationDialog';
+import { ConversationDialog } from '@/components/ConversationDialog';
 import { SearchResults } from '@/components/dm/SearchResults';
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
 import { ShortsStrip } from '@/components/shorts/ShortsStrip';
@@ -235,7 +235,7 @@ const ConversationListSkeleton = () => {
   );
 };
 
-export const NewDMConversationList = ({
+export const DMConversationList = ({
   selectedPubkey,
   onSelectConversation,
   className,
@@ -245,7 +245,7 @@ export const NewDMConversationList = ({
   filterConversationId,
   onClearFilter
 }: DMConversationListProps) => {
-  const { messagingState, isLoading, phase, getConversationRelays, unreadActive, unreadRequests } = useNewDMContext();
+  const { messagingState, isLoading, phase, getConversationRelays, unreadActive, unreadRequests } = useDMContext();
   const { user } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<'known' | 'requests'>('known');
   const [searchQuery, setSearchQuery] = useState('');
@@ -362,7 +362,7 @@ export const NewDMConversationList = ({
             )}
           </div>
           <div className="flex items-center gap-1">
-            <NewConversationDialog onStartConversation={onSelectConversation} />
+            <ConversationDialog onStartConversation={onSelectConversation} />
             {onStatusClick && (
               <Button
                 variant="ghost"

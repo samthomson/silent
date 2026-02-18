@@ -1,20 +1,20 @@
 import { useSeoMeta } from '@unhead/react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { NewDMMessagingInterface } from '@/components/dm/NewDMMessagingInterface';
+import { DMMessagingInterface } from '@/components/dm/DMMessagingInterface';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { APP_NAME } from '@/lib/constants';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
 
 const BASE_TITLE = `${APP_NAME} - DMs on Nostr`;
 
 const Index = () => {
   const { user } = useCurrentUser();
   const { theme, setTheme } = useTheme();
-  const { unreadTotal } = useNewDMContext();
+  const { unreadTotal } = useDMContext();
 
   const title = user && unreadTotal > 0 ? `(${unreadTotal}) ${BASE_TITLE}` : BASE_TITLE;
   useSeoMeta({ title });
@@ -24,7 +24,7 @@ const Index = () => {
       <div className="h-screen flex bg-background">
         <AppSidebar />
         <div className="flex-1 overflow-hidden">
-          <NewDMMessagingInterface />
+          <DMMessagingInterface />
         </div>
       </div>
     );

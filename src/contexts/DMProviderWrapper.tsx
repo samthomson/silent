@@ -8,24 +8,24 @@ import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { getDisplayName } from '@/lib/genUserName';
 import { 
-  NewDMProvider, 
-  useNewDMContext, 
+  DMProvider, 
+  useDMContext, 
   useConversationMessages, 
-  type NewDMProviderDeps,
+  type DMProviderDeps,
   type MessageSearchResult,
   type ConversationSearchResult,
 } from '@samthomson/nostr-messaging/react';
 import type { MessagingState, Conversation } from '@samthomson/nostr-messaging/core';
 
 // Re-export hooks and types for use in Silent
-export { useNewDMContext, useConversationMessages };
+export { useDMContext, useConversationMessages };
 export type { MessageSearchResult, ConversationSearchResult, MessagingState, Conversation };
 
-interface NewDMProviderWrapperProps {
+interface DMProviderWrapperProps {
   children: ReactNode;
 }
 
-export const NewDMProviderWrapper = ({ children }: NewDMProviderWrapperProps) => {
+export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
   const { config, updateConfig } = useAppContext();
@@ -34,7 +34,7 @@ export const NewDMProviderWrapper = ({ children }: NewDMProviderWrapperProps) =>
   const authorsBatch = useAuthorsBatch;
   const { mutateAsync: publishEvent } = useNostrPublish();
 
-  const deps: NewDMProviderDeps = {
+  const deps: DMProviderDeps = {
     nostr,
     user,
     discoveryRelays: config.discoveryRelays,
@@ -49,8 +49,8 @@ export const NewDMProviderWrapper = ({ children }: NewDMProviderWrapperProps) =>
   };
 
   return (
-    <NewDMProvider deps={deps}>
+    <DMProvider deps={deps}>
       {children}
-    </NewDMProvider>
+    </DMProvider>
   );
 };

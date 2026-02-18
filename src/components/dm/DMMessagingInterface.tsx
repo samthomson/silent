@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-import { NewDMConversationList } from '@/components/dm/NewDMConversationList';
-import { NewDMChatArea } from '@/components/dm/NewDMChatArea';
+import { DMConversationList } from '@/components/dm/DMConversationList';
+import { DMChatArea } from '@/components/dm/DMChatArea';
 import { ConversationMediaPanel } from '@/components/dm/ConversationMediaPanel';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
@@ -10,7 +10,7 @@ interface DMMessagingInterfaceProps {
   onStatusClick?: () => void;
 }
 
-export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagingInterfaceProps) => {
+export const DMMessagingInterface = ({ className, onStatusClick }: DMMessagingInterfaceProps) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [scrollToMessageId, setScrollToMessageId] = useState<string | undefined>(undefined);
   const [showMediaPanel, setShowMediaPanel] = useState(false);
@@ -65,7 +65,7 @@ export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagin
         isMobile && !showConversationList && "hidden",
         isMobile && showConversationList && "w-full"
       )}>
-        <NewDMConversationList
+        <DMConversationList
           selectedPubkey={selectedConversationId}
           onSelectConversation={handleSelectConversation}
           className="h-full"
@@ -82,7 +82,7 @@ export const NewDMMessagingInterface = ({ className, onStatusClick }: DMMessagin
         isMobile && !showChatArea && "hidden",
         isMobile && showChatArea && "w-full"
       )}>
-        <NewDMChatArea
+        <DMChatArea
           conversationId={selectedConversationId}
           scrollToMessageId={scrollToMessageId}
           onBack={isMobile ? handleBack : undefined}

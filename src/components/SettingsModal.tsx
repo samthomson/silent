@@ -3,7 +3,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
@@ -75,7 +75,7 @@ function AppearanceContent() {
 }
 
 function StorageContent() {
-  const { clearCacheAndRefetch } = useNewDMContext();
+  const { clearCacheAndRefetch } = useDMContext();
 
   return (
     <div className="space-y-4">
@@ -226,7 +226,7 @@ function AdvancedContent() {
 
 export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
-  const { messagingState, reloadAfterSettingsChange } = useNewDMContext();
+  const { messagingState, reloadAfterSettingsChange } = useDMContext();
   const { config, updateConfig } = useAppContext();
   const { user } = useCurrentUser();
   const { currentUser, removeLogin } = useLoggedInAccounts();

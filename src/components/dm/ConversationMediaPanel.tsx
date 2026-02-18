@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useConversationMessages } from '@/contexts/NewDMProviderWrapper';
+import { useConversationMessages } from '@/contexts/DMProviderWrapper';
 import { useConversationMedia } from '@/hooks/useConversationMedia';
 import { EncryptedMediaDisplay } from '@/components/dm/EncryptedMediaDisplay';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

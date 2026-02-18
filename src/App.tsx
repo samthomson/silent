@@ -15,7 +15,7 @@ import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
 import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
-import { NewDMProviderWrapper as NewDMProvider } from '@/contexts/NewDMProviderWrapper';
+import { DMProviderWrapper as DMProvider } from '@/contexts/DMProviderWrapper';
 import { FaviconSync } from '@/components/FaviconSync';
 import { NetworkStatus } from '@/components/NetworkStatus';
 import AppRouter from './AppRouter';
@@ -64,7 +64,7 @@ export function App() {
         <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
           <NostrLoginProvider storageKey='nostr:login'>
             <NostrProvider>
-              <NewDMProvider>
+              <DMProvider>
                 <FaviconSync />
                 <NWCProvider>
                   <TooltipProvider>
@@ -75,7 +75,7 @@ export function App() {
                     </Suspense>
                   </TooltipProvider>
                 </NWCProvider>
-              </NewDMProvider>
+              </DMProvider>
             </NostrProvider>
           </NostrLoginProvider>
         </PersistQueryClientProvider>

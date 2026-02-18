@@ -1,12 +1,12 @@
 import { memo } from 'react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
 import { getDisplayName } from '@/lib/genUserName';
 import { formatConversationTime, getPubkeyColor } from '@samthomson/nostr-messaging/core';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import type { MessageSearchResult as MessageSearchResultType } from '@/contexts/NewDMProviderWrapper';
+import type { MessageSearchResult as MessageSearchResultType } from '@/contexts/DMProviderWrapper';
 
 interface MessageSearchResultProps {
   result: MessageSearchResultType;
@@ -16,7 +16,7 @@ interface MessageSearchResultProps {
 
 const MessageSearchResultComponent = ({ result, onClick, isSelected }: MessageSearchResultProps) => {
   const { user } = useCurrentUser();
-  const { messagingState } = useNewDMContext();
+  const { messagingState } = useDMContext();
   const { message, conversationId } = result;
 
   // Get conversation metadata to show context

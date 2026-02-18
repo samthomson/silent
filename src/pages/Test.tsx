@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
-import { NewDMMessagingInterface } from "@/components/dm/NewDMMessagingInterface";
-import { useNewDMContext } from "@/contexts/NewDMProviderWrapper";
+import { DMMessagingInterface } from "@/components/dm/DMMessagingInterface";
+import { useDMContext } from "@/contexts/DMProviderWrapper";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { useState, useMemo } from "react";
 
 export function Test() {
   const { user } = useCurrentUser();
-  const { messagingState, isLoading, timing, phase } = useNewDMContext();
+  const { messagingState, isLoading, timing, phase } = useDMContext();
   const [relayDetailsOpen, setRelayDetailsOpen] = useState(false);
 
   // Build relay-to-users mapping and calculate failed count
@@ -187,7 +187,7 @@ export function Test() {
       </Card>
       {/* Messaging Interface */}
       <div className="flex-1 overflow-hidden m-4 mt-4">
-        <NewDMMessagingInterface />
+        <DMMessagingInterface />
       </div>
       </div>
     </div>

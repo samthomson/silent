@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
 import { ConversationSearchResult } from './ConversationSearchResult';
 import { MessageSearchResult } from './MessageSearchResult';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,7 +23,7 @@ export const SearchResults = ({ query, onSelectConversation, filterConversationI
       return () => clearTimeout(timer);
     }
   }, [highlightedMessageId]);
-  const { searchMessages, searchConversations } = useNewDMContext();
+  const { searchMessages, searchConversations } = useDMContext();
 
   const messageResults = useMemo(() => {
     const results = searchMessages(query, filterConversationId || undefined);

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { RefreshCw, Database, Wifi, CheckCircle2, Loader2 } from 'lucide-react';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
-import { NEW_DM_PHASES } from '@samthomson/nostr-messaging/core';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
+import { DM_PHASES } from '@samthomson/nostr-messaging/core';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,7 @@ export const DMStatusInfo = ({ clearCacheAndRefetch }: DMStatusInfoProps) => {
     scanProgress,
     isDoingInitialLoad,
     messagingState,
-  } = useNewDMContext();
+  } = useDMContext();
 
   const conversationCount = messagingState ? Object.keys(messagingState.conversationMetadata).length : 0;
   const totalMessages = useMemo(() => {
@@ -67,13 +67,13 @@ export const DMStatusInfo = ({ clearCacheAndRefetch }: DMStatusInfoProps) => {
 
   const getLoadingPhaseInfo = () => {
     switch (phase) {
-      case NEW_DM_PHASES.CACHE:
+      case DM_PHASES.CACHE:
         return { label: 'Loading from cache', description: 'Reading cached messages...', icon: Database, color: 'text-blue-500' };
-      case NEW_DM_PHASES.INITIAL_QUERY:
+      case DM_PHASES.INITIAL_QUERY:
         return { label: 'Loading from relays', description: 'Fetching messages from Nostr relays...', icon: Wifi, color: 'text-yellow-500' };
-      case NEW_DM_PHASES.GAP_FILLING:
+      case DM_PHASES.GAP_FILLING:
         return { label: 'Loading additional messages', description: 'Filling in message gaps...', icon: RefreshCw, color: 'text-orange-500' };
-      case NEW_DM_PHASES.COMPLETE:
+      case DM_PHASES.COMPLETE:
         return { label: 'Ready', description: 'All systems operational', icon: CheckCircle2, color: 'text-green-500' };
       default:
         return { label: 'Idle', description: 'Not yet initialized', icon: Loader2, color: 'text-muted-foreground' };
@@ -102,7 +102,7 @@ export const DMStatusInfo = ({ clearCacheAndRefetch }: DMStatusInfoProps) => {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-start gap-3">
-            <PhaseIcon className={`h-5 w-5 ${phaseInfo.color} ${phase !== NEW_DM_PHASES.COMPLETE ? 'animate-pulse' : ''}`} />
+            <PhaseIcon className={`h-5 w-5 ${phaseInfo.color} ${phase !== DM_PHASES.COMPLETE ? 'animate-pulse' : ''}`} />
             <div className="flex-1 space-y-1">
               <div className="flex items-center gap-2">
                 <p className="font-medium">{phaseInfo.label}</p>

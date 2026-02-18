@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
-import { useConversationMessages, useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useConversationMessages, useDMContext } from '@/contexts/DMProviderWrapper';
 import type { Message } from '@samthomson/nostr-messaging/core';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
@@ -757,7 +757,7 @@ const ParticipantInfoModal = ({ open, onOpenChange, conversationId }: {
 const RelayInfoModal = ({ open, onOpenChange, conversationId }: { open: boolean; onOpenChange: (open: boolean) => void; conversationId: string }) => {
   const { user } = useCurrentUser();
   const { config } = useAppContext();
-  const { getConversationRelays, messagingState } = useNewDMContext();
+  const { getConversationRelays, messagingState } = useDMContext();
 
   // This is reactive - updates when cache updates
   const rawRelayInfo = useMemo(() => getConversationRelays(conversationId), [getConversationRelays, conversationId]);
@@ -988,7 +988,7 @@ const ChatHeader = ({
   onSearchInConversation?: () => void;
 }) => {
   const { user } = useCurrentUser();
-  const { getConversationRelays, messagingState } = useNewDMContext();
+  const { getConversationRelays, messagingState } = useDMContext();
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
 
@@ -1189,10 +1189,10 @@ const EmptyState = ({ isLoading }: { isLoading: boolean }) => {
   );
 };
 
-export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onToggleMediaPanel, showMediaPanel, onSearchInConversation, className }: DMChatAreaProps) => {
+export const DMChatArea = ({ conversationId, scrollToMessageId, onBack, onToggleMediaPanel, showMediaPanel, onSearchInConversation, className }: DMChatAreaProps) => {
   const { user } = useCurrentUser();
   const { config } = useAppContext();
-  const { sendMessage, protocolMode, isLoading, markConversationAsRead } = useNewDMContext();
+  const { sendMessage, protocolMode, isLoading, markConversationAsRead } = useDMContext();
   const { messages, hasMoreMessages, loadEarlierMessages } = useConversationMessages(conversationId || '');
 
   const devMode = config.devMode ?? false;
@@ -1445,11 +1445,11 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
             }
 
             const result = await uploadFile({ file, encrypt: true });
-            console.log('[NewDMChatArea] Upload result:', { result, type: typeof result, hasUrl: typeof result !== 'string' && 'url' in result });
+            console.log('[DMChatArea] Upload result:', { result, type: typeof result, hasUrl: typeof result !== 'string' && 'url' in result });
             if (typeof result !== 'string' && 'url' in result) {
               attachments.push(result);
             } else {
-              console.error('[NewDMChatArea] Upload returned unexpected format:', result);
+              console.error('[DMChatArea] Upload returned unexpected format:', result);
               toast({
                 title: 'Upload failed',
                 description: `Upload returned unexpected format for ${file.name}`,
@@ -1457,7 +1457,7 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
               });
             }
           } catch (error) {
-            console.error('[NewDMChatArea] Failed to upload file:', error);
+            console.error('[DMChatArea] Failed to upload file:', error);
             toast({
               title: 'Upload failed',
               description: `Failed to upload ${file.name}. Please try again.`,
@@ -1478,7 +1478,7 @@ export const NewDMChatArea = ({ conversationId, scrollToMessageId, onBack, onTog
         return;
       }
 
-      console.log('[NewDMChatArea] Sending message with attachments:', { attachmentsCount: attachments.length, attachments });
+      console.log('[DMChatArea] Sending message with attachments:', { attachmentsCount: attachments.length, attachments });
 
       await sendMessage({
         recipientPubkey: conversationId,

@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MessageSquarePlus, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapper';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useFollows } from '@/hooks/useFollows';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
@@ -21,13 +21,13 @@ import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/genUserName';
 import { Pure as DMLib } from '@samthomson/nostr-messaging/core';
 
-interface NewConversationDialogProps {
+interface ConversationDialogProps {
   onStartConversation: (pubkey: string) => void;
 }
 
 const EMPTY_AUTHORS_MAP = new Map();
 
-export function NewConversationDialog({ onStartConversation }: NewConversationDialogProps) {
+export function ConversationDialog({ onStartConversation }: ConversationDialogProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
@@ -37,7 +37,7 @@ export function NewConversationDialog({ onStartConversation }: NewConversationDi
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { messagingState } = useNewDMContext();
+  const { messagingState } = useDMContext();
   const { user } = useCurrentUser();
   
   const conversationsList = useMemo(() => {

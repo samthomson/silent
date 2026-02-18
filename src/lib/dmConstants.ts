@@ -42,7 +42,7 @@ export type LoadingPhase = typeof LOADING_PHASES[keyof typeof LOADING_PHASES];
 // New DM Phases (New DM System)
 // ============================================================================
 
-export const NEW_DM_PHASES = {
+export const DM_PHASES = {
   IDLE: 'idle',
   CACHE: 'cache',
   INITIAL_QUERY: 'initial_query',
@@ -50,7 +50,7 @@ export const NEW_DM_PHASES = {
   COMPLETE: 'complete',
 } as const;
 
-export type NewDMPhase = typeof NEW_DM_PHASES[keyof typeof NEW_DM_PHASES];
+export type DMPhase = typeof DM_PHASES[keyof typeof DM_PHASES];
 
 // ============================================================================
 // Protocol Configuration

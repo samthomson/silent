@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/useToast';
-import { getMediaCacheStats } from '@samthomson/nostr-messaging/storage';
+import { getMediaCacheStats } from '@samthomson/nostr-messaging/core';
 import { formatBytes } from '@samthomson/nostr-messaging/core';
 
 interface DMStatusInfoProps {

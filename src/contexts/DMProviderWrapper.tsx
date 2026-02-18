@@ -14,7 +14,7 @@ import {
   type DMProviderDeps,
   type MessageSearchResult,
   type ConversationSearchResult,
-} from '@samthomson/nostr-messaging/react';
+} from '@samthomson/nostr-messaging/core';
 import type { MessagingState, Conversation } from '@samthomson/nostr-messaging/core';
 
 // Re-export hooks and types for use in Silent

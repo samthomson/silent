@@ -3,7 +3,7 @@ import { Blurhash } from 'react-blurhash';
 import { Pure as DMLib } from '@samthomson/nostr-messaging/core';
 import type { FileMetadata } from '@samthomson/nostr-messaging/core';
 import { formatBytes, formatSpeed, isDisplayableMediaType } from '@samthomson/nostr-messaging/core';
-import { getCachedDecryptedBlob, cacheDecryptedBlob } from '@samthomson/nostr-messaging/storage';
+import { getCachedDecryptedBlob, cacheDecryptedBlob } from '@samthomson/nostr-messaging/core';
 import { Loader2, AlertCircle, RotateCcw, FileQuestion } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

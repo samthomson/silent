@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
-import { useConversationMessages, useNewDMContext } from '@/contexts/NewDMContext';
+import { useConversationMessages, useNewDMContext } from '@/contexts/NewDMProviderWrapper';
 import type { Message } from '@samthomson/nostr-messaging/core';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';

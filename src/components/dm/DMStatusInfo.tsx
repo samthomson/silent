@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { RefreshCw, Database, Wifi, CheckCircle2, Loader2 } from 'lucide-react';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
 import { NEW_DM_PHASES } from '@samthomson/nostr-messaging/core';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

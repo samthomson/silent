@@ -4,7 +4,7 @@ import { useAuthor } from '@/hooks/useAuthor';
 import { getDisplayName } from '@/lib/genUserName';
 import { GroupAvatar } from '@/components/dm/GroupAvatar';
 import { cn } from '@/lib/utils';
-import type { ConversationSearchResult as ConversationSearchResultType } from '@/contexts/NewDMContext';
+import type { ConversationSearchResult as ConversationSearchResultType } from '@/contexts/NewDMProviderWrapper';
 
 interface ConversationSearchResultProps {
   result: ConversationSearchResultType;

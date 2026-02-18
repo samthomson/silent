@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { NewDMMessagingInterface } from "@/components/dm/NewDMMessagingInterface";
-import { useNewDMContext } from "@/contexts/NewDMContext";
+import { useNewDMContext } from "@/contexts/NewDMProviderWrapper";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent } from "@/components/ui/card";

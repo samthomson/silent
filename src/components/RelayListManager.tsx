@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useRelayLists, type RelayEntry } from '@/hooks/useRelayList';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
 import type { RelayInfo } from '@samthomson/nostr-messaging/core';
 
 // Popular relay suggestions for each tab

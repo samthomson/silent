@@ -15,7 +15,7 @@ import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
 import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
-import { NewDMProvider } from '@/contexts/NewDMContext';
+import { NewDMProviderWrapper as NewDMProvider } from '@/contexts/NewDMProviderWrapper';
 import { FaviconSync } from '@/components/FaviconSync';
 import { NetworkStatus } from '@/components/NetworkStatus';
 import AppRouter from './AppRouter';

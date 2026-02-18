@@ -2,7 +2,7 @@ import { MessageSquare, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { SettingsModal } from '@/components/SettingsModal';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
 
 export function AppSidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);

@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
 import { ConversationSearchResult } from './ConversationSearchResult';
 import { MessageSearchResult } from './MessageSearchResult';
 import { ScrollArea } from '@/components/ui/scroll-area';

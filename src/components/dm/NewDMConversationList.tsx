@@ -1,6 +1,6 @@
 import { useMemo, useState, memo, useEffect, useRef } from 'react';
 import { Info, Loader2, AlertCircle, Radio, Search, X } from 'lucide-react';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { useNewDMContext } from '@/contexts/NewDMProviderWrapper';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useDebounce } from '@/hooks/useDebounce';

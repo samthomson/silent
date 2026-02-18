@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { useConversationMessages, useNewDMContext } from '@/contexts/NewDMContext';
-import type { Message } from '@/lib/dmTypes';
+import type { Message } from '@samthomson/nostr-messaging/core';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { useAppContext } from '@/hooks/useAppContext';
-import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@/lib/dmConstants';
+import { MESSAGE_PROTOCOL, PROTOCOL_MODE, type MessageProtocol } from '@samthomson/nostr-messaging/core';
 import { getDisplayName } from '@/lib/genUserName';
-import { formatConversationTime, formatFullDateTime, getPubkeyColor, formatBytes, isMediaFile } from '@/lib/dmUtils';
-import { Pure as DMLib, type FileAttachment } from '@/lib/dmLib';
+import { formatConversationTime, formatFullDateTime, getPubkeyColor, formatBytes, isMediaFile } from '@samthomson/nostr-messaging/core';
+import { Pure as DMLib, type FileAttachment } from '@samthomson/nostr-messaging/core';
 import { useUploadFile } from '@/hooks/useUploadFile';
 import { useToast } from '@/hooks/useToast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

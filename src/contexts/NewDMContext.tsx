@@ -10,19 +10,19 @@ import { useNetworkState } from '@/hooks/useNetworkState';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { getDisplayName } from '@/lib/genUserName';
 import type { NPool, NostrMetadata } from '@nostrify/nostrify';
-import { RELAY_MODE } from '@/lib/dmTypes';
+import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
 import Fuse from 'fuse.js';
 import type {
   DMSettings,
   MessagingState,
   Participant,
-} from '@/lib/dmTypes';
-import * as DMLib from '@/lib/dmLib';
-import type { Signer } from '@/lib/dmLib';
-import { PROTOCOL_MODE, type ProtocolMode, type MessageProtocol, NEW_DM_PHASES, type NewDMPhase, MESSAGE_PROTOCOL } from '@/lib/dmConstants';
-import type { ConversationRelayInfo } from '@/lib/dmTypes';
+} from '@samthomson/nostr-messaging/core';
+import * as DMLib from '@samthomson/nostr-messaging/core';
+import type { Signer } from '@samthomson/nostr-messaging/core';
+import { PROTOCOL_MODE, type ProtocolMode, type MessageProtocol, NEW_DM_PHASES, type NewDMPhase, MESSAGE_PROTOCOL } from '@samthomson/nostr-messaging/core';
+import type { ConversationRelayInfo } from '@samthomson/nostr-messaging/core';
 import type { NostrEvent } from '@nostrify/nostrify';
-import type { FileAttachment } from '@/lib/dmLib';
+import type { FileAttachment } from '@samthomson/nostr-messaging/core';
 const MESSAGES_PER_PAGE = 25;
 
 // lastReadAt is stored in ms; message.event.created_at is Unix seconds (inner event for NIP-17).
@@ -47,7 +47,7 @@ const DEFAULT_RELAY_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 const DEFAULT_QUERY_LIMIT = 20000;
 
 // Re-export FileAttachment from dmLib
-export type { FileAttachment } from '@/lib/dmLib';
+export type { FileAttachment } from '@samthomson/nostr-messaging/core';
 
 // ============================================================================
 // Orchestrators

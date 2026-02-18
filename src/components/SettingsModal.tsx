@@ -10,8 +10,8 @@ import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/useToast';
-import * as DMLib from '@/lib/dmLib';
-import { RELAY_MODE, type RelayMode } from '@/lib/dmTypes';
+import * as DMLib from '@samthomson/nostr-messaging/core';
+import { RELAY_MODE, type RelayMode } from '@samthomson/nostr-messaging/core';
 import {
   Dialog,
   DialogContent,

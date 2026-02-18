@@ -1,6 +1,6 @@
 import { useAuthor } from '@/hooks/useAuthor';
 import { getDisplayName } from '@/lib/genUserName';
-import { getPubkeyColor } from '@/lib/dmUtils';
+import { getPubkeyColor } from '@samthomson/nostr-messaging/core';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 

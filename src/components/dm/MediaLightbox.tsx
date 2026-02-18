@@ -3,8 +3,8 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, X, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { FileMetadata } from '@/lib/dmTypes';
-import { formatFullDateTime } from '@/lib/dmUtils';
+import type { FileMetadata } from '@samthomson/nostr-messaging/core';
+import { formatFullDateTime } from '@samthomson/nostr-messaging/core';
 import { EncryptedMediaDisplay } from './EncryptedMediaDisplay';
 
 interface MediaItem {

@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { RelayMode } from "@/lib/dmTypes";
+import type { RelayMode } from "@samthomson/nostr-messaging/core";
 
 export type Theme = "dark" | "light" | "system";
 

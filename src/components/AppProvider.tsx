@@ -2,7 +2,7 @@ import { ReactNode, useEffect } from 'react';
 import { z } from 'zod';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { AppContext, type AppConfig, type AppContextType, type Theme } from '@/contexts/AppContext';
-import { RELAY_MODE } from '@/lib/dmTypes';
+import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
 
 interface AppProviderProps {
   children: ReactNode;

@@ -1,14 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import { RefreshCw, Database, Wifi, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNewDMContext } from '@/contexts/NewDMContext';
-import { NEW_DM_PHASES } from '@/lib/dmConstants';
+import { NEW_DM_PHASES } from '@samthomson/nostr-messaging/core';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/useToast';
-import { getMediaCacheStats } from '@/lib/dmMediaCache';
-import { formatBytes } from '@/lib/dmUtils';
+import { getMediaCacheStats } from '@samthomson/nostr-messaging/storage';
+import { formatBytes } from '@samthomson/nostr-messaging/core';
 
 interface DMStatusInfoProps {
   clearCacheAndRefetch?: () => Promise<void>;

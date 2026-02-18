@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { BlossomUploader } from '@nostrify/nostrify/uploaders';
-import { Impure as DMLib } from '@/lib/dmLib';
-import type { FileAttachment } from '@/lib/dmLib';
+import { Impure as DMLib } from '@samthomson/nostr-messaging/core';
+import type { FileAttachment } from '@samthomson/nostr-messaging/core';
 
 import { useCurrentUser } from "./useCurrentUser";
 

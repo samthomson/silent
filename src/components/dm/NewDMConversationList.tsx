@@ -5,7 +5,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useDebounce } from '@/hooks/useDebounce';
 import { getDisplayName } from '@/lib/genUserName';
-import { formatConversationTime, formatFullDateTime } from '@/lib/dmUtils';
+import { formatConversationTime, formatFullDateTime } from '@samthomson/nostr-messaging/core';
 import { GroupAvatar } from '@/components/dm/GroupAvatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';

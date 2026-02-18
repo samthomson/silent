@@ -14,7 +14,7 @@ import { NostrLoginProvider } from '@nostrify/react/login';
 import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
-import { RELAY_MODE } from '@/lib/dmTypes';
+import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
 import { NewDMProvider } from '@/contexts/NewDMContext';
 import { FaviconSync } from '@/components/FaviconSync';
 import { NetworkStatus } from '@/components/NetworkStatus';

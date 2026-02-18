@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getDisplayName } from '@/lib/genUserName';
-import { Pure as DMLib } from '@/lib/dmLib';
+import { Pure as DMLib } from '@samthomson/nostr-messaging/core';
 
 interface NewConversationDialogProps {
   onStartConversation: (pubkey: string) => void;

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import type { Message } from '@/lib/dmTypes';
-import { isImageUrl, isVideoUrl, isAudioUrl, isDocUrl } from '@/lib/dmUtils';
+import type { Message } from '@samthomson/nostr-messaging/core';
+import { isImageUrl, isVideoUrl, isAudioUrl, isDocUrl } from '@samthomson/nostr-messaging/core';
 
 export interface MediaItem {
   messageId: string;

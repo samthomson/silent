@@ -10,7 +10,7 @@ import { useRelayLists, type RelayEntry } from '@/hooks/useRelayList';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useNewDMContext } from '@/contexts/NewDMContext';
-import type { RelayInfo } from '@/lib/dmTypes';
+import type { RelayInfo } from '@samthomson/nostr-messaging/core';
 
 // Popular relay suggestions for each tab
 const DISCOVERY_SUGGESTIONS = [

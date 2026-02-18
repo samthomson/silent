@@ -6,9 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ExternalLink, FileText, Image as ImageIcon, Play } from 'lucide-react';
-import { formatConversationTime, isDisplayableMediaType } from '@/lib/dmUtils';
+import { formatConversationTime, isDisplayableMediaType } from '@samthomson/nostr-messaging/core';
 import { cn } from '@/lib/utils';
-import type { FileMetadata } from '@/lib/dmTypes';
+import type { FileMetadata } from '@samthomson/nostr-messaging/core';
 
 interface ConversationMediaPanelProps {
   conversationId: string;

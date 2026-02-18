@@ -6,7 +6,7 @@ import NostrProvider from '@/components/NostrProvider';
 import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
-import { RELAY_MODE } from '@/lib/dmTypes';
+import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
 
 interface TestAppProps {
   children: React.ReactNode;

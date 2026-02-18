@@ -49,3 +49,18 @@ Other clients supporting NIP17 messages.
 npm install
 npm run dev
 ```
+
+## Development
+
+### Docker Development
+
+The project uses Docker for development with automatic package linking (note you can run it without docker, but then without the proxy for decrypting nip17 kind 15s):
+
+```bash
+# Start development environment
+docker-compose up
+
+# App runs at http://localhost:3000
+```
+
+The `nostr-messaging` package is automatically linked and rebuilt on changes. See `DOCKER_SETUP.md` for details.

@@ -1,7 +1,33 @@
 services:
-  web:
-    build: .
-    restart: unless-stopped
+  messaging-builder:
+    image: node:20-alpine
+    working_dir: /nostr-messaging
+    volumes:
+      - ../nostr-messaging:/nostr-messaging
+    command: sh -c "npm install && npm run dev"
+  
+  app:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - ../nostr-messaging:/nostr-messaging
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - messaging-builder
     expose:
-      - "80"
+      - "8080"
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
+volumes:
+  node_modules:
 

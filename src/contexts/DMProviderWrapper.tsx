@@ -10,15 +10,15 @@ import { useUploadFile } from '@/hooks/useUploadFile';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useFollows } from '@/hooks/useFollows';
 import { getDisplayName } from '@/lib/genUserName';
-import { 
-  DMProvider, 
-  useDMContext, 
-  useConversationMessages, 
+import {
+  DMProvider,
+  useDMContext,
+  useConversationMessages,
   type DMProviderDeps,
   type MessageSearchResult,
   type ConversationSearchResult,
 } from '@samthomson/nostr-messaging/core';
-import type { MessagingState, Conversation } from '@samthomson/nostr-messaging/core';
+import type { MessagingState, Conversation, MessagingConfig } from '@samthomson/nostr-messaging/core';
 
 // Re-export hooks and types for use in Silent
 export { useDMContext, useConversationMessages };
@@ -31,7 +31,7 @@ interface DMProviderWrapperProps {
 export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
-  const { config, updateConfig } = useAppContext();
+  const { config } = useAppContext();
   const { isOnline, wasOffline } = useNetworkState();
   const { toast } = useToast();
   const authorsBatch = useAuthorsBatch;
@@ -45,10 +45,9 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
     user: user ?? null,
     discoveryRelays: config.discoveryRelays,
     relayMode: config.relayMode,
-    updateConfig,
     isOnline,
     wasOffline,
-    toast,
+    onNotify: (opts) => toast(opts),
     getDisplayName,
     fetchAuthorsBatch: authorsBatch,
     publishEvent: async (event) => {
@@ -60,7 +59,7 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
     },
     isMobile,
     follows,
-    appConfig: config,
+    appConfig: config as unknown as MessagingConfig & Record<string, unknown>,
   };
 
   return (

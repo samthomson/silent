@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import { DMMessagingInterface } from "@/components/dm/DMMessagingInterface";
+import { DMMessagingInterface } from '@samthomson/nostr-messaging/ui';
 import { useDMContext } from "@/contexts/DMProviderWrapper";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { AppSidebar } from "@/components/AppSidebar";

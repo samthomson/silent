@@ -2,7 +2,7 @@ import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, Chevro
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
-import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
+import { DMStatusInfo } from '@samthomson/nostr-messaging/ui';
 import { useDMContext } from '@/contexts/DMProviderWrapper';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';

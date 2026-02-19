@@ -1,6 +1,6 @@
 import { useSeoMeta } from '@unhead/react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { DMMessagingInterface } from '@/components/dm/DMMessagingInterface';
+import { DMMessagingInterface } from '@samthomson/nostr-messaging/ui';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { Button } from '@/components/ui/button';

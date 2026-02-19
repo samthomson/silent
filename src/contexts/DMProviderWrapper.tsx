@@ -6,6 +6,9 @@ import { useNetworkState } from '@/hooks/useNetworkState';
 import { useToast } from '@/hooks/useToast';
 import { useAuthorsBatch } from '@/hooks/useAuthorsBatch';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
+import { useUploadFile } from '@/hooks/useUploadFile';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useFollows } from '@/hooks/useFollows';
 import { getDisplayName } from '@/lib/genUserName';
 import { 
   DMProvider, 
@@ -33,10 +36,13 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { toast } = useToast();
   const authorsBatch = useAuthorsBatch;
   const { mutateAsync: publishEvent } = useNostrPublish();
+  const { mutateAsync: uploadFile } = useUploadFile();
+  const isMobile = useIsMobile();
+  const { data: follows = [] } = useFollows();
 
   const deps: DMProviderDeps = {
     nostr,
-    user,
+    user: user ?? null,
     discoveryRelays: config.discoveryRelays,
     relayMode: config.relayMode,
     updateConfig,
@@ -45,7 +51,16 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
     toast,
     getDisplayName,
     fetchAuthorsBatch: authorsBatch,
-    publishEvent,
+    publishEvent: async (event) => {
+      await publishEvent(event);
+    },
+    uploadFile: async (file: File) => {
+      const tags = await uploadFile(file);
+      return tags[0][1]; // Return URL from first tag
+    },
+    isMobile,
+    follows,
+    appConfig: config,
   };
 
   return (

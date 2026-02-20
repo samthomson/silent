@@ -34,7 +34,6 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { config } = useAppContext();
   const { isOnline, wasOffline } = useNetworkState();
   const { toast } = useToast();
-  const authorsBatch = useAuthorsBatch;
   const { mutateAsync: publishEvent } = useNostrPublish();
   const { mutateAsync: uploadFile } = useUploadFile();
   const isMobile = useIsMobile();
@@ -49,7 +48,7 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
     wasOffline,
     onNotify: (opts) => toast(opts),
     getDisplayName,
-    fetchAuthorsBatch: authorsBatch,
+    fetchAuthorsBatch: useAuthorsBatch,
     publishEvent: async (event) => {
       await publishEvent(event);
     },

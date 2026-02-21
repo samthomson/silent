@@ -62,7 +62,7 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   };
 
   return (
-    <DMProvider deps={deps}>
+    <DMProvider deps={deps} config={{ ui: { showShorts: true } }}>
       {children}
     </DMProvider>
   );

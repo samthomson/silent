@@ -19,6 +19,7 @@ const AppConfigSchema = z.object({
   relayMode: z.enum([RELAY_MODE.DISCOVERY, RELAY_MODE.HYBRID, RELAY_MODE.STRICT_OUTBOX]),
   devMode: z.boolean().optional(),
   renderInlineMedia: z.boolean().optional(),
+  newMessageSoundPref: z.object({ enabled: z.boolean(), soundId: z.string() }).optional(),
 }) satisfies z.ZodType<AppConfig>;
 
 export function AppProvider(props: AppProviderProps) {

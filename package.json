@@ -8,7 +8,8 @@
     "build": "npm i --silent && vite build -l error && cp dist/index.html dist/404.html && echo 'Project built successfully!'",
     "test": "npm i --silent && npx tsc --noEmit && eslint && vitest run --reporter=dot --silent && vite build -l error && cp dist/index.html dist/404.html && echo 'All tests passed!'",
     "deploy": "npm run build && npx -y nostr-deploy-cli deploy --skip-setup",
-    "postinstall": "if [ -d ../nostr-messaging ]; then rm -rf node_modules/@samthomson/nostr-messaging && mkdir -p node_modules/@samthomson && ln -s $(pwd)/../nostr-messaging node_modules/@samthomson/nostr-messaging && (cd ../nostr-messaging && npm run build); elif [ -d /nostr-messaging ]; then rm -rf node_modules/@samthomson/nostr-messaging && mkdir -p node_modules/@samthomson && ln -s /nostr-messaging node_modules/@samthomson/nostr-messaging && (cd /nostr-messaging && npm run build); fi"
+    "postinstall:copy-sounds": "mkdir -p public/sounds && (cp node_modules/@samthomson/nostr-messaging/assets/sounds/*.mp3 public/sounds/ 2>/dev/null || true)",
+    "postinstall": "if [ -d ../nostr-messaging ]; then rm -rf node_modules/@samthomson/nostr-messaging && mkdir -p node_modules/@samthomson && ln -s $(pwd)/../nostr-messaging node_modules/@samthomson/nostr-messaging && (cd ../nostr-messaging && npm run build); elif [ -d /nostr-messaging ]; then rm -rf node_modules/@samthomson/nostr-messaging && mkdir -p node_modules/@samthomson && ln -s /nostr-messaging node_modules/@samthomson/nostr-messaging && (cd /nostr-messaging && npm run build); fi; npm run postinstall:copy-sounds"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
@@ -103,5 +104,8 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^6.3.5",
     "vitest": "^3.1.4"
+  },
+  "overrides": {
+    "blurhash": "^2.0.5"
   }
 }

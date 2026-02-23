@@ -14,6 +14,7 @@ import {
   DMProvider,
   useDMContext,
   useConversationMessages,
+  DEFAULT_NEW_MESSAGE_SOUNDS,
   type DMProviderDeps,
   type MessageSearchResult,
   type ConversationSearchResult,
@@ -31,7 +32,7 @@ interface DMProviderWrapperProps {
 export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
-  const { config } = useAppContext();
+  const { config, updateConfig } = useAppContext();
   const { isOnline, wasOffline } = useNetworkState();
   const { toast } = useToast();
   const { mutateAsync: publishEvent } = useNostrPublish();
@@ -59,10 +60,14 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
     isMobile,
     follows,
     appConfig: config as unknown as MessagingConfig & Record<string, unknown>,
+    soundPref: {
+      value: config.newMessageSoundPref ?? { enabled: false, soundId: '' },
+      onChange: (pref) => updateConfig((c) => ({ ...c, newMessageSoundPref: pref })),
+    },
   };
 
   return (
-    <DMProvider deps={deps} config={{ ui: { showShorts: true } }}>
+    <DMProvider deps={deps} config={{ sounds: DEFAULT_NEW_MESSAGE_SOUNDS, ui: { showShorts: true } }}>
       {children}
     </DMProvider>
   );

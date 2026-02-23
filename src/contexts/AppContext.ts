@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { RelayMode } from "@samthomson/nostr-messaging/core";
+import type { RelayMode, NewMessageSoundPref } from "@samthomson/nostr-messaging/core";
 
 export type Theme = "dark" | "light" | "system";
 
@@ -14,6 +14,8 @@ export interface AppConfig {
   devMode?: boolean;
   /** Render images and media inline in messages */
   renderInlineMedia?: boolean;
+  /** New-message notification sound (enabled + selected id). Persisted with other app config. */
+  newMessageSoundPref?: NewMessageSoundPref;
 }
 
 export interface AppContextType {

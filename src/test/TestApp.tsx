@@ -22,10 +22,11 @@ export function TestApp({ children }: TestAppProps) {
     },
   });
 
+  const testDiscoveryRelays = ['wss://relay.nostr.band'];
   const defaultConfig: AppConfig = {
     theme: 'light',
-    discoveryRelays: ['wss://relay.nostr.band'],
-    relayMode: RELAY_MODE.HYBRID,
+    discoveryRelays: testDiscoveryRelays,
+    messagingConfig: { discoveryRelays: testDiscoveryRelays, relayMode: RELAY_MODE.HYBRID },
   };
 
   return (

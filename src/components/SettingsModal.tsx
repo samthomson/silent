@@ -105,9 +105,12 @@ function MessagesContent() {
         </div>
         <Switch
           id="inline-media"
-          checked={config.renderInlineMedia ?? true}
+          checked={config.messagingConfig.renderInlineMedia ?? true}
           onCheckedChange={(checked) => {
-            updateConfig((current) => ({ ...current, renderInlineMedia: checked }));
+            updateConfig((current) => ({
+              ...current,
+              messagingConfig: { ...current.messagingConfig!, renderInlineMedia: checked },
+            }));
           }}
         />
       </div>
@@ -191,7 +194,7 @@ function MessagesContent() {
 
 function RelayModeContent() {
   const { config, updateConfig } = useAppContext();
-  const relayMode = config.relayMode;
+  const relayMode = config.messagingConfig.relayMode;
 
   return (
     <div className="space-y-4">
@@ -202,7 +205,7 @@ function RelayModeContent() {
         </p>
         <div className="space-y-2">
           <button
-            onClick={() => updateConfig((current) => ({ ...current, relayMode: RELAY_MODE.DISCOVERY }))}
+            onClick={() => updateConfig((current) => ({ ...current, messagingConfig: { ...current.messagingConfig!, relayMode: RELAY_MODE.DISCOVERY } }))}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${
               relayMode === RELAY_MODE.DISCOVERY
                 ? 'border-primary bg-primary/5'
@@ -221,7 +224,7 @@ function RelayModeContent() {
           </button>
 
           <button
-            onClick={() => updateConfig((current) => ({ ...current, relayMode: RELAY_MODE.HYBRID }))}
+            onClick={() => updateConfig((current) => ({ ...current, messagingConfig: { ...current.messagingConfig!, relayMode: RELAY_MODE.HYBRID } }))}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${
               relayMode === RELAY_MODE.HYBRID
                 ? 'border-primary bg-primary/5'
@@ -240,7 +243,7 @@ function RelayModeContent() {
           </button>
 
           <button
-            onClick={() => updateConfig((current) => ({ ...current, relayMode: RELAY_MODE.STRICT_OUTBOX }))}
+            onClick={() => updateConfig((current) => ({ ...current, messagingConfig: { ...current.messagingConfig!, relayMode: RELAY_MODE.STRICT_OUTBOX } }))}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${
               relayMode === RELAY_MODE.STRICT_OUTBOX
                 ? 'border-primary bg-primary/5'
@@ -273,7 +276,7 @@ function RelayListContent() {
 
 function AdvancedContent() {
   const { config, updateConfig } = useAppContext();
-  const devMode = config.devMode ?? false;
+  const devMode = config.messagingConfig.devMode ?? false;
 
   return (
     <div className="space-y-4">
@@ -291,7 +294,10 @@ function AdvancedContent() {
           id="dev-mode"
           checked={devMode}
           onCheckedChange={(checked) => {
-            updateConfig((current) => ({ ...current, devMode: checked }));
+            updateConfig((current) => ({
+              ...current,
+              messagingConfig: { ...current.messagingConfig!, devMode: checked },
+            }));
           }}
         />
       </div>
@@ -316,11 +322,11 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
     if (open) {
       setInitialSettings({ 
         discoveryRelays: [...config.discoveryRelays],
-        relayMode: config.relayMode,
+        relayMode: config.messagingConfig.relayMode,
       });
       setShowReloadConfirm(false);
     }
-  }, [open, config.discoveryRelays, config.relayMode]);
+  }, [open, config.discoveryRelays, config.messagingConfig.relayMode]);
   
   const failedRelayCount = useMemo(() => {
     if (!user || !messagingState) return 0;
@@ -336,10 +342,10 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
     const initialFingerprint = DMLib.Pure.Settings.computeFingerprint(initialSettings);
     const currentFingerprint = DMLib.Pure.Settings.computeFingerprint({ 
       discoveryRelays: config.discoveryRelays,
-      relayMode: config.relayMode,
+      relayMode: config.messagingConfig.relayMode,
     });
     return initialFingerprint !== currentFingerprint;
-  }, [initialSettings, config.discoveryRelays, config.relayMode]);
+  }, [initialSettings, config.discoveryRelays, config.messagingConfig.relayMode]);
   
   // Handle close - check if settings changed
   const handleClose = useCallback(() => {
@@ -385,7 +391,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
     updateConfig((prev) => ({
       ...prev,
       discoveryRelays: [...initialSettings.discoveryRelays],
-      relayMode: initialSettings.relayMode,
+      messagingConfig: { ...prev.messagingConfig!, discoveryRelays: [...initialSettings.discoveryRelays], relayMode: initialSettings.relayMode },
     }));
     
     toast({

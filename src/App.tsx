@@ -44,17 +44,22 @@ const persistOptions = {
   maxAge: Infinity, // Profile metadata rarely changes, cache indefinitely
 };
 
+const DEFAULT_DISCOVERY_RELAYS: string[] = [
+  'wss://relay.ditto.pub',
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://relay.primal.net',
+  'wss://nos.lol',
+];
+
 const defaultConfig: AppConfig = {
   theme: "dark",
-  discoveryRelays: [
-    'wss://relay.ditto.pub',
-    'wss://relay.damus.io',
-    'wss://relay.nostr.band',
-    'wss://relay.primal.net',
-    'wss://nos.lol',
-  ],
-  relayMode: RELAY_MODE.HYBRID,
-  renderInlineMedia: true,
+  discoveryRelays: DEFAULT_DISCOVERY_RELAYS,
+  messagingConfig: {
+    discoveryRelays: DEFAULT_DISCOVERY_RELAYS,
+    relayMode: RELAY_MODE.HYBRID,
+    renderInlineMedia: true,
+  },
 };
 
 export function App() {

@@ -12,14 +12,16 @@ interface AppProviderProps {
   defaultConfig: AppConfig;
 }
 
-// Zod schema for AppConfig validation
 const AppConfigSchema = z.object({
   theme: z.enum(['dark', 'light', 'system']),
   discoveryRelays: z.array(z.string().url()),
-  relayMode: z.enum([RELAY_MODE.DISCOVERY, RELAY_MODE.HYBRID, RELAY_MODE.STRICT_OUTBOX]),
-  devMode: z.boolean().optional(),
-  renderInlineMedia: z.boolean().optional(),
-  newMessageSoundPref: z.object({ enabled: z.boolean(), soundId: z.string() }).optional(),
+  messagingConfig: z.object({
+    discoveryRelays: z.array(z.string().url()),
+    relayMode: z.enum([RELAY_MODE.DISCOVERY, RELAY_MODE.HYBRID, RELAY_MODE.STRICT_OUTBOX]),
+    renderInlineMedia: z.boolean().optional(),
+    devMode: z.boolean().optional(),
+    newMessageSoundPref: z.object({ enabled: z.boolean(), soundId: z.string() }).optional(),
+  }),
 }) satisfies z.ZodType<AppConfig>;
 
 export function AppProvider(props: AppProviderProps) {

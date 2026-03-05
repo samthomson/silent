@@ -52,15 +52,21 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
       return tags[0][1]; // Return URL from first tag
     },
     follows,
-    messagingConfig: { ...config.messagingConfig, discoveryRelays: config.discoveryRelays },
-    soundPref: {
-      value: config.messagingConfig.newMessageSoundPref ?? { enabled: false, soundId: '' },
-      onChange: (pref: { enabled: boolean; soundId: string }) => updateConfig((c) => ({
-        ...c,
-        messagingConfig: { ...c.messagingConfig!, newMessageSoundPref: pref },
-      })),
+    messagingConfig: {
+      discoveryRelays: config.discoveryRelays,
+      relayMode: config.messagingConfig.relayMode,
+      protocolMode: undefined,
+      renderInlineMedia: config.messagingConfig.renderInlineMedia,
+      devMode: config.messagingConfig.devMode,
+      soundPref: {
+        options: DEFAULT_NEW_MESSAGE_SOUNDS,
+        value: config.messagingConfig.soundPref ?? { enabled: false, soundId: '' },
+        onChange: (pref: { enabled: boolean; soundId: string }) => updateConfig((c) => ({
+          ...c,
+          messagingConfig: { ...c.messagingConfig!, soundPref: pref },
+        })),
+      },
     },
-    sounds: DEFAULT_NEW_MESSAGE_SOUNDS,
     ui: { showShorts: true, isMobile },
   };
 

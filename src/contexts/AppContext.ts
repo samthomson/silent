@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { MessagingConfig } from "@samthomson/nostr-messaging/core";
+import type { RelayMode } from "@samthomson/nostr-messaging/core";
 
 export type Theme = "dark" | "light" | "system";
 
@@ -7,7 +7,12 @@ export interface AppConfig {
   theme: Theme;
   /** Discovery relays (also passed as messagingConfig.discoveryRelays for the package). */
   discoveryRelays: string[];
-  messagingConfig: MessagingConfig;
+  messagingConfig: {
+    relayMode: RelayMode;
+    renderInlineMedia?: boolean;
+    devMode?: boolean;
+    soundPref?: { enabled: boolean; soundId: string };
+  };
 }
 
 export interface AppContextType {

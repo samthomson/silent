@@ -58,6 +58,8 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
       protocolMode: undefined,
       renderInlineMedia: config.messagingConfig.renderInlineMedia,
       devMode: config.messagingConfig.devMode,
+      appName: 'Silent',
+      appDescription: 'Private messaging on Nostr',
       soundPref: {
         options: DEFAULT_NEW_MESSAGE_SOUNDS,
         value: config.messagingConfig.soundPref ?? { enabled: false, soundId: '' },

@@ -11,18 +11,9 @@ import { useFollows } from '@/hooks/useFollows';
 import { getDisplayName } from '@/lib/genUserName';
 import {
   DMProvider,
-  useDMContext,
-  useConversationMessages,
   DEFAULT_NEW_MESSAGE_SOUNDS,
   type DMProviderDeps,
-  type MessageSearchResult,
-  type ConversationSearchResult,
 } from '@samthomson/nostr-messaging/core';
-import type { MessagingState, Conversation } from '@samthomson/nostr-messaging/core';
-
-// Re-export hooks and types for use in Silent
-export { useDMContext, useConversationMessages };
-export type { MessageSearchResult, ConversationSearchResult, MessagingState, Conversation };
 
 interface DMProviderWrapperProps {
   children: ReactNode;

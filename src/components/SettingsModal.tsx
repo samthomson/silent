@@ -3,7 +3,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { DMStatusInfo } from '@samthomson/nostr-messaging/ui';
-import { useDMContext } from '@/contexts/DMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapperExports';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';

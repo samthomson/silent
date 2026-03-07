@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useDMContext } from '@/contexts/DMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapperExports';
 import { setFavicon, resetFavicon } from '@/lib/favicon';
 
 /**

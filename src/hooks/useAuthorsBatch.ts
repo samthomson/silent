@@ -225,7 +225,7 @@ export function useAuthorsBatch(pubkeys: string[]) {
         abortControllerRef.current.abort();
       }
     };
-  }, [pubkeysString, fetchChunk, queryClient]); // Re-run when pubkeys change (tracked by pubkeysString)
+  }, [pubkeysString, fetchChunk, queryClient, emptyMap, pubkeys]); // Re-run when pubkeys change (tracked by pubkeysString)
 
   return {
     data: authorsMap,

@@ -35,7 +35,7 @@ export function RelayResolver({ children, inboxRelaysRef, outboxRelaysRef }: Rel
     console.log('[RelayResolver] ✅ Outbox relays updated:', outboxRelays);
 
     hasResolved.current = true;
-  }, [user?.pubkey, relayLists, isLoading, config.discoveryRelays]);
+  }, [user?.pubkey, relayLists, isLoading, config.discoveryRelays, inboxRelaysRef, outboxRelaysRef]);
 
   if (user?.pubkey && isLoading) {
     return (

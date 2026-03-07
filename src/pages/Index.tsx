@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { APP_NAME } from '@/lib/constants';
-import { useDMContext } from '@/contexts/DMProviderWrapper';
+import { useDMContext } from '@/contexts/DMProviderWrapperExports';
 
 const BASE_TITLE = `${APP_NAME} - DMs on Nostr`;
 

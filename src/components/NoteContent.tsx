@@ -146,7 +146,7 @@ export function NoteContent({
     }
     
     return parts;
-  }, [event]);
+  }, [event, onMediaClick]);
 
   return (
     <div className={cn("whitespace-pre-wrap break-words", className)}>

@@ -27,6 +27,9 @@ yarn.lock
 # Vercel
 .vercel
 
+# Default sounds (copied from package at postinstall; see README)
+public/sounds/*.mp3
+
 # Secrets
 .env
 .env.*

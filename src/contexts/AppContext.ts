@@ -1,19 +1,18 @@
 import { createContext } from "react";
-import type { RelayMode } from "@/lib/dmTypes";
+import type { RelayMode } from "@samthomson/nostr-messaging/core";
 
 export type Theme = "dark" | "light" | "system";
 
 export interface AppConfig {
-  /** Current theme */
   theme: Theme;
-  /** Discovery relays - used to find NIP-65 and as default relay pool */
+  /** Discovery relays (also passed as messagingConfig.discoveryRelays for the package). */
   discoveryRelays: string[];
-  /** Relay connection mode - how to derive relay sets for messaging */
-  relayMode: RelayMode;
-  /** Developer mode toggle */
-  devMode?: boolean;
-  /** Render images and media inline in messages */
-  renderInlineMedia?: boolean;
+  messagingConfig: {
+    relayMode: RelayMode;
+    renderInlineMedia?: boolean;
+    devMode?: boolean;
+    soundPref?: { enabled: boolean; soundId: string };
+  };
 }
 
 export interface AppContextType {

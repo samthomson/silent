@@ -9,8 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useRelayLists, type RelayEntry } from '@/hooks/useRelayList';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
-import { useNewDMContext } from '@/contexts/NewDMContext';
-import type { RelayInfo } from '@/lib/dmTypes';
+import { useDMContext } from '@/contexts/DMProviderWrapperExports';
+import type { RelayInfo } from '@samthomson/nostr-messaging/core';
 
 // Popular relay suggestions for each tab
 const DISCOVERY_SUGGESTIONS = [
@@ -458,7 +458,7 @@ function NIP65Tab({ failedRelays }: { failedRelays: Array<[string, RelayInfo]> }
 }
 
 export function RelayListManager() {
-  const { messagingState } = useNewDMContext();
+  const { messagingState } = useDMContext();
   const { user } = useCurrentUser();
   const { config } = useAppContext();
   const { data } = useRelayLists();

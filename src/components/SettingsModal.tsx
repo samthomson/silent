@@ -1,17 +1,17 @@
-import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User, Wifi, LogOut } from 'lucide-react';
+import { MessageSquare, Moon, Sun, Palette, Database, Code, X, ArrowLeft, ChevronRight, Radio, AlertTriangle, User, Wifi, LogOut, Play, Check } from 'lucide-react';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
-import { DMStatusInfo } from '@/components/dm/DMStatusInfo';
-import { useNewDMContext } from '@/contexts/NewDMContext';
+import { DMStatusInfo } from '@samthomson/nostr-messaging/ui';
+import { useDMContext } from '@/contexts/DMProviderWrapperExports';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/useToast';
-import * as DMLib from '@/lib/dmLib';
-import { RELAY_MODE, type RelayMode } from '@/lib/dmTypes';
+import * as DMLib from '@samthomson/nostr-messaging/core';
+import { RELAY_MODE, type RelayMode } from '@samthomson/nostr-messaging/core';
 import {
   Dialog,
   DialogContent,
@@ -75,7 +75,7 @@ function AppearanceContent() {
 }
 
 function StorageContent() {
-  const { clearCacheAndRefetch } = useNewDMContext();
+  const { clearCacheAndRefetch } = useDMContext();
 
   return (
     <div className="space-y-4">
@@ -89,6 +89,7 @@ function StorageContent() {
 
 function MessagesContent() {
   const { config, updateConfig } = useAppContext();
+  const { newMessageSoundOptions, newMessageSoundPref, setNewMessageSoundPref, previewNewMessageSound } = useDMContext();
 
   return (
     <div className="space-y-4">
@@ -104,19 +105,96 @@ function MessagesContent() {
         </div>
         <Switch
           id="inline-media"
-          checked={config.renderInlineMedia ?? true}
+          checked={config.messagingConfig.renderInlineMedia ?? true}
           onCheckedChange={(checked) => {
-            updateConfig((current) => ({ ...current, renderInlineMedia: checked }));
+            updateConfig((current) => ({
+              ...current,
+              messagingConfig: { ...current.messagingConfig!, renderInlineMedia: checked },
+            }));
           }}
         />
       </div>
+      {newMessageSoundOptions.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col items-start">
+                <Label htmlFor="sound-on-new" className="font-medium cursor-pointer">
+                  Sound on new message
+                </Label>
+                <span className="text-xs text-muted-foreground">
+                  Play a sound when you receive a direct message
+                </span>
+              </div>
+              <Switch
+                id="sound-on-new"
+                checked={newMessageSoundPref.enabled}
+                onCheckedChange={(checked) => setNewMessageSoundPref({ ...newMessageSoundPref, enabled: checked })}
+              />
+            </div>
+            {newMessageSoundPref.enabled && (
+              <div
+                className="space-y-1 overflow-hidden animate-in fade-in-0 duration-200"
+              >
+                <Label className="text-xs font-medium text-muted-foreground">Sound</Label>
+                <div
+                  role="radiogroup"
+                  aria-label="Sound"
+                  className="ml-3 space-y-0.5 pl-3"
+                >
+                  {newMessageSoundOptions.map((s) => {
+                    const selected = (newMessageSoundPref.soundId || newMessageSoundOptions[0]?.id) === s.id;
+                    return (
+                      <div
+                        key={s.id}
+                        role="radio"
+                        aria-checked={selected}
+                        tabIndex={0}
+                        className="flex items-center gap-2 rounded py-1 px-1.5 group hover:bg-accent/50 cursor-pointer"
+                        onClick={() => setNewMessageSoundPref({ ...newMessageSoundPref, soundId: s.id })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setNewMessageSoundPref({ ...newMessageSoundPref, soundId: s.id });
+                          }
+                        }}
+                      >
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-primary">
+                          {selected ? <Check className="h-2.5 w-2.5 text-primary" /> : null}
+                        </span>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm truncate">{s.label}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              previewNewMessageSound(s);
+                            }}
+                            aria-label={`Preview ${s.label}`}
+                          >
+                            <Play className="h-3 w-3" />
+                          </Button>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function RelayModeContent() {
   const { config, updateConfig } = useAppContext();
-  const relayMode = config.relayMode;
+  const relayMode = config.messagingConfig.relayMode;
 
   return (
     <div className="space-y-4">
@@ -127,7 +205,7 @@ function RelayModeContent() {
         </p>
         <div className="space-y-2">
           <button
-            onClick={() => updateConfig((current) => ({ ...current, relayMode: RELAY_MODE.DISCOVERY }))}
+            onClick={() => updateConfig((current) => ({ ...current, messagingConfig: { ...current.messagingConfig!, relayMode: RELAY_MODE.DISCOVERY } }))}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${
               relayMode === RELAY_MODE.DISCOVERY
                 ? 'border-primary bg-primary/5'
@@ -146,7 +224,7 @@ function RelayModeContent() {
           </button>
 
           <button
-            onClick={() => updateConfig((current) => ({ ...current, relayMode: RELAY_MODE.HYBRID }))}
+            onClick={() => updateConfig((current) => ({ ...current, messagingConfig: { ...current.messagingConfig!, relayMode: RELAY_MODE.HYBRID } }))}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${
               relayMode === RELAY_MODE.HYBRID
                 ? 'border-primary bg-primary/5'
@@ -165,7 +243,7 @@ function RelayModeContent() {
           </button>
 
           <button
-            onClick={() => updateConfig((current) => ({ ...current, relayMode: RELAY_MODE.STRICT_OUTBOX }))}
+            onClick={() => updateConfig((current) => ({ ...current, messagingConfig: { ...current.messagingConfig!, relayMode: RELAY_MODE.STRICT_OUTBOX } }))}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${
               relayMode === RELAY_MODE.STRICT_OUTBOX
                 ? 'border-primary bg-primary/5'
@@ -198,7 +276,7 @@ function RelayListContent() {
 
 function AdvancedContent() {
   const { config, updateConfig } = useAppContext();
-  const devMode = config.devMode ?? false;
+  const devMode = config.messagingConfig.devMode ?? false;
 
   return (
     <div className="space-y-4">
@@ -216,7 +294,10 @@ function AdvancedContent() {
           id="dev-mode"
           checked={devMode}
           onCheckedChange={(checked) => {
-            updateConfig((current) => ({ ...current, devMode: checked }));
+            updateConfig((current) => ({
+              ...current,
+              messagingConfig: { ...current.messagingConfig!, devMode: checked },
+            }));
           }}
         />
       </div>
@@ -226,7 +307,7 @@ function AdvancedContent() {
 
 export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }: SettingsModalProps) {
   const [mobileCategory, setMobileCategory] = useState<string | null>(null);
-  const { messagingState, reloadAfterSettingsChange } = useNewDMContext();
+  const { messagingState, reloadAfterSettingsChange } = useDMContext();
   const { config, updateConfig } = useAppContext();
   const { user } = useCurrentUser();
   const { currentUser, removeLogin } = useLoggedInAccounts();
@@ -241,11 +322,11 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
     if (open) {
       setInitialSettings({ 
         discoveryRelays: [...config.discoveryRelays],
-        relayMode: config.relayMode,
+        relayMode: config.messagingConfig.relayMode,
       });
       setShowReloadConfirm(false);
     }
-  }, [open, config.discoveryRelays, config.relayMode]);
+  }, [open, config.discoveryRelays, config.messagingConfig.relayMode]);
   
   const failedRelayCount = useMemo(() => {
     if (!user || !messagingState) return 0;
@@ -261,10 +342,10 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
     const initialFingerprint = DMLib.Pure.Settings.computeFingerprint(initialSettings);
     const currentFingerprint = DMLib.Pure.Settings.computeFingerprint({ 
       discoveryRelays: config.discoveryRelays,
-      relayMode: config.relayMode,
+      relayMode: config.messagingConfig.relayMode,
     });
     return initialFingerprint !== currentFingerprint;
-  }, [initialSettings, config.discoveryRelays, config.relayMode]);
+  }, [initialSettings, config.discoveryRelays, config.messagingConfig.relayMode]);
   
   // Handle close - check if settings changed
   const handleClose = useCallback(() => {
@@ -310,7 +391,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
     updateConfig((prev) => ({
       ...prev,
       discoveryRelays: [...initialSettings.discoveryRelays],
-      relayMode: initialSettings.relayMode,
+      messagingConfig: { ...prev.messagingConfig!, discoveryRelays: [...initialSettings.discoveryRelays], relayMode: initialSettings.relayMode },
     }));
     
     toast({

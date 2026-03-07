@@ -14,8 +14,8 @@ import { NostrLoginProvider } from '@nostrify/react/login';
 import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
-import { RELAY_MODE } from '@/lib/dmTypes';
-import { NewDMProvider } from '@/contexts/NewDMContext';
+import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
+import { DMProviderWrapper as DMProvider } from '@/contexts/DMProviderWrapper';
 import { FaviconSync } from '@/components/FaviconSync';
 import { NetworkStatus } from '@/components/NetworkStatus';
 import AppRouter from './AppRouter';
@@ -44,17 +44,23 @@ const persistOptions = {
   maxAge: Infinity, // Profile metadata rarely changes, cache indefinitely
 };
 
+const DEFAULT_DISCOVERY_RELAYS: string[] = [
+  'wss://relay.ditto.pub',
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://relay.primal.net',
+  'wss://nos.lol',
+];
+
 const defaultConfig: AppConfig = {
   theme: "dark",
-  discoveryRelays: [
-    'wss://relay.ditto.pub',
-    'wss://relay.damus.io',
-    'wss://relay.nostr.band',
-    'wss://relay.primal.net',
-    'wss://nos.lol',
-  ],
-  relayMode: RELAY_MODE.HYBRID,
-  renderInlineMedia: true,
+  discoveryRelays: DEFAULT_DISCOVERY_RELAYS,
+  messagingConfig: {
+    relayMode: RELAY_MODE.HYBRID,
+    renderInlineMedia: true,
+    devMode: false,
+    soundPref: { enabled: false, soundId: '' },
+  },
 };
 
 export function App() {
@@ -64,7 +70,7 @@ export function App() {
         <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
           <NostrLoginProvider storageKey='nostr:login'>
             <NostrProvider>
-              <NewDMProvider>
+              <DMProvider>
                 <FaviconSync />
                 <NWCProvider>
                   <TooltipProvider>
@@ -75,7 +81,7 @@ export function App() {
                     </Suspense>
                   </TooltipProvider>
                 </NWCProvider>
-              </NewDMProvider>
+              </DMProvider>
             </NostrProvider>
           </NostrLoginProvider>
         </PersistQueryClientProvider>

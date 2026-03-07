@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { LOADING_PHASES } from '@/lib/dmConstants';
-import { NewConversationDialog } from '@/components/NewConversationDialog';
+import { ConversationDialog } from '@/components/ConversationDialog';
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
 
 interface DMConversationListProps {
@@ -314,7 +314,7 @@ export const DMConversationList = ({
             )}
           </div>
           <div className="flex items-center gap-1">
-            <NewConversationDialog onStartConversation={onSelectConversation} />
+            <ConversationDialog onStartConversation={onSelectConversation} />
             {onStatusClick && (
               <Button
                 variant="ghost"

@@ -8,6 +8,7 @@ export default {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./src/**/*.{ts,tsx}",
+		"./node_modules/@samthomson/nostr-messaging/src/**/*.{ts,tsx}",
 	],
 	prefix: "",
 	theme: {

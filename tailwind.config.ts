@@ -8,7 +8,9 @@ export default {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./src/**/*.{ts,tsx}",
+		// src for dev (symlink); dist for prod (npm package has no src)
 		"./node_modules/@samthomson/nostr-messaging/src/**/*.{ts,tsx}",
+		"./node_modules/@samthomson/nostr-messaging/dist/**/*.js",
 	],
 	prefix: "",
 	theme: {

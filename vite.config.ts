@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vitest/config";
 
 // https://vitejs.dev/config/
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
@@ -37,6 +37,11 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // In dev mode, use source files for hot reloading. In production, use built package.
+      ...(mode === 'development' && {
+        "@samthomson/nostr-messaging/core": path.resolve(__dirname, "../nostr-messaging/src/core/index.ts"),
+        "@samthomson/nostr-messaging/ui": path.resolve(__dirname, "../nostr-messaging/src/ui/index.ts"),
+      }),
     },
     dedupe: ["react", "react-dom"],
   },

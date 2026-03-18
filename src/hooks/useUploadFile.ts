@@ -29,10 +29,9 @@ export function useUploadFile() {
       if (encrypt) {
         const attachment = await DMLib.Message.prepareEncryptedAttachment(
           file,
-          async (blob: Blob) => {
-            // Create a File-like object from blob for uploader
-            const blobFile = new File([blob], file.name, { type: 'application/octet-stream' });
-            return await uploader.upload(blobFile);
+          async (uploadFile: File) => {
+            const tags = await uploader.upload(uploadFile);
+            return tags[0][1];
           }
         );
         // Return full FileAttachment object for encrypted uploads

@@ -116,6 +116,26 @@ function RelayInputWithSuggestions({ suggestions, onAdd, currentRelays, disabled
   );
 }
 
+function DeleteRelayButton({
+  onClick,
+  disabled = false,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-destructive flex-shrink-0"
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
+  );
+}
+
 function DiscoveryRelaysTab({ failedRelays }: { failedRelays: Array<[string, RelayInfo]> }) {
   const { config, updateConfig } = useAppContext();
   const [edited, setEdited] = useState<string[] | null>(null);
@@ -161,14 +181,12 @@ function DiscoveryRelaysTab({ failedRelays }: { failedRelays: Array<[string, Rel
                 >
                   {isFailed && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-mono truncate">{url}</p>
+                    <p className="text-sm font-mono truncate" title={url}>{url}</p>
                     {isFailed && (
                       <p className="text-xs text-red-500 mt-1">{failedRelayErrors.get(url)}</p>
                     )}
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive flex-shrink-0" onClick={() => remove(url)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <DeleteRelayButton onClick={() => remove(url)} />
                 </div>
               );
             })}
@@ -279,14 +297,12 @@ function DMInboxTab({ failedRelays }: { failedRelays: Array<[string, RelayInfo]>
                 >
                   {isFailed && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-mono truncate">{url}</p>
+                    <p className="text-xs font-mono truncate" title={url}>{url}</p>
                     {isFailed && (
                       <p className="text-xs text-red-500 mt-1">{failedRelayErrors.get(url)}</p>
                     )}
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => remove(url)} disabled={!user} className="h-7 w-7 p-0 flex-shrink-0">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <DeleteRelayButton onClick={() => remove(url)} disabled={!user} />
                 </div>
               );
             })}
@@ -410,30 +426,30 @@ function NIP65Tab({ failedRelays }: { failedRelays: Array<[string, RelayInfo]> }
             {current.map(r => {
               const isFailed = failedRelaySet.has(r.url);
               return (
-                <div 
-                  key={r.url} 
-                  className={`flex flex-col gap-2 p-3 border rounded-lg ${isFailed ? 'border-red-500 bg-red-500/10' : ''}`}
+                <div
+                  key={r.url}
+                  className={`p-3 border rounded-lg ${isFailed ? 'border-red-500 bg-red-500/10' : ''}`}
                 >
-                  <div className="flex items-center gap-2">
-                    {isFailed && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
-                    <p className="flex-1 text-sm font-mono truncate">{r.url}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {isFailed && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
+                      <p className="text-sm font-mono truncate" title={r.url}>{r.url}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <Switch id={`r-${r.url}`} checked={r.read} onCheckedChange={() => toggleRead(r.url)} disabled={isPublishingNIP65} className="scale-75" />
+                        <Label htmlFor={`r-${r.url}`} className="text-xs cursor-pointer">Read</Label>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Switch id={`w-${r.url}`} checked={r.write} onCheckedChange={() => toggleWrite(r.url)} disabled={isPublishingNIP65} className="scale-75" />
+                        <Label htmlFor={`w-${r.url}`} className="text-xs cursor-pointer">Write</Label>
+                      </div>
+                      <DeleteRelayButton onClick={() => remove(r.url)} disabled={isPublishingNIP65} />
+                    </div>
                   </div>
                   {isFailed && (
-                    <p className="text-xs text-red-500 ml-6">{failedRelayErrors.get(r.url)}</p>
+                    <p className="text-xs text-red-500 mt-2">{failedRelayErrors.get(r.url)}</p>
                   )}
-                  <div className="flex items-center gap-3 ml-6">
-                    <div className="flex items-center gap-1.5">
-                      <Switch id={`r-${r.url}`} checked={r.read} onCheckedChange={() => toggleRead(r.url)} disabled={isPublishingNIP65} className="scale-75" />
-                      <Label htmlFor={`r-${r.url}`} className="text-xs cursor-pointer">Read</Label>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Switch id={`w-${r.url}`} checked={r.write} onCheckedChange={() => toggleWrite(r.url)} disabled={isPublishingNIP65} className="scale-75" />
-                      <Label htmlFor={`w-${r.url}`} className="text-xs cursor-pointer">Write</Label>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(r.url)} disabled={isPublishingNIP65}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
                 </div>
               );
             })}

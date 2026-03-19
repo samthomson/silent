@@ -565,7 +565,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
                 <div className="border-t border-sidebar-border px-4">
                   <Button
                     variant="ghost"
-                    className="w-full justify-start gap-3 h-auto py-4 px-4 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="w-full justify-start gap-3 h-auto py-4 px-4 text-destructive dark:text-red-300 hover:bg-destructive/10 hover:text-destructive dark:hover:text-red-200"
                     onClick={() => currentUser && removeLogin(currentUser.id)}
                   >
                     <LogOut className="h-5 w-5" />
@@ -664,7 +664,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = 'appearance' }:
               <div className="px-2 pb-4 pt-2 mt-auto border-t border-sidebar-border">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 rounded-sm px-3 py-1.5 text-sm font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="w-full justify-start gap-3 rounded-sm px-3 py-1.5 text-sm font-medium text-destructive dark:text-red-300 hover:bg-destructive/10 hover:text-destructive dark:hover:text-red-200"
                   onClick={() => currentUser && removeLogin(currentUser.id)}
                 >
                   <LogOut className="h-4 w-4" />

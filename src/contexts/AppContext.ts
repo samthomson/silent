@@ -8,6 +8,8 @@ export interface AppConfig {
   /** Discovery relays (also passed as messagingConfig.discoveryRelays for the package). */
   discoveryRelays: string[];
   messagingConfig: {
+    /** When false, DM sync and subscriptions are off and local message cache is cleared. Default true. */
+    enabled?: boolean;
     relayMode: RelayMode;
     renderInlineMedia?: boolean;
     devMode?: boolean;

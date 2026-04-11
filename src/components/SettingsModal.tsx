@@ -90,102 +90,128 @@ function StorageContent() {
 function MessagesContent() {
   const { config, updateConfig } = useAppContext();
   const { newMessageSoundOptions, newMessageSoundPref, setNewMessageSoundPref, previewNewMessageSound } = useDMContext();
+  const messagingOn = config.messagingConfig.enabled !== false;
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold mb-3">Display</h3>
       <div className="flex items-center justify-between">
         <div className="flex flex-col items-start">
-          <Label htmlFor="inline-media" className="font-medium cursor-pointer">
-            Render Inline Media
+          <Label htmlFor="messaging-enabled" className="font-medium cursor-pointer">
+            Enable messaging
           </Label>
           <span className="text-xs text-muted-foreground">
-            Show images and videos directly in messages
+            Sync DMs, subscriptions, and local cache. Turn off to pause messaging entirely.
           </span>
         </div>
         <Switch
-          id="inline-media"
-          checked={config.messagingConfig.renderInlineMedia ?? true}
+          id="messaging-enabled"
+          checked={messagingOn}
           onCheckedChange={(checked) => {
             updateConfig((current) => ({
               ...current,
-              messagingConfig: { ...current.messagingConfig!, renderInlineMedia: checked },
+              messagingConfig: { ...current.messagingConfig!, enabled: checked },
             }));
           }}
         />
       </div>
-      {newMessageSoundOptions.length > 0 && (
+      {messagingOn && (
         <>
           <Separator />
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col items-start">
-                <Label htmlFor="sound-on-new" className="font-medium cursor-pointer">
-                  Sound on new message
-                </Label>
-                <span className="text-xs text-muted-foreground">
-                  Play a sound when you receive a direct message
-                </span>
-              </div>
-              <Switch
-                id="sound-on-new"
-                checked={newMessageSoundPref.enabled}
-                onCheckedChange={(checked) => setNewMessageSoundPref({ ...newMessageSoundPref, enabled: checked })}
-              />
+          <h3 className="text-sm font-semibold mb-3">Display</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col items-start">
+              <Label htmlFor="inline-media" className="font-medium cursor-pointer">
+                Render Inline Media
+              </Label>
+              <span className="text-xs text-muted-foreground">
+                Show images and videos directly in messages
+              </span>
             </div>
-            {newMessageSoundPref.enabled && (
-              <div
-                className="space-y-1 overflow-hidden animate-in fade-in-0 duration-200"
-              >
-                <Label className="text-xs font-medium text-muted-foreground">Sound</Label>
-                <div
-                  role="radiogroup"
-                  aria-label="Sound"
-                  className="ml-3 space-y-0.5 pl-3"
-                >
-                  {newMessageSoundOptions.map((s) => {
-                    const selected = (newMessageSoundPref.soundId || newMessageSoundOptions[0]?.id) === s.id;
-                    return (
-                      <div
-                        key={s.id}
-                        role="radio"
-                        aria-checked={selected}
-                        tabIndex={0}
-                        className="flex items-center gap-2 rounded py-1 px-1.5 group hover:bg-accent/50 cursor-pointer"
-                        onClick={() => setNewMessageSoundPref({ ...newMessageSoundPref, soundId: s.id })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setNewMessageSoundPref({ ...newMessageSoundPref, soundId: s.id });
-                          }
-                        }}
-                      >
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-primary">
-                          {selected ? <Check className="h-2.5 w-2.5 text-primary" /> : null}
-                        </span>
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-sm truncate">{s.label}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              previewNewMessageSound(s);
-                            }}
-                            aria-label={`Preview ${s.label}`}
-                          >
-                            <Play className="h-3 w-3" />
-                          </Button>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <Switch
+              id="inline-media"
+              checked={config.messagingConfig.renderInlineMedia ?? true}
+              onCheckedChange={(checked) => {
+                updateConfig((current) => ({
+                  ...current,
+                  messagingConfig: { ...current.messagingConfig!, renderInlineMedia: checked },
+                }));
+              }}
+            />
           </div>
+          {newMessageSoundOptions.length > 0 && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col items-start">
+                    <Label htmlFor="sound-on-new" className="font-medium cursor-pointer">
+                      Sound on new message
+                    </Label>
+                    <span className="text-xs text-muted-foreground">
+                      Play a sound when you receive a direct message
+                    </span>
+                  </div>
+                  <Switch
+                    id="sound-on-new"
+                    checked={newMessageSoundPref.enabled}
+                    onCheckedChange={(checked) => setNewMessageSoundPref({ ...newMessageSoundPref, enabled: checked })}
+                  />
+                </div>
+                {newMessageSoundPref.enabled && (
+                  <div
+                    className="space-y-1 overflow-hidden animate-in fade-in-0 duration-200"
+                  >
+                    <Label className="text-xs font-medium text-muted-foreground">Sound</Label>
+                    <div
+                      role="radiogroup"
+                      aria-label="Sound"
+                      className="ml-3 space-y-0.5 pl-3"
+                    >
+                      {newMessageSoundOptions.map((s) => {
+                        const selected = (newMessageSoundPref.soundId || newMessageSoundOptions[0]?.id) === s.id;
+                        return (
+                          <div
+                            key={s.id}
+                            role="radio"
+                            aria-checked={selected}
+                            tabIndex={0}
+                            className="flex items-center gap-2 rounded py-1 px-1.5 group hover:bg-accent/50 cursor-pointer"
+                            onClick={() => setNewMessageSoundPref({ ...newMessageSoundPref, soundId: s.id })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setNewMessageSoundPref({ ...newMessageSoundPref, soundId: s.id });
+                              }
+                            }}
+                          >
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-primary">
+                              {selected ? <Check className="h-2.5 w-2.5 text-primary" /> : null}
+                            </span>
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-sm truncate">{s.label}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  previewNewMessageSound(s);
+                                }}
+                                aria-label={`Preview ${s.label}`}
+                              >
+                                <Play className="h-3 w-3" />
+                              </Button>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

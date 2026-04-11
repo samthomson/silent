@@ -16,6 +16,7 @@ const AppConfigSchema = z.object({
   theme: z.enum(['dark', 'light', 'system']),
   discoveryRelays: z.array(z.string().url()),
   messagingConfig: z.object({
+    enabled: z.boolean().optional(),
     relayMode: z.enum([RELAY_MODE.DISCOVERY, RELAY_MODE.HYBRID, RELAY_MODE.STRICT_OUTBOX]),
     renderInlineMedia: z.boolean().optional(),
     devMode: z.boolean().optional(),

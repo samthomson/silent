@@ -55,6 +55,7 @@ const defaultConfig: AppConfig = {
   theme: "dark",
   discoveryRelays: DEFAULT_DISCOVERY_RELAYS,
   messagingConfig: {
+    enabled: true,
     relayMode: RELAY_MODE.HYBRID,
     renderInlineMedia: true,
     devMode: false,

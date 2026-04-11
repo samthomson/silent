@@ -26,7 +26,7 @@ export function TestApp({ children }: TestAppProps) {
   const defaultConfig: AppConfig = {
     theme: 'light',
     discoveryRelays: testDiscoveryRelays,
-    messagingConfig: { relayMode: RELAY_MODE.HYBRID },
+    messagingConfig: { enabled: true, relayMode: RELAY_MODE.HYBRID },
   };
 
   return (

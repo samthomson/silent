@@ -47,6 +47,7 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
       discoveryRelays: config.discoveryRelays,
       relayMode: config.messagingConfig.relayMode,
       protocolMode: undefined,
+      ...(config.messagingConfig.enabled === false ? { enabled: false } : {}),
       renderInlineMedia: config.messagingConfig.renderInlineMedia,
       devMode: config.messagingConfig.devMode,
       appName: 'Silent',

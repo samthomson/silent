@@ -8,6 +8,7 @@ import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { APP_NAME } from '@/lib/constants';
 import { useDMContext } from '@/contexts/DMProviderWrapperExports';
+import { useAppContext } from '@/hooks/useAppContext';
 
 const BASE_TITLE = `${APP_NAME} - DMs on Nostr`;
 
@@ -15,16 +16,30 @@ const Index = () => {
   const { user } = useCurrentUser();
   const { theme, setTheme } = useTheme();
   const { unreadTotal } = useDMContext();
+  const { config } = useAppContext();
+  const messagingEnabled = config.messagingConfig.enabled !== false;
 
-  const title = user && unreadTotal > 0 ? `(${unreadTotal}) ${BASE_TITLE}` : BASE_TITLE;
+  const title = user && messagingEnabled && unreadTotal > 0 ? `(${unreadTotal}) ${BASE_TITLE}` : BASE_TITLE;
   useSeoMeta({ title });
 
   if (user) {
     return (
       <div className="h-screen flex bg-background">
         <AppSidebar />
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <DMMessagingInterface />
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          {messagingEnabled ? (
+            <DMMessagingInterface />
+          ) : (
+            <div className="flex-1 flex items-center justify-center px-6 py-12">
+              <div className="max-w-md text-center space-y-3">
+                <h2 className="text-lg font-semibold text-foreground">Messaging is off</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Direct messages are not loading or syncing. Open Settings using the gear in the sidebar, go to
+                  Messages, and turn on Enable messaging.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

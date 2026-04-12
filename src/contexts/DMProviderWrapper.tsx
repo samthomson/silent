@@ -50,6 +50,7 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
       ...(config.messagingConfig.enabled === false ? { enabled: false } : {}),
       renderInlineMedia: config.messagingConfig.renderInlineMedia,
       devMode: config.messagingConfig.devMode,
+      nip42Auth: false,
       appName: 'Silent',
       appDescription: 'Private messaging on Nostr',
       soundPref: {

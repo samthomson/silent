@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { nip19 } from 'nostr-tools';
 import { useNostr } from '@nostrify/react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAppContext } from '@/hooks/useAppContext';
@@ -20,8 +21,8 @@ interface DMProviderWrapperProps {
 }
 
 // Debug-only identity override for DM sync/query.
-// Set to a hex pubkey to simulate that user's relay/message footprint.
-const DEBUG_USE_AS_PUBKEY = '';
+// Set to an npub to simulate that user's relay/message footprint.
+const DEBUG_USE_AS_NPUB = 'npub18ams6ewn5aj2n3wt2qawzglx9mr4nzksxhvrdc4gzrecw7n5tvjqctp424';
 
 export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { nostr } = useNostr();
@@ -33,8 +34,8 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const isMobile = useIsMobile();
   const { data: follows = [] } = useFollows();
 
-  const effectiveUser = DEBUG_USE_AS_PUBKEY
-    ? { pubkey: DEBUG_USE_AS_PUBKEY, signer: user?.signer ?? {} }
+  const effectiveUser = DEBUG_USE_AS_NPUB
+    ? { pubkey: (nip19.decode(DEBUG_USE_AS_NPUB) as unknown as { type: 'npub'; data: string }).data, signer: user?.signer ?? {} }
     : (user ?? null);
 
   const providerProps: DMProviderDeps = {

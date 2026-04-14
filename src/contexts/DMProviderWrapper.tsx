@@ -22,7 +22,8 @@ interface DMProviderWrapperProps {
 
 // Debug-only identity override for DM sync/query.
 // Set to an npub to simulate that user's relay/message footprint.
-const DEBUG_USE_AS_NPUB = 'npub18ams6ewn5aj2n3wt2qawzglx9mr4nzksxhvrdc4gzrecw7n5tvjqctp424';
+// derek: npub18ams6ewn5aj2n3wt2qawzglx9mr4nzksxhvrdc4gzrecw7n5tvjqctp424
+const DEBUG_USE_AS_NPUB = '';
 
 export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { nostr } = useNostr();

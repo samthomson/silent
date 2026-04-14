@@ -1,5 +1,4 @@
 import { useSeoMeta } from '@unhead/react';
-import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { DMMessagingInterface } from '@samthomson/nostr-messaging/ui';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LoginArea } from '@/components/auth/LoginArea';
@@ -13,9 +12,8 @@ import { useAppContext } from '@/hooks/useAppContext';
 const BASE_TITLE = `${APP_NAME} - DMs on Nostr`;
 
 const Index = () => {
-  const { user } = useCurrentUser();
   const { theme, setTheme } = useTheme();
-  const { unreadTotal } = useDMContext();
+  const { unreadTotal, user } = useDMContext();
   const { config } = useAppContext();
   const messagingEnabled = config.messagingConfig.enabled !== false;
 

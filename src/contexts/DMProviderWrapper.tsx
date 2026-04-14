@@ -19,6 +19,10 @@ interface DMProviderWrapperProps {
   children: ReactNode;
 }
 
+// Debug-only identity override for DM sync/query.
+// Set to a hex pubkey to simulate that user's relay/message footprint.
+const DEBUG_USE_AS_PUBKEY = '';
+
 export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
@@ -29,9 +33,13 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
   const isMobile = useIsMobile();
   const { data: follows = [] } = useFollows();
 
+  const effectiveUser = DEBUG_USE_AS_PUBKEY
+    ? { pubkey: DEBUG_USE_AS_PUBKEY, signer: user?.signer ?? {} }
+    : (user ?? null);
+
   const providerProps: DMProviderDeps = {
     nostr,
-    user: user ?? null,
+    user: effectiveUser,
     onNotify: (opts) => toast(opts),
     getDisplayName,
     fetchAuthorsBatch: useAuthorsBatch,

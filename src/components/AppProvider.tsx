@@ -33,24 +33,30 @@ export function AppProvider(props: AppProviderProps) {
   } = props;
 
   // App configuration state with localStorage persistence
-  const [rawConfig, setConfig] = useLocalStorage<Partial<AppConfig>>(
+  const [config, setConfig] = useLocalStorage<AppConfig>(
     storageKey,
-    {},
+    defaultConfig,
     {
       serialize: JSON.stringify,
       deserialize: (value: string) => {
         const parsed = JSON.parse(value);
-        return AppConfigSchema.partial().parse(parsed);
+        const merged: AppConfig = {
+          ...defaultConfig,
+          ...parsed,
+          messagingConfig: {
+            ...defaultConfig.messagingConfig,
+            ...(parsed.messagingConfig ?? {}),
+          },
+        };
+        return AppConfigSchema.parse(merged);
       }
     }
   );
 
   // Generic config updater with callback pattern
-  const updateConfig = (updater: (currentConfig: Partial<AppConfig>) => Partial<AppConfig>) => {
+  const updateConfig = (updater: (currentConfig: AppConfig) => AppConfig) => {
     setConfig(updater);
   };
-
-  const config = { ...defaultConfig, ...rawConfig };
 
   const appContextValue: AppContextType = {
     config,

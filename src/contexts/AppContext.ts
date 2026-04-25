@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { RelayMode } from "@samthomson/nostr-messaging/core";
+import type { ProtocolMode, RelayMode } from "@samthomson/nostr-messaging/core";
 
 export type Theme = "dark" | "light" | "system";
 
@@ -11,6 +11,7 @@ export interface AppConfig {
     /** When false, DM sync and subscriptions are off and local message cache is cleared. Default true. */
     enabled?: boolean;
     relayMode: RelayMode;
+    protocolMode?: ProtocolMode;
     renderInlineMedia?: boolean;
     devMode?: boolean;
     soundPref?: { enabled: boolean; soundId: string };

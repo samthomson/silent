@@ -14,7 +14,7 @@ import { NostrLoginProvider } from '@nostrify/react/login';
 import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
 import { AppConfig } from '@/contexts/AppContext';
-import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
+import { PROTOCOL_MODE, RELAY_MODE } from '@samthomson/nostr-messaging/core';
 import { DMProviderWrapper as DMProvider } from '@/contexts/DMProviderWrapper';
 import { FaviconSync } from '@/components/FaviconSync';
 import { NetworkStatus } from '@/components/NetworkStatus';
@@ -57,6 +57,7 @@ const defaultConfig: AppConfig = {
   messagingConfig: {
     enabled: true,
     relayMode: RELAY_MODE.HYBRID,
+    protocolMode: PROTOCOL_MODE.NIP17_ONLY,
     renderInlineMedia: true,
     devMode: false,
     soundPref: { enabled: false, soundId: '' },

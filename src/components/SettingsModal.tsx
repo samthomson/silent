@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/useToast';
 import * as DMLib from '@samthomson/nostr-messaging/core';
-import { RELAY_MODE, type RelayMode } from '@samthomson/nostr-messaging/core';
+import { PROTOCOL_MODE, RELAY_MODE, type RelayMode } from '@samthomson/nostr-messaging/core';
 import {
   Dialog,
   DialogContent,
@@ -91,6 +91,7 @@ function MessagesContent() {
   const { config, updateConfig } = useAppContext();
   const { newMessageSoundOptions, newMessageSoundPref, setNewMessageSoundPref, previewNewMessageSound } = useDMContext();
   const messagingOn = config.messagingConfig.enabled !== false;
+  const allowLegacyProtocolChoice = config.messagingConfig.protocolMode === PROTOCOL_MODE.NIP04_OR_NIP17;
 
   return (
     <div className="space-y-4">
@@ -134,6 +135,29 @@ function MessagesContent() {
                 updateConfig((current) => ({
                   ...current,
                   messagingConfig: { ...current.messagingConfig!, renderInlineMedia: checked },
+                }));
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col items-start">
+              <Label htmlFor="allow-legacy-protocol-choice" className="font-medium cursor-pointer">
+                Allow legacy NIP-04 sending
+              </Label>
+              <span className="text-xs text-muted-foreground">
+                Let users choose NIP-04 or NIP-17 when sending. Off keeps NIP-17 only.
+              </span>
+            </div>
+            <Switch
+              id="allow-legacy-protocol-choice"
+              checked={allowLegacyProtocolChoice}
+              onCheckedChange={(checked) => {
+                updateConfig((current) => ({
+                  ...current,
+                  messagingConfig: {
+                    ...current.messagingConfig!,
+                    protocolMode: checked ? PROTOCOL_MODE.NIP04_OR_NIP17 : PROTOCOL_MODE.NIP17_ONLY,
+                  },
                 }));
               }}
             />

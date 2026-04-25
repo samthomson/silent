@@ -56,7 +56,7 @@ export const DMProviderWrapper = ({ children }: DMProviderWrapperProps) => {
     messagingConfig: {
       discoveryRelays: config.discoveryRelays,
       relayMode: config.messagingConfig.relayMode,
-      protocolMode: undefined,
+      protocolMode: config.messagingConfig.protocolMode,
       ...(config.messagingConfig.enabled === false ? { enabled: false } : {}),
       renderInlineMedia: config.messagingConfig.renderInlineMedia,
       devMode: config.messagingConfig.devMode,

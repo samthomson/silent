@@ -2,7 +2,7 @@ import { ReactNode, useEffect } from 'react';
 import { z } from 'zod';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { AppContext, type AppConfig, type AppContextType, type Theme } from '@/contexts/AppContext';
-import { RELAY_MODE } from '@samthomson/nostr-messaging/core';
+import { PROTOCOL_MODE, RELAY_MODE } from '@samthomson/nostr-messaging/core';
 
 interface AppProviderProps {
   children: ReactNode;
@@ -18,6 +18,7 @@ const AppConfigSchema = z.object({
   messagingConfig: z.object({
     enabled: z.boolean().optional(),
     relayMode: z.enum([RELAY_MODE.DISCOVERY, RELAY_MODE.HYBRID, RELAY_MODE.STRICT_OUTBOX]),
+    protocolMode: z.enum([PROTOCOL_MODE.NIP04_ONLY, PROTOCOL_MODE.NIP17_ONLY, PROTOCOL_MODE.NIP04_OR_NIP17]).optional(),
     renderInlineMedia: z.boolean().optional(),
     devMode: z.boolean().optional(),
     soundPref: z.object({ enabled: z.boolean(), soundId: z.string() }).optional(),

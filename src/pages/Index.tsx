@@ -88,19 +88,6 @@ const Index = () => {
         </div>
       </main>
 
-      <footer className="py-6 text-center border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          Vibed with{' '}
-          <a
-            href="https://soapbox.pub/mkstack"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            MKStack
-          </a>
-        </p>
-      </footer>
     </div>
   );
 };

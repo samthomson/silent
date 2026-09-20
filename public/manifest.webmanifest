@@ -1,6 +1,6 @@
 {
-  "name": "Silent - Private Messaging",
-  "short_name": "Silent",
+  "name": "Relayed Chat - Private Messaging",
+  "short_name": "Relayed Chat",
   "description": "End-to-end encrypted messaging powered by Nostr",
   "start_url": "/",
   "display": "standalone",

@@ -1,4 +1,4 @@
-# Silent (formerly Doduo)
+# Relayed Chat
 
 A Nostr direct messaging client.
 

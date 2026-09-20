@@ -2,9 +2,9 @@
 
 ## Two Development Modes
 
-### 1. Normal Development (Just Silent)
+### 1. Normal Development (Just Relayed Chat)
 
-For developers working only on Silent (not the messaging package):
+For developers working only on Relayed Chat (not the messaging package):
 
 ```bash
 npm install  # Fetches @nostr-dm/messaging from npm/git
@@ -13,9 +13,9 @@ npm run dev  # Standard Vite dev server
 
 The package is a normal dependency in `package.json`.
 
-### 2. Package Development (Silent + Messaging)
+### 2. Package Development (Relayed Chat + Messaging)
 
-For developers working on both Silent and the messaging package:
+For developers working on both Relayed Chat and the messaging package:
 
 ```bash
 docker-compose up
@@ -29,7 +29,7 @@ docker-compose up
    - Rebuilds on file changes
 
 2. **app** container:
-   - Mounts: `.` (Silent) and `../nostr-messaging`
+   - Mounts: `.` (Relayed Chat) and `../nostr-messaging`
    - Environment: `DOCKER_DEV=true`
    - Postinstall creates symlink: `node_modules/@nostr-dm/messaging` → `/nostr-messaging`
    - Overrides the npm-installed package with local development version
@@ -38,7 +38,7 @@ docker-compose up
 ```bash
 # Edit files in ~/code/nostr-messaging/src/
 # → messaging-builder auto-rebuilds
-# → Silent's Vite picks up changes
+# → Relayed Chat's Vite picks up changes
 # → Browser hot-reloads
 ```
 

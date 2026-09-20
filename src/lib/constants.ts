@@ -1,3 +1,3 @@
-export const APP_NAME = 'Silent';
+export const APP_NAME = 'Relayed Chat';
 export const APP_DESCRIPTION = 'Private messaging';
 
